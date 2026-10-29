@@ -1,0 +1,23 @@
+{
+  "name": "gamble-with-your-ayris",
+  "version": "1.0.0",
+  "description": "Gamble with your Ayris – humorvolles 3D-Co-op-Casino-Spiel für Freunde (nur virtuelle Spielwährung)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n server,client \"node server/index.js\" \"vite\"",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "test": "node --test tests/*.test.js",
+    "rtp": "node scripts/rtp.js"
+  },
+  "dependencies": {
+    "three": "0.170.0",
+    "ws": "8.18.0"
+  },
+  "devDependencies": {
+    "concurrently": "9.1.2",
+    "vite": "6.3.5"
+  }
+}
