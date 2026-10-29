@@ -78,7 +78,7 @@ export class UI {
       try {
         await this.app.connect(mode, code.value.trim().toUpperCase());
       } catch (e) {
-        this.menuErr.textContent = mode === 'solo' ? e.message : `${e.message}. Starte den Server mit "npm start" – oder spiele Solo.`;
+        this.menuErr.textContent = mode === 'solo' ? e.message : `${e.message}. Online-Gruppen brauchen den Multiplayer-Server ("npm start") – hier kannst du Solo spielen.`;
       }
       this.menu.classList.remove('busy');
     };
@@ -94,6 +94,7 @@ export class UI {
           h('button.big', { onclick: () => go('solo') }, '🎮 Solo spielen'),
         ),
         this.menuErr,
+        location.hostname.endsWith('github.io') ? h('div.disclaimer', 'Diese Seite läuft auf GitHub Pages und hat keinen Multiplayer-Server: Hier geht Solo. Für Gruppen mit Freunden den Server mit "npm start" starten (siehe README).') : null,
         h('div.progressline', `Fortschritt: ${camp.completed.length}/15 Stockwerke · 🍆 ${s.dildos} · Team-Pot ${fmtMoney(s.run.pot)}`),
         h('div.menulinks',
           h('button.link', { onclick: () => this.openSettings() }, '⚙️ Einstellungen'),
