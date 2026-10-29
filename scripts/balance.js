@@ -5,18 +5,18 @@ import { floorDef, luckChance } from '../src/shared/config.js';
 import { handTotal, cardValue } from '../src/shared/games/blackjack.js';
 
 const N = +process.argv[2] || 20000;
-const FLOOR = 15;
+const FLOOR = +process.env.FLOOR || 15;
 
 // Spieler mit Pechsträhnen-Zähler wie im Raum
 export function simulate(type, rounds = N, withLuck = true) {
   const game = GAMES[type];
-  const limits = floorDef(FLOOR).limits[type] || floorDef(FLOOR).limits.roulette;
+  const limits = floorDef(FLOOR).limits[type] || floorDef(15).limits[type];
   const table = { id: type, type, state: game.init(), busy: false };
   game.setup?.(table);
   let staked = 0, paid = 0, wins = 0, losses = 0, played = 0, streak = 0, maxLossRun = 0, lossRun = 0;
   const queue = [];
   const ctx = {
-    limits, money: v => '$' + v,
+    limits, floor: FLOOR, money: v => '$' + v,
     fail: m => { throw new Error(type + ': ' + m); },
     debit: () => true, refund() {}, busy() {}, changed() {},
     later: (ms, fn) => queue.push(fn),
@@ -68,8 +68,8 @@ export function simulate(type, rounds = N, withLuck = true) {
 
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  for (const t of Object.keys(GAMES)) {
-    const r = simulate(t);
+  for (const t of Object.keys(GAMES).filter(g => floorDef(FLOOR).limits[g] || !process.env.FLOOR)) {
+    const r = simulate(t, N, process.env.LUCK !== '0');
     console.log(`${t.padEnd(10)} RTP ${(r.rtp * 100).toFixed(1).padStart(6)}%   Gewinnquote ${(r.winRate * 100).toFixed(1).padStart(5)}%   Verlustquote ${(r.lossRate * 100).toFixed(1).padStart(5)}%   längste Pechsträhne ${r.maxLossRun}`);
   }
 }

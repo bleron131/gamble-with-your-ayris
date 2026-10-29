@@ -55,17 +55,22 @@ test('Zwei Spieler: Join-Code, gemeinsamer Pot, Aufzug-Abstimmung, synchronisier
     b.send({ t: 'vote.cast', yes: true });
     await a.wait(m => m.t === 'event' && m.ev.kind === 'scene' && m.ev.scene === 'floor');
     await b.wait(m => m.t === 'event' && m.ev.kind === 'scene' && m.ev.scene === 'floor');
-    // Beide setzen sich an Slots und setzen gleichzeitig
-    a.send({ t: 'table.sit', id: 'slots-0' });
-    b.send({ t: 'table.sit', id: 'slots-1' });
-    a.send({ t: 'table.start', id: 'slots-0', payload: { bet: 100, lines: 5 } });
-    b.send({ t: 'table.start', id: 'slots-1', payload: { bet: 50, lines: 5 } });
+    // Beide drücken gleichzeitig SPIN an zwei verschiedenen Automaten (je eigener Einsatz)
+    const fl = await a.wait(m => m.t === 'state' && m.state.session?.tables['slots-1']);
+    const betA = fl.state.session.tables['slots-0'].state.bet, betB = fl.state.session.tables['slots-1'].state.bet;
+    a.send({ t: 'slot.bet', id: 'slots-0', dir: -1 });
+    const lowered = await b.wait(m => m.t === 'state' && m.state.session?.tables['slots-0']?.state.bet < betA);
+    const betA2 = lowered.state.session.tables['slots-0'].state.bet;
+    a.send({ t: 'slot.spin', id: 'slots-0' });
+    b.send({ t: 'slot.spin', id: 'slots-1' });
     const betSeen = await b.wait(m => m.t === 'event' && m.ev.kind === 'bet' && m.ev.name === 'Anna');
-    assert.equal(betSeen.ev.amount, 100);
-    const potState = await a.wait(m => m.t === 'state' && m.state.pot === START_CAPITAL - 150);
+    assert.equal(betSeen.ev.amount, betA2);
+    const potState = await a.wait(m => m.t === 'state' && m.state.pot === START_CAPITAL - betA2 - betB);
     assert.ok(potState);
+    const spinState = await b.wait(m => m.t === 'state' && m.state.session?.tables['slots-0']?.state.spinnerName === 'Anna');
+    assert.equal(spinState.state.session.tables['slots-0'].busy, true);
     const res = await b.wait(m => m.t === 'event' && m.ev.kind === 'result' && m.ev.name === 'Anna', 5000);
-    assert.equal(res.ev.stake, 100);
+    assert.equal(res.ev.stake, betA2);
     a.ws.close(); b.ws.close();
   } finally {
     srv.kill();

@@ -34,18 +34,18 @@ export const GAME_ICONS = {
 // stärker begrenzt, damit ein Level nicht mit einer normalen kleinen Wette trivial wird,
 // grosse Risiken (z.B. 40% des Ziels auf Rot) aber bewusst möglich bleiben.
 const MAX_FACTOR = {
-  slots: 0.03,
-  highslots: 0.06,
+  slots: 0.1, // Stock 1: bis $1'000 pro Spin
+  highslots: 0.2,
   roulette: 0.4, // Summe aller Chips pro Spin
-  blackjack: 0.2, // pro Hand (Double/Split erhöhen das Risiko)
+  blackjack: 0.25, // pro Hand (Double/Split erhöhen das Risiko)
   baccarat: 0.3,
-  craps: 0.2,
-  poker: 0.1, // Ante (Call = 2× Ante)
-  wheel: 0.06, // pro Feld
+  craps: 0.25,
+  poker: 0.15, // Ante (Call = 2× Ante)
+  wheel: 0.12, // pro Feld
 };
 const MIN_FACTOR = {
-  slots: 0.001, highslots: 0.005, roulette: 0.001, blackjack: 0.002, baccarat: 0.002,
-  craps: 0.002, poker: 0.002, wheel: 0.001,
+  slots: 0.005, highslots: 0.02, roulette: 0.002, blackjack: 0.005, baccarat: 0.005,
+  craps: 0.005, poker: 0.005, wheel: 0.002,
 };
 
 export function niceRound(v) {
@@ -86,13 +86,31 @@ export const FLOORS = FLOOR_DEFS.map((d, i) => {
     };
   }
   // Roulette: Einzelzahl separat begrenzt (35:1)
-  if (limits.roulette) limits.roulette.straightMax = niceRound(d.target * 0.02);
+  if (limits.roulette) limits.roulette.straightMax = niceRound(d.target * 0.04);
   if (limits.baccarat) limits.baccarat.tieMax = niceRound(d.target * 0.03);
-  if (limits.craps) limits.craps.propMax = niceRound(d.target * 0.02);
+  if (limits.craps) limits.craps.propMax = niceRound(d.target * 0.04);
   return { n, ...d, limits, minBet: Math.min(...Object.values(limits).map(l => l.min)) };
 });
 
 export function floorDef(n) { return FLOORS[n - 1]; }
+
+// Einsatzstufen der Spielautomaten (1 – 2.5 – 5 – 10 …) zwischen Minimum und Maximum des Stockwerks
+export function slotSteps(n, type = 'slots') {
+  const l = floorDef(n).limits[type];
+  if (!l) return [];
+  const steps = [];
+  for (let e = 0; e < 12; e++) for (const m of [1, 2.5, 5]) {
+    const v = m * Math.pow(10, e);
+    if (v >= l.min && v <= l.max) steps.push(v);
+  }
+  if (!steps.includes(l.min)) steps.unshift(l.min);
+  if (!steps.includes(l.max)) steps.push(l.max);
+  return [...new Set(steps)].sort((a, b) => a - b);
+}
+
+// Je höher das Stockwerk, desto höher der Top-Multiplikator und der Jackpot
+export const slotTopMultiplier = n => 10 + (n - 1) * 2; // Stock 1: ×10 … Stock 15: ×38
+export const jackpotBoost = n => 1 + (n - 1) * 0.08; // Stock 15: Jackpot ×2.1
 
 // Tische pro Stockwerk – deterministisch, damit Server und Client dieselben IDs/Positionen kennen.
 export function floorTables(n) {

@@ -1,7 +1,8 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { Room } from '../src/shared/room.js';
-import { floorDef, START_CAPITAL, MAFIA_KEEP_FRACTION } from '../src/shared/config.js';
+import { floorDef, START_CAPITAL, MAFIA_KEEP_FRACTION, slotSteps } from '../src/shared/config.js';
+import { winTier, spin } from '../src/shared/games/slots.js';
 import { bestHand, compareScore } from '../src/shared/games/poker.js';
 import { handTotal } from '../src/shared/games/blackjack.js';
 import { playCoup } from '../src/shared/games/baccarat.js';
@@ -12,7 +13,7 @@ function fakeConn() {
 }
 
 function setup(players = 2, campaign) {
-  mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  mock.timers.enable({ apis: ['setTimeout', 'setInterval', 'Date'], now: Date.now() });
   const room = new Room('AYRI-0001');
   const conns = [];
   const ids = [];
@@ -31,10 +32,9 @@ test('Team-Pot: zwei gleichzeitige Einsätze desselben Betrags → nur einer wir
   room.enterFloor(2);
   room.pot = 10_000;
   room.handle(ids[0], { t: 'table.sit', id: 'roulette-0' });
-  room.handle(ids[1], { t: 'table.sit', id: 'slots-0' });
-  // Spieler A setzt $10'000 auf Rot, Spieler B versucht gleichzeitig $500 am Slot (Pot ist danach leer)
+  // Spieler A setzt $10'000 auf Rot, Spieler B drückt gleichzeitig SPIN am Automaten (Pot ist danach leer)
   room.handle(ids[0], { t: 'table.start', id: 'roulette-0', payload: { bets: [{ spot: 'red', amount: 10_000 }] } });
-  room.handle(ids[1], { t: 'table.start', id: 'slots-0', payload: { bet: 500, lines: 5 } });
+  room.handle(ids[1], { t: 'slot.spin', id: 'slots-0' });
   assert.equal(room.pot, 0);
   assert.equal(room.session.tables['slots-0'].busy, false);
   assert.ok(conns[1].errors().some(e => e.includes('Nicht genug')));
@@ -44,12 +44,13 @@ test('Team-Pot: zwei gleichzeitige Einsätze desselben Betrags → nur einer wir
 test('Einsätze werden sofort abgebucht und Gewinne nach der Animation gutgeschrieben', () => {
   const { room, ids } = setup(1);
   room.enterFloor(1);
-  room.handle(ids[0], { t: 'table.sit', id: 'slots-0' });
-  room.handle(ids[0], { t: 'table.start', id: 'slots-0', payload: { bet: 100, lines: 5 } });
-  assert.equal(room.pot, START_CAPITAL - 100);
+  const bet = room.session.tables['slots-0'].state.bet;
+  room.handle(ids[0], { t: 'slot.spin', id: 'slots-0' });
+  assert.equal(room.pot, START_CAPITAL - bet);
+  assert.equal(room.session.tables['slots-0'].busy, true);
   mock.timers.tick(3000);
   assert.equal(room.session.tables['slots-0'].busy, false);
-  assert.ok(room.pot >= START_CAPITAL - 100);
+  assert.ok(room.pot >= START_CAPITAL - bet);
   teardown(room);
 });
 
@@ -178,4 +179,109 @@ test('Baccarat-Ergebnisse sind gültig', () => {
     assert.ok(coup.player.length >= 2 && coup.player.length <= 3);
     assert.ok(['player', 'banker', 'tie'].includes(coup.winner));
   }
+});
+
+// ───────────────────────── Begehbare Spielautomaten ─────────────────────────
+test('Automat: BET −/+ wechselt durch die Stockwerk-Stufen, jeder Automat hat seinen eigenen Einsatz', () => {
+  const { room, ids } = setup(1);
+  room.enterFloor(1);
+  const steps = slotSteps(1, 'slots');
+  assert.ok(steps.length >= 4 && steps[0] === floorDef(1).limits.slots.min && steps.at(-1) === floorDef(1).limits.slots.max);
+  const t0 = room.session.tables['slots-0'], t1 = room.session.tables['slots-1'];
+  assert.notEqual(t0.state.bet, t1.state.bet);
+  const i = steps.indexOf(t0.state.bet);
+  room.handle(ids[0], { t: 'slot.bet', id: 'slots-0', dir: 1 });
+  assert.equal(t0.state.bet, steps[i + 1]);
+  room.handle(ids[0], { t: 'slot.bet', id: 'slots-0', dir: -1 });
+  room.handle(ids[0], { t: 'slot.bet', id: 'slots-0', dir: -1 });
+  assert.equal(t0.state.bet, steps[i - 1]);
+  for (let k = 0; k < 30; k++) room.handle(ids[0], { t: 'slot.bet', id: 'slots-0', dir: 1 });
+  assert.equal(t0.state.bet, steps.at(-1));
+  assert.equal(t1.state.bet, steps[Math.min(steps.length - 1, Math.floor(steps.length * 0.3) + 1)]);
+  teardown(room);
+});
+
+test('Automat: während der Drehung kann niemand den Einsatz ändern oder erneut drehen', () => {
+  const { room, ids, conns } = setup(2);
+  room.enterFloor(1);
+  const t = room.session.tables['slots-0'];
+  const bet = t.state.bet;
+  room.handle(ids[0], { t: 'slot.spin', id: 'slots-0' });
+  room.handle(ids[0], { t: 'slot.bet', id: 'slots-0', dir: 1 });
+  room.handle(ids[0], { t: 'slot.spin', id: 'slots-0' });
+  room.handle(ids[1], { t: 'slot.spin', id: 'slots-0' });
+  room.handle(ids[1], { t: 'slot.bet', id: 'slots-0', dir: 1 });
+  assert.equal(t.state.bet, bet);
+  assert.equal(room.pot, START_CAPITAL - bet);
+  assert.ok(conns[1].errors().some(e => e.includes('dreht gerade')));
+  mock.timers.tick(3000);
+  assert.equal(t.busy, false);
+  assert.equal(t.occupant, null);
+  // Kurz danach hält P0 den Automaten noch – P1 wird freundlich abgewiesen
+  room.handle(ids[1], { t: 'slot.bet', id: 'slots-0', dir: 1 });
+  assert.equal(t.state.bet, bet);
+  assert.ok(conns[1].errors().some(e => e.includes('spielt gerade')));
+  mock.timers.tick(4500);
+  room.handle(ids[1], { t: 'slot.bet', id: 'slots-0', dir: 1 });
+  assert.notEqual(t.state.bet, bet);
+  teardown(room);
+});
+
+test('Automaten: mehrere Geräte drehen gleichzeitig, der Pot wird beim Start reserviert und nie negativ', () => {
+  const { room, ids, conns } = setup(2);
+  room.enterFloor(1);
+  const ts = room.session.tables;
+  for (const id of ['slots-0', 'slots-1', 'slots-2']) ts[id].state.bet = 1000;
+  room.pot = 2500;
+  // Zwei Spieler gleichzeitig an verschiedenen Automaten, P0 zusätzlich an einem dritten
+  room.handle(ids[0], { t: 'slot.spin', id: 'slots-0' });
+  room.handle(ids[1], { t: 'slot.spin', id: 'slots-1' });
+  room.handle(ids[0], { t: 'slot.spin', id: 'slots-2' });
+  assert.equal(ts['slots-0'].busy, true);
+  assert.equal(ts['slots-1'].busy, true);
+  assert.equal(ts['slots-2'].busy, false);
+  assert.equal(room.pot, 500);
+  assert.ok(conns[0].errors().some(e => e.includes('Nicht genug')));
+  assert.equal(ts['slots-0'].state.spinner, ids[0]);
+  assert.equal(ts['slots-1'].state.spinnerName, 'P1');
+  const results = () => conns[0].msgs.filter(m => m.t === 'event' && m.ev.kind === 'result');
+  mock.timers.tick(3000);
+  assert.equal(results().length, 2);
+  const paid = results().reduce((s, m) => s + m.ev.payout, 0);
+  assert.equal(room.pot, 500 + paid);
+  for (const r of results()) assert.ok(['loss', 'small', 'medium', 'big', 'mega', 'jackpot'].includes(r.ev.tier));
+  teardown(room);
+});
+
+test('Automaten: Spieler werden nicht an einen Automaten gesetzt, Spin-Ergebnis wird an alle gesendet', () => {
+  const { room, ids, conns } = setup(2);
+  room.enterFloor(1);
+  room.handle(ids[0], { t: 'table.sit', id: 'slots-0' });
+  assert.equal(room.players.get(ids[0]).seat, null);
+  room.handle(ids[0], { t: 'slot.spin', id: 'slots-0' });
+  mock.timers.tick(30);
+  const st = conns[1].msgs.filter(m => m.t === 'state').at(-1).state;
+  assert.equal(st.session.tables['slots-0'].state.phase, 'spinning');
+  assert.equal(st.session.tables['slots-0'].state.stops.length, 3);
+  mock.timers.tick(3000);
+  assert.ok(conns[1].msgs.some(m => m.t === 'event' && m.ev.kind === 'result' && m.ev.tableId === 'slots-0'));
+  teardown(room);
+});
+
+test('Gewinnstufen: klein, mittel, gross, mega, Jackpot', () => {
+  assert.equal(winTier(-500, 500), 'loss');
+  assert.equal(winTier(500, 500), 'small');
+  assert.equal(winTier(1500, 500), 'medium');
+  assert.equal(winTier(5000, 500), 'big');
+  assert.equal(winTier(15000, 500), 'mega');
+  assert.equal(winTier(1, 500, true), 'jackpot');
+});
+
+test('Slots: ein Treffer bringt mindestens das Doppelte des Einsatzes zurück', () => {
+  let hits = 0;
+  for (let i = 0; i < 20000; i++) {
+    const r = spin('normal', 1000, 5, 1);
+    if (r.payout > 0) { hits++; assert.ok(r.payout >= 2000, `Auszahlung ${r.payout}`); }
+  }
+  assert.ok(hits > 3000 && hits < 7000, `Treffer ${hits}`);
 });

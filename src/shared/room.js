@@ -4,16 +4,18 @@
 // Wetten auf denselben Betrag können daher nie beide akzeptiert werden (kein Geld-Duplizieren).
 import {
   START_CAPITAL, MAFIA_KEEP_FRACTION, FLOORS, floorDef, floorTables, ITEMS, RETRY_GAMES_HAT,
-  FLOOR_REWARDS, CHALLENGE_FACTOR, CHALLENGE_REWARDS, LOADOUT_SLOTS, MAX_PLAYERS, fmtMoney, GAME_NAMES, luckChance,
+  FLOOR_REWARDS, CHALLENGE_FACTOR, CHALLENGE_REWARDS, LOADOUT_SLOTS, MAX_PLAYERS, fmtMoney, GAME_NAMES, luckChance, slotSteps,
 } from './config.js';
 import { rand } from './rng.js';
-import { slotsGame } from './games/slots.js';
+import { slotsGame, winTier } from './games/slots.js';
 import { rouletteGame } from './games/roulette.js';
 import { blackjackGame } from './games/blackjack.js';
 import { baccaratGame } from './games/baccarat.js';
 import { crapsGame } from './games/craps.js';
 import { pokerGame } from './games/poker.js';
 import { wheelGame } from './games/wheel.js';
+
+const SLOT_HOLD_MS = 4000;
 
 export const GAMES = {
   slots: slotsGame('normal'),
@@ -163,7 +165,7 @@ export class Room {
       switch (msg.t) {
         case 'move':
           if (Array.isArray(msg.p) && msg.p.length === 3 && msg.p.every(Number.isFinite)) {
-            p.pose = { p: msg.p, r: +msg.r || 0, a: String(msg.a || 'idle').slice(0, 12), pitch: +msg.pitch || 0, fx: String(msg.fx || '').slice(0, 6) };
+            p.pose = { p: [msg.p[0], Math.max(0, Math.min(1.5, msg.p[1])), msg.p[2]], r: +msg.r || 0, a: String(msg.a || 'idle').slice(0, 12), pitch: +msg.pitch || 0, fx: String(msg.fx || '').slice(0, 6) };
             p.poseDirty = true;
           }
           break;
@@ -178,6 +180,8 @@ export class Room {
         case 'vote.start': this.startVote(p, msg.type, msg.data || {}); break;
         case 'vote.cast': this.castVote(p, !!msg.yes); break;
         case 'table.sit': this.sit(p, msg.id); break;
+        case 'slot.bet': this.slotBet(p, msg.id, msg.dir); break;
+        case 'slot.spin': this.slotSpin(p, msg.id); break;
         case 'table.leave': this.leaveTable(p); break;
         case 'table.start': this.tableStart(p, msg.id, msg.payload || {}); break;
         case 'table.action': this.tableAction(p, msg.id, String(msg.action)); break;
@@ -311,6 +315,11 @@ export class Room {
       const game = GAMES[def.type];
       const t = { id: def.id, type: def.type, state: game.init(), occupant: null, busy: false, lastRound: {}, roundMods: null };
       game.setup?.(t);
+      // Jeder Automat startet mit eigenem Einsatz (verschiedene Stufen je Gerät)
+      if (game.walkUp) {
+        const steps = slotSteps(n, def.type);
+        t.state.bet = steps[Math.min(steps.length - 1, Math.floor(steps.length * 0.3) + def.index)];
+      }
       tables[def.id] = t;
     }
     this.floor = n;
@@ -403,6 +412,7 @@ export class Room {
   sit(p, id) {
     const t = this.getTable(p, id);
     if (!t) return;
+    if (GAMES[t.type].walkUp) return this.error(p.id, 'Spielautomaten werden direkt am Gerät bedient');
     if (t.occupant && t.occupant !== p.id) return this.error(p.id, `${this.players.get(t.occupant)?.name || 'Jemand'} spielt hier gerade`);
     if (p.seat && p.seat !== id) { this.leaveTable(p); if (p.seat) return; }
     t.occupant = p.id;
@@ -425,10 +435,56 @@ export class Room {
     this.checkBankrupt();
   }
 
+  // ───────────────────────── Spielautomaten (begehbar) ─────────────────────────
+  // Wer gerade an einem Automaten dreht oder den Einsatz verstellt, hält ihn kurz – so können
+  // zwei Spieler nicht gleichzeitig an derselben Maschine widersprüchliche Änderungen machen.
+  slotLock(p, t) {
+    const now = Date.now();
+    if (t.busy && t.occupant && t.occupant !== p.id) { this.error(p.id, `${this.players.get(t.occupant)?.name || 'Jemand'} dreht gerade an diesem Automaten`); return false; }
+    if (t.busy) { this.error(p.id, 'Walzen drehen noch'); return false; }
+    if (t.holder && t.holder.pid !== p.id && t.holder.until > now && this.players.has(t.holder.pid)) {
+      this.error(p.id, `${this.players.get(t.holder.pid).name} spielt gerade an diesem Automaten`);
+      return false;
+    }
+    t.holder = { pid: p.id, until: now + SLOT_HOLD_MS };
+    return true;
+  }
+
+  slotBet(p, id, dir) {
+    const t = this.getTable(p, id);
+    if (!t || !GAMES[t.type].walkUp) return;
+    if (!this.slotLock(p, t)) return;
+    const steps = slotSteps(this.floor, t.type);
+    let i = steps.indexOf(t.state.bet);
+    if (i < 0) i = steps.findIndex(v => v >= t.state.bet);
+    i = Math.max(0, Math.min(steps.length - 1, i + (dir > 0 ? 1 : -1)));
+    t.state.bet = steps[i];
+    t.state.betBy = p.name;
+    t.state.betId = (t.state.betId || 0) + 1;
+    this.markDirty();
+  }
+
+  slotSpin(p, id, betOverride) {
+    const t = this.getTable(p, id);
+    if (!t || !GAMES[t.type].walkUp) return;
+    if (!this.slotLock(p, t)) return;
+    const bet = betOverride || t.state.bet;
+    if (bet > this.pot) return this.error(p.id, `Nicht genug im Team-Pot für ${fmtMoney(bet)} (${fmtMoney(this.pot)})`);
+    t.occupant = p.id;
+    this.startRound(p, t, { bet, lines: 5 });
+    if (!t.busy) t.occupant = null;
+  }
+
   tableStart(p, id, payload) {
     const t = this.getTable(p, id);
     if (!t) return;
+    if (GAMES[t.type].walkUp) return this.slotSpin(p, id);
     if (t.occupant !== p.id) return this.error(p.id, 'Setz dich zuerst an den Tisch');
+    this.startRound(p, t, payload);
+  }
+
+  startRound(p, t, payload) {
+    const id = t.id;
     const game = GAMES[t.type];
     const idleish = !t.busy || (t.type === 'craps' && t.state.phase === 'idle');
     if (!idleish) return this.error(p.id, 'Runde läuft bereits');
@@ -465,6 +521,9 @@ export class Room {
     const f = floorDef(this.floor);
     return {
       limits: f.limits[table.type],
+      floor: this.floor,
+      pid,
+      playerName: this.players.get(pid)?.name,
       money: fmtMoney,
       fail(msg) { room.error(pid, msg); },
       debit(amount, { label } = {}) {
@@ -541,6 +600,8 @@ export class Room {
     const f = floorDef(this.floor);
     table.roundMods = null;
     table.busy = !!r.keepBusy;
+    if (GAMES[table.type].walkUp) { table.occupant = null; table.holder = { pid, until: Date.now() + SLOT_HOLD_MS }; }
+    const tier = winTier(net, stake, !!r.jackpot);
     if (net < 0 && stake > 0 && r.replay) table.lastRound[pid] = { game: table.type, replay: r.replay, loss: -net };
     else table.lastRound[pid] = null;
     if (p && stake > 0) p.lossStreak = net < 0 ? p.lossStreak + 1 : net > 0 ? 0 : p.lossStreak;
@@ -548,7 +609,7 @@ export class Room {
     const bigWin = net > 0 && (net >= stake * 8 || net >= f.target * 0.1);
     this.event({
       kind: 'result', pid, name: p?.name || '?', game: table.type, tableId: table.id,
-      stake, payout: payout - extra, net, detail: r.detail, jackpot: !!r.jackpot, bigWin, effects,
+      stake, payout: payout - extra, net, detail: r.detail, jackpot: !!r.jackpot, bigWin, effects, tier, multiplier: r.multiplier,
       straight: r.straight, blackjacks: r.blackjacks, tieWin: r.tieWin, pointHit: r.pointHit,
       pokerCat: r.pokerCat, wheel: r.wheel, newStake: r.newStake, pot: this.pot, lucky: !!r.lucky && net > 0,
     });
@@ -601,7 +662,8 @@ export class Room {
     if (!['luckyhat', 'crown'].includes(item)) return;
     const t = this.getTable(p, tableId);
     if (!t) return;
-    if (t.occupant !== p.id || t.busy) return this.error(p.id, 'Gerade nicht möglich');
+    const walkUp = GAMES[t.type].walkUp;
+    if ((!walkUp && t.occupant !== p.id) || t.busy) return this.error(p.id, 'Gerade nicht möglich');
     const last = t.lastRound[p.id];
     if (!last) return this.error(p.id, 'Keine verlorene Runde zum Wiederholen');
     if (item === 'luckyhat' && !RETRY_GAMES_HAT.includes(t.type)) return this.error(p.id, 'Lucky Hat wirkt nur bei Slots, Roulette, Rad und Craps');
@@ -610,7 +672,8 @@ export class Room {
     t.lastRound[p.id] = null;
     this.pot += last.loss;
     this.event({ kind: 'item', pid: p.id, name: p.name, item, msg: `${ITEMS[item].name}: Runde wird zurückgesetzt (${fmtMoney(last.loss)} zurück)!` });
-    this.tableStart(p, tableId, last.replay);
+    if (walkUp) this.slotSpin(p, tableId, last.replay.bet);
+    else this.tableStart(p, tableId, last.replay);
   }
 
   // ───────────────────────── Finale ─────────────────────────
