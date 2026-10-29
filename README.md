@@ -44,6 +44,7 @@ Port ändern: `PORT=3000 npm start`.
 | H / S / D / P / J | Blackjack: Hit / Stand / Double / Split / Joker |
 | C / F | Hold'em: Call / Fold |
 | ESC / Q | Vom Tisch aufstehen |
+| T | MAKKA trinken (nach dem Kauf an der Bar) |
 | 1–5 | Emotes (Jubeln, Tanzen, Traurig, Facepalm, Zeigen) |
 | TAB | Gruppenübersicht |
 | Mausrad | Kamera-Zoom (Shishabar) |
@@ -68,6 +69,8 @@ Port ändern: `PORT=3000 npm start`.
   (mind. $7'500), damit der Run weitergehen kann.
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Bonus-Challenges
   (Stockwerk mit ≥150 % des Ziels verlassen) und Achievements – jeweils nur einmal pro Spieler, also kein Farming.
+- **MAKKA an der Bar**: Bei Kemal gibt es die pinke Ayri-Limonade für genau 1 🍆. Mit T trinken –
+  danach dreht und schwankt die Shishabar 10 Sekunden lang (nur für dich; Mitspieler sehen dich torkeln).
 - **AYRI SHOP**: Pokal, Glücks-Shisha, Lucky Hat, Golden Coin, Ayri-Versicherung, Joker Card,
   Mafia Briefcase, Devil Dice, Ayris Crown – jeweils als „einmal verwendbar“ oder „permanent, 1× pro Level“ gekennzeichnet.
 - **Finale**: Nach $500'000'000 auf Stock 15 erscheint im Aufzug **???**. In der luxuriösen
@@ -84,7 +87,10 @@ seinen Run (Team-Pot) mit; der Level-Fortschritt wird für alle Mitglieder über
 
 Alle Werte stehen in [`src/shared/config.js`](src/shared/config.js): Startkapital, Mafia-Anteil,
 Zielbeträge, Min/Max-Einsätze pro Spiel als Anteil des Stockwerk-Ziels, Belohnungen und Item-Preise.
-`npm run rtp` gibt die exakten Auszahlungsquoten (Slots ≈ 97 %, Glücksrad 78–96 %) und alle Tischlimits aus.
+Das Spiel ist bewusst als Party-Casino balanciert: Alle Spiele zahlen leicht über 100 % aus, Verlieren bleibt aber
+jederzeit möglich. Das **Ayri-Glück** würfelt einen verlorenen Ausgang gelegentlich neu – nach mehreren Niederlagen
+in Folge häufiger –, damit lange Pechsträhnen selten werden (`luckChance` in `config.js`).
+`npm run rtp` zeigt Quoten und Tischlimits, `node scripts/balance.js` simuliert alle Spiele (Auszahlung, Gewinnquote, längste Pechsträhne).
 
 ## Architektur
 
