@@ -286,7 +286,7 @@ export function openSettings(ui) {
     toggle('bloom', 'Neon-Glow (Bloom)'), toggle('shadows', 'Schatten'),
     h('div.actions',
       app.state ? h('button.danger', { onclick: () => { ui.closeModal(); app.disconnect(); ui.showMenu(); } }, app.mode === 'solo' ? 'Zum Hauptmenü' : 'Gruppe verlassen') : null,
-      h('button', { onclick: () => { if (window.confirm('Wirklich ALLE Fortschritte, Dildos und Items löschen?')) { Save.resetAll(); location.reload(); } } }, 'Spielstand zurücksetzen'),
+      h('button', { onclick: async () => { if (await ui.confirm('Wirklich ALLE Fortschritte, Dildos und Items löschen?')) { Save.resetAll(); location.reload(); } } }, 'Spielstand zurücksetzen'),
     ),
     h('div.subtle.small', 'Steuerung: WASD laufen · Maus schauen · Shift rennen · E interagieren · ESC/Q Tisch verlassen · 1-5 Emotes · TAB Gruppe · Mausrad Kamera-Zoom (Shishabar)'),
   ), 'small');
