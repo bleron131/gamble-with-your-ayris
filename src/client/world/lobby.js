@@ -118,8 +118,12 @@ export class LobbyWorld extends World {
     ];
     let li = 0;
     this.addInteract({
-      pos: new THREE.Vector3(-W / 2 + 3.6, 0, -2), radius: 1.8, label: 'Mit Kemal reden',
-      action: () => { this.app.ui.toast(lines[li++ % lines.length], 'info', 5000); tender.setAnim('point'); setTimeout(() => tender.setAnim('idle'), 1500); },
+      pos: new THREE.Vector3(-W / 2 + 3.6, 0, -2), radius: 1.8, label: 'Bar: MAKKA kaufen (1 🍆) · mit Kemal reden',
+      action: () => {
+        tender.setAnim('point');
+        setTimeout(() => tender.setAnim('idle'), 1500);
+        this.app.ui.openBar(() => lines[li++ % lines.length]);
+      },
     });
   }
 
@@ -240,6 +244,7 @@ export class LobbyWorld extends World {
     this.hallTex = new THREE.CanvasTexture(c);
     this.hallTex.colorSpace = THREE.SRGBColorSpace;
     const board = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2), new THREE.MeshBasicMaterial({ map: this.hallTex, toneMapped: false }));
+    board.material.color.setScalar(0.9);
     board.position.set(x, 2.2, z - 0.05);
     board.rotation.y = Math.PI;
     s.add(board);

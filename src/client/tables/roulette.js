@@ -97,6 +97,7 @@ export class RouletteView extends TableView {
     const post = new THREE.Group();
     post.position.set(-1.5, 0, -0.45);
     post.add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.6), M.gold(), 0, 0.8, 0));
+    board.material.color.setScalar(0.9);
     board.position.set(0, 1.7, 0);
     board.rotation.y = 0.6;
     post.add(board);
@@ -263,7 +264,7 @@ export class RouletteView extends TableView {
     this.panel = h('div.tablepanel',
       h('div.ptitle', '🎡 ROULETTE'),
       limitLine(this.limits, ` · Einzelzahl max ${fmtMoney(this.limits.straightMax)}`),
-      h('div.phint', 'Chip wählen und auf das Tableau klicken (Rechtsklick entfernt). Bei 0 gibt es auf einfache Chancen die Hälfte zurück.'),
+      h('div.phint', 'Chip wählen und auf das Tableau klicken (Rechtsklick entfernt). Einzelzahl zahlt 36:1, bei 0 gibt es alle Aussenwetten zurück.'),
       this.picker.el,
       quick,
       h('div.betrow', h('span', 'Einsatz:'), this.totalEl),

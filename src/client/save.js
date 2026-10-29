@@ -11,7 +11,7 @@ export function defaultStats() {
     rouletteWins: 0, blackjackWins: 0, blackjacks: 0, slotJackpots: 0, baccaratWins: 0, crapsWins: 0, pokerWins: 0, wheelWins: 0,
     hands: 0, spins: 0, rounds: 0, roundsWon: 0, floorsCompleted: 0, floorsFailed: 0, mafiaVisits: 0,
     doubleAttempts: 0, doubleWins: 0, doubleLosses: 0, highestPot: START_CAPITAL,
-    dildosEarned: 0, dildosSpent: 0, itemsUsed: 0, takes: 0,
+    dildosEarned: 0, dildosSpent: 0, itemsUsed: 0, takes: 0, makkas: 0,
   };
 }
 
@@ -65,6 +65,19 @@ export function profile() {
     name: s.name, appearance: s.appearance, rewardedFloors: s.rewardedFloors, challengeFloors: s.challengeFloors,
     campaign: s.campaign, run: s.run,
   };
+}
+
+export const MAKKA_PRICE = 1;
+
+// Kauft einen MAKKA an der Bar: zieht genau 1 Dildo ab, sonst nichts
+export function buyMakka() {
+  const s = get();
+  if (s.dildos < MAKKA_PRICE) return false;
+  s.dildos -= MAKKA_PRICE;
+  s.stats.dildosSpent += MAKKA_PRICE;
+  s.stats.makkas = (s.stats.makkas || 0) + 1;
+  save();
+  return true;
 }
 
 export function addDildos(n, earned = true) {

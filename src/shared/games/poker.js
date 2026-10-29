@@ -1,5 +1,5 @@
 // Casino Hold'em gegen den NPC-Dealer. Ante → Flop → Call (2× Ante) oder Fold.
-// Dealer qualifiziert sich mit einem Paar Vieren oder besser.
+// Party-Regel: Dealer qualifiziert sich erst mit einem Paar Sechsen oder besser.
 import { Shoe } from '../rng.js';
 
 export const HAND_NAMES = ['High Card', 'Paar', 'Zwei Paare', 'Drilling', 'Straße', 'Flush', 'Full House', 'Vierling', 'Straight Flush', 'Royal Flush'];
@@ -114,16 +114,23 @@ function showdown(ctx, table, folded) {
   s.board = sec.board.slice();
   ctx.changed();
   ctx.later(1500, () => {
-    s.dealer = sec.dealer;
     const ps = bestHand(s.player.concat(s.board));
-    const ds = bestHand(s.dealer.concat(s.board));
+    let ds = bestHand(sec.dealer.concat(s.board));
+    let lucky = false;
+    // Ayri-Glück: schlägt der Dealer den Spieler, bekommt er manchmal neue Karten
+    if (!folded && compareScore(ps, ds) < 0 && ctx.lucky?.()) {
+      const alt = [table.shoe.draw(), table.shoe.draw()];
+      const as = bestHand(alt.concat(s.board));
+      if (compareScore(ps, as) > 0) { sec.dealer = alt; ds = as; lucky = true; }
+    }
+    s.dealer = sec.dealer;
     s.playerHand = HAND_NAMES[ps[0]];
     s.dealerHand = HAND_NAMES[ds[0]];
     const stake = s.ante + s.call;
     let payout = 0, res;
     if (folded) res = 'FOLD';
     else {
-      const qualifies = ds[0] >= 2 || (ds[0] === 1 && ds[1] >= 4);
+      const qualifies = ds[0] >= 2 || (ds[0] === 1 && ds[1] >= 6);
       const cmp = compareScore(ps, ds);
       if (!qualifies) { res = 'DEALER QUALIFIZIERT NICHT'; payout = s.ante * (1 + antePay(ps[0])) + s.call; }
       else if (cmp > 0) { res = 'GEWONNEN'; payout = s.ante * (1 + antePay(ps[0])) + s.call * 2; }
@@ -134,7 +141,7 @@ function showdown(ctx, table, folded) {
     ctx.later(1200, () => {
       s.phase = 'idle';
       ctx.settle({
-        stake, payout, pokerCat: folded ? -1 : ps[0],
+        stake, payout, pokerCat: folded ? -1 : ps[0], lucky,
         detail: `${s.playerHand} vs. ${s.dealerHand} – ${res}`,
         replay: { bet: sec.ante },
       });

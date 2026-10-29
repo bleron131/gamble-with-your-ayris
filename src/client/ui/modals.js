@@ -77,6 +77,32 @@ function loadoutEditor(ui) {
   return wrap;
 }
 
+// ───────────────────────── Bar ─────────────────────────
+export function openBar(ui, nextLine) {
+  const s = Save.get();
+  const app = ui.app;
+  const line = h('div.barline', nextLine());
+  const buy = h('button.primary.big', {
+    disabled: s.dildos < Save.MAKKA_PRICE || app.player.hasBottle || app.player.drinkT > 0 ? true : null,
+    onclick: () => { if (app.buyMakka()) ui.closeModal(); },
+  }, `MAKKA kaufen – ${Save.MAKKA_PRICE} 🍆`);
+  ui.openModal(h('div.bar',
+    h('h2', '🍸 KEMALS BAR'),
+    h('div.makkacard',
+      h('div.makkaicon', '🍾'),
+      h('div',
+        h('div.sname', 'MAKKA'),
+        h('div.sdesc', 'Pinke Ayri-Limonade in der klaren Flasche. Schmeckt nach Zitrone – und dreht dir für 10 Sekunden die ganze Shishabar.'),
+        h('div.susage', `Preis: ${Save.MAKKA_PRICE} 🍆 · Dein Bestand: ${s.dildos} 🍆`))),
+    line,
+    h('div.actions',
+      buy,
+      h('button', { onclick: () => { line.textContent = nextLine(); sfx.click(); } }, 'Mit Kemal reden'),
+    ),
+    app.player.hasBottle ? h('div.subtle.small', 'Du hast schon einen MAKKA in der Hand – drücke T zum Trinken.') : null,
+  ), 'small');
+}
+
 // ───────────────────────── Shop ─────────────────────────
 export function openShop(ui) {
   const s = Save.get();

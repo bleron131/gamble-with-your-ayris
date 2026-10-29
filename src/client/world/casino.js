@@ -352,6 +352,7 @@ export class CasinoWorld extends World {
     });
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
     const board = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.6), new THREE.MeshBasicMaterial({ map: t, toneMapped: false }));
+    board.material.color.setScalar(0.9);
     board.position.set(3.4, 2.2, this.D / 2 - 0.06);
     board.rotation.y = Math.PI;
     s.add(board);

@@ -9,6 +9,12 @@ export const FINAL_TARGET = 500_000_000;
 export const MAX_PLAYERS = 6;
 export const LOADOUT_SLOTS = 4;
 
+// Ayri-Glück: Chance, dass ein verlorener Ausgang einmal neu ausgewürfelt wird.
+// Steigt mit jeder weiteren verlorenen Runde, damit lange Pechsträhnen selten werden.
+export function luckChance(lossStreak) {
+  return Math.min(0.4, 0.08 + Math.max(0, lossStreak - 2) * 0.08);
+}
+
 export const GAME_NAMES = {
   slots: 'Slots',
   roulette: 'Roulette',

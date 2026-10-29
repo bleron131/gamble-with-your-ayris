@@ -3,13 +3,13 @@ import * as THREE from 'three';
 import { Engine } from './engine.js';
 import { Input } from './input.js';
 import { LocalPlayer } from './player.js';
-import { Character, FPHands } from './character.js';
+import { Character, FPHands, makkaBottle } from './character.js';
 import { LobbyWorld } from './world/lobby.js';
 import { CasinoWorld } from './world/casino.js';
 import { FinalWorld } from './world/final.js';
 import { WSTransport, LocalTransport } from './net.js';
 import * as Save from './save.js';
-import { initAudio, sfx, setMusic, setAmbience, setDuck, setVolumes } from './audio.js';
+import { initAudio, sfx, setMusic, setAmbience, setDuck, setVolumes, setDizzyAudio } from './audio.js';
 import { bindSfx } from './tables/common.js';
 import { UI } from './ui/ui.js';
 import { esc } from './ui/dom.js';
@@ -95,7 +95,7 @@ export class App {
         for (const [id, pose] of Object.entries(m.moves)) {
           if (id === this.me) continue;
           const a = this.avatars.get(id);
-          if (a) { a.target = pose; if (!a.emoteUntil || a.emoteUntil < performance.now()) a.setAnim(pose.a); }
+          if (a) { a.target = pose; a.setFx(pose.fx); if (!a.emoteUntil || a.emoteUntil < performance.now()) a.setAnim(pose.a); }
         }
         break;
       case 'event': this.onEvent(m.ev); break;
@@ -206,6 +206,7 @@ export class App {
         a.key = key;
         a.root.position.set(p.pose.p[0], 0, p.pose.p[2]);
         a.target = p.pose;
+        a.setFx(p.pose.fx);
         this.avatars.set(p.id, a);
         this.world.scene.add(a.root);
       }
@@ -310,6 +311,10 @@ export class App {
         if (ev.result === 'win' || ev.result === 'gold') sfx.win(); else if (ev.result === 'lose' || ev.result === 'black') sfx.lose(); else sfx.pop();
         break;
       }
+      case 'drink':
+        if (ev.phase === 'buy') this.ui.feed(`🍾 <b>${esc(ev.name)}</b> kauft einen MAKKA`);
+        else { this.ui.feed(`🥴 <b>${esc(ev.name)}</b> trinkt MAKKA – alles dreht sich!`); if (!mine) { this.avatarIcon(ev.pid, '🥴'); sfx.gulp(); } }
+        break;
       case 'emote': {
         const a = this.avatars.get(ev.pid);
         if (a) { a.setAnim(ev.e); a.emoteUntil = performance.now() + 2600; }
@@ -391,6 +396,41 @@ export class App {
   }
 
   bumpStat(k, v) { this.save.stats[k] = (this.save.stats[k] || 0) + v; if (k === 'itemsUsed' && this.save.stats.itemsUsed >= 5) this.achieve('item5'); Save.save(); }
+
+  // ───────────────────────── MAKKA ─────────────────────────
+  buyMakka() {
+    const p = this.player;
+    if (p.hasBottle || p.drinkT > 0) { this.ui.toast('Du hast schon einen MAKKA in der Hand – erst austrinken (T)', 'warn'); return false; }
+    if (!Save.buyMakka()) { sfx.error(); this.ui.toast('Du brauchst 1 🍆 für einen MAKKA', 'error'); return false; }
+    sfx.register();
+    setTimeout(() => sfx.bottle(), 350);
+    p.hasBottle = true;
+    this.send({ t: 'drink', phase: 'buy' });
+    this.ui.toast('MAKKA gekauft (−1 🍆). Drücke T zum Trinken!', 'good', 4000);
+    this.ui.refreshHud();
+    return true;
+  }
+
+  drinkMakka() {
+    const p = this.player;
+    if (!p.hasBottle || p.drinkT > 0 || this.ui.modalOpen) return;
+    p.startDrink(2.4);
+    p.emoteT = 0;
+    this.send({ t: 'drink', phase: 'drink' });
+    sfx.open();
+    if (this.world.mode === 'first') { this.hands.holdItem(makkaBottle(1)); this.hands.itemT = 2.4; }
+    [0.7, 1.15, 1.6, 2.0].forEach(d => setTimeout(() => sfx.gulp(), d * 1000));
+    clearTimeout(this.drinkTimer);
+    this.drinkTimer = setTimeout(() => {
+      p.hasBottle = false;
+      p.startDizzy();
+      sfx.dizzy();
+      setDizzyAudio(true);
+      this.ui.toast('😵‍💫 Uff… alles dreht sich!', 'info', 2500);
+      clearTimeout(this.dizzyTimer);
+      this.dizzyTimer = setTimeout(() => setDizzyAudio(false), 8800);
+    }, 2400);
+  }
 
   // Schwebendes Item-Symbol über einem Mitspieler
   avatarIcon(pid, icon) {
@@ -527,6 +567,7 @@ export class App {
     }
     if (e.code === 'Tab') { e.preventDefault(); this.ui.toggleScoreboard(true); }
     if (e.code === 'KeyI' && this.world.kind === 'floor') this.ui.focusItems();
+    if (e.code === 'KeyT') this.drinkMakka();
   }
 
   onCanvasClick(e) {
@@ -557,6 +598,7 @@ export class App {
       this.selfChar.root.position.copy(this.player.pos);
       this.selfChar.root.rotation.y = this.player.yaw;
       this.selfChar.setAnim(this.player.anim);
+      this.selfChar.setFx(this.player.fx);
       this.selfChar.update(dt);
       this.selfChar.root.visible = this.world.mode === 'third' || !!this.cinematic;
     }
@@ -580,6 +622,9 @@ export class App {
       const key = JSON.stringify(pose);
       if (key !== this.lastPoseKey) { this.lastPoseKey = key; this.send({ t: 'move', ...pose }); }
     }
+    const dz = this.player.dizzyK;
+    const filter = dz > 0.01 ? `blur(${(dz * 0.9).toFixed(2)}px) saturate(${(1 + dz * 0.35).toFixed(2)}) hue-rotate(${(Math.sin(t * 0.6) * 14 * dz).toFixed(1)}deg)` : '';
+    if (this.engine.renderer.domElement.style.filter !== filter) this.engine.renderer.domElement.style.filter = filter;
     this.ui.tick(dt);
     this.input.endFrame();
   }

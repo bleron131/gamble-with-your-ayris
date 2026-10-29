@@ -112,7 +112,7 @@ export class BlackjackView extends TableView {
     this.panel = h('div.tablepanel',
       h('div.ptitle', '🃏 BLACKJACK'),
       limitLine(this.limits),
-      h('div.phint', 'Blackjack zahlt 3:2 · Dealer steht auf 17 · Double & Split erlaubt'),
+      h('div.phint', 'Blackjack zahlt 2:1 · 5 Karten ohne Bust gewinnen · Dealer steht auf 17'),
       this.info,
       this.betWrap,
       h('div.actions', ...Object.values(this.btn)),

@@ -88,6 +88,7 @@ export class SlotView extends TableView {
     this.winTex = new THREE.CanvasTexture(c);
     this.winTex.colorSpace = THREE.SRGBColorSpace;
     const disp = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.15), new THREE.MeshBasicMaterial({ map: this.winTex, toneMapped: false }));
+    disp.material.color.setScalar(0.9);
     disp.position.set(0, 1.58, 0.23);
     g.add(disp);
     this.setWinDisplay('PLAY ME');
@@ -188,7 +189,7 @@ export class SlotView extends TableView {
       this.bet.el,
       h('div.actions', this.spinBtn),
       h('details.paytable', h('summary', 'Gewinntabelle (× Linieneinsatz)'),
-        h('div', `👑👑👑 JACKPOT ${pay[6]}× · 💎💎💎 ${pay[5]}× · 7️⃣7️⃣7️⃣ ${pay[4]}× · BAR×3 ${pay[3]}× · 🔔×3 ${pay[2]}× · 🍋×3 ${pay[1]}× · 🍒×3 ${pay[0]}× · 🍒🍒 ${this.variant.cherry2}× · 🍒 ${this.variant.cherry1}×`)),
+        h('div', `👑 Krone = WILD · 👑👑👑 JACKPOT ${pay[6]}× · 💎×3 ${pay[5]}× · 7️⃣×3 ${pay[4]}× · BAR×3 ${pay[3]}× · 🔔×3 ${pay[2]}× · 🍋×3 ${pay[1]}× · 🍒×3 ${pay[0]}× · zwei gleiche auf Walze 1+2: ${this.variant.pay2[0]}–${this.variant.pay2[5]}×`)),
       h('div.keys', 'LEERTASTE = Spin · ESC = Aufstehen'),
     );
     return this.panel;

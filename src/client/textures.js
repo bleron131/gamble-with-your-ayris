@@ -145,6 +145,8 @@ export function wallpaperTexture(base, accent) {
   });
 }
 
+// Neon-Schrift: dunkle Rückwand für Kontrast, weicher farbiger Halo, klarer heller Textkern.
+// Der Kern bleibt unter der Bloom-Schwelle, damit der Text leuchtet statt zu einem weissen Fleck zu verschwimmen.
 export function neonTexture(text, color = '#ff3cac', { w = 1024, h = 256, font = FONT, size = 120, sub = null } = {}) {
   return cached('neon' + text + color + w + h + sub, () => {
     const [c, g] = canvas(w, h);
@@ -152,19 +154,33 @@ export function neonTexture(text, color = '#ff3cac', { w = 1024, h = 256, font =
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.font = `${size}px ${font}`;
     const y = sub ? h * 0.4 : h / 2;
-    for (const [blur, alpha] of [[40, 0.7], [20, 0.9], [6, 1]]) {
-      g.shadowColor = color; g.shadowBlur = blur; g.globalAlpha = alpha;
-      g.fillStyle = color; g.fillText(text, w / 2, y);
-    }
+    const tw = Math.min(w - 8, g.measureText(text).width + size * 0.7);
+    // Rückwand
+    g.fillStyle = 'rgba(8, 4, 14, 0.62)';
+    roundRect(g, (w - tw) / 2, h * 0.06, tw, h * 0.88, Math.min(40, h * 0.2)); g.fill();
+    // Halo (dezent)
+    g.shadowColor = color; g.shadowBlur = size * 0.22; g.globalAlpha = 0.55;
+    g.fillStyle = color; g.fillText(text, w / 2, y);
+    g.shadowBlur = size * 0.08; g.globalAlpha = 0.8; g.fillText(text, w / 2, y);
     g.shadowBlur = 0; g.globalAlpha = 1;
-    g.fillStyle = '#fff'; g.font = `${size * 0.92}px ${font}`;
-    g.globalAlpha = 0.85; g.fillText(text, w / 2, y);
+    // Klarer Textkern: helle Tönung der Neonfarbe mit farbiger Kontur
+    g.lineWidth = Math.max(2, size * 0.05); g.strokeStyle = color; g.lineJoin = 'round';
+    g.strokeText(text, w / 2, y);
+    g.fillStyle = mixWhite(color, 0.5); g.fillText(text, w / 2, y);
     if (sub) {
-      g.font = `${size * 0.4}px ${font}`; g.fillStyle = color; g.shadowColor = color; g.shadowBlur = 12; g.globalAlpha = 1;
+      g.font = `${size * 0.4}px ${font}`;
+      g.shadowColor = color; g.shadowBlur = 8; g.fillStyle = mixWhite(color, 0.35);
       g.fillText(sub, w / 2, h * 0.8);
+      g.shadowBlur = 0;
     }
     return toTex(c);
   });
+}
+
+function mixWhite(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = i => Math.round(((n >> i) & 255) * (1 - k) + 255 * k);
+  return `rgb(${ch(16)}, ${ch(8)}, ${ch(0)})`;
 }
 
 export function signTexture(lines, { bg = '#111', fg = '#ffd97a', w = 512, h = 256, border = '#ffd97a', size = 54 } = {}) {
@@ -357,7 +373,7 @@ export function rouletteRotorTexture() {
 }
 
 // ───────────────────────── Glücksrad ─────────────────────────
-export const WHEEL_COLORS = { x1: '#f5c542', x3: '#2a9df4', x5: '#9b51e0', x10: '#27ae60', x20: '#eb5757', x50: '#111' };
+export const WHEEL_COLORS = { x1: '#f5c542', x3: '#2a9df4', x6: '#9b51e0', x12: '#27ae60', x25: '#eb5757', x50: '#111' };
 export function wheelTexture() {
   return cached('bigwheel', () => {
     const S = 1024;
@@ -465,7 +481,7 @@ export function crapsLayout() {
     };
     box('pass', 30, 500, 940, 110, 'PASS LINE', 'zahlt 1:1');
     box('dontpass', 30, 390, 940, 100, "DON'T PASS BAR", '12 = Push');
-    box('field', 30, 190, 940, 190, 'FIELD', '2·3·4·9·10·11·12 – (2 zahlt 2:1, 12 zahlt 3:1)');
+    box('field', 30, 190, 940, 190, 'FIELD', '2·3·4·9·10·11·12 – (2 und 12 zahlen 3:1)');
     box('odds', 30, 30, 460, 150, 'ODDS', 'echte Quoten', '#0a527a');
     // Point-Nummern Anzeige
     [4, 5, 6, 8, 9, 10].forEach((n, i) => {
@@ -476,9 +492,9 @@ export function crapsLayout() {
     g.fillStyle = '#7a1230'; g.fillRect(990, 30, 380, 580);
     g.strokeRect(990, 30, 380, 580);
     g.fillStyle = '#ffe58a'; g.font = `30px ${FONT}`; g.fillText('PROPOSITION', 1180, 70);
-    box('any7', 1010, 110, 340, 140, 'ANY 7', 'zahlt 4:1');
-    box('anycraps', 1010, 270, 340, 150, 'ANY CRAPS', '2·3·12 zahlt 7:1');
-    box('yo', 1010, 440, 340, 150, 'YO 11', 'zahlt 15:1');
+    box('any7', 1010, 110, 340, 140, 'ANY 7', 'zahlt 5:1');
+    box('anycraps', 1010, 270, 340, 150, 'ANY CRAPS', '2·3·12 zahlt 8:1');
+    box('yo', 1010, 440, 340, 150, 'YO 11', 'zahlt 17:1');
     return { texture: toTex(c), regions, W, H, pointX: n => 500 + [4, 5, 6, 8, 9, 10].indexOf(n) * 78 + 39 };
   });
 }
@@ -506,13 +522,13 @@ export function printedFelt(kind) {
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.strokeStyle = '#e8d9a8'; g.fillStyle = '#e8d9a8'; g.lineWidth = 4;
     if (kind === 'blackjack') {
-      g.font = `44px ${FONT}`; g.fillText('BLACKJACK PAYS 3 TO 2', 512, 150);
-      g.font = `bold 26px ${UIFONT}`; g.fillText('Dealer must stand on all 17s', 512, 200);
+      g.font = `44px ${FONT}`; g.fillText('BLACKJACK PAYS 2 TO 1', 512, 150);
+      g.font = `bold 26px ${UIFONT}`; g.fillText('Dealer must stand on all 17s · Five Card Charlie wins', 512, 200);
       g.beginPath(); g.arc(512, 360, 60, 0, Math.PI * 2); g.stroke();
     } else if (kind === 'baccarat') {
       g.font = `42px ${FONT}`;
-      [['PLAYER', 250], ['TIE 8:1', 512], ['BANKER', 774]].forEach(([t, x]) => { g.strokeRect(x - 120, 300, 240, 110); g.fillText(t, x, 355); });
-      g.font = `bold 24px ${UIFONT}`; g.fillText('Banker zahlt 0.95 : 1', 512, 450);
+      [['PLAYER', 250], ['TIE 9:1', 512], ['BANKER', 774]].forEach(([t, x]) => { g.strokeRect(x - 120, 300, 240, 110); g.fillText(t, x, 355); });
+      g.font = `bold 24px ${UIFONT}`; g.fillText('Player 1.05 : 1 · Banker 1 : 1 ohne Kommission', 512, 450);
     } else if (kind === 'poker') {
       g.font = `44px ${FONT}`; g.fillText("CASINO HOLD'EM", 512, 120);
       g.font = `bold 22px ${UIFONT}`; g.fillText('Royal 100:1 · Str. Flush 20:1 · Vierling 10:1 · Full House 3:1 · Flush 2:1 · sonst 1:1', 512, 170);

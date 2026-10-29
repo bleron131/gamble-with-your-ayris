@@ -313,10 +313,24 @@ export class Character {
   // ───────────────────────── Animation ─────────────────────────
   setAnim(a) { this.anim = a; }
 
+  // Effekte von Mitspielern (b = Flasche, d = trinkt, z = schwindelig)
+  setFx(fx = '') {
+    this.fx = fx;
+    const wantBottle = fx.includes('b') || fx.includes('d');
+    if (wantBottle && !this.bottle) {
+      this.bottle = makkaBottle(1.6);
+      // In der Faust gehalten: Flaschenhals zeigt quer zum Arm (beim Trinken Richtung Mund)
+      this.bottle.rotation.x = Math.PI / 2;
+      this.bottle.position.set(0.03, -0.31, -0.13);
+      this.armR.add(this.bottle);
+    } else if (!wantBottle && this.bottle) { this.armR.remove(this.bottle); this.bottle = null; }
+  }
+
   update(dt) {
     this.t += dt;
     const t = this.t;
     let legSwing = 0, armSwing = 0, bob = 0, armUp = 0, headTilt = 0, sway = 0;
+    const fx = this.fx || '';
     const L = this.legL, R = this.legR;
     switch (this.anim) {
       case 'walk': legSwing = Math.sin(t * 11) * 0.65; armSwing = legSwing * 0.8; bob = Math.abs(Math.sin(t * 11)) * 0.05; break;
@@ -349,6 +363,21 @@ export class Character {
       this.armR.rotation.set(armSwing, 0, 0.18);
     }
     this.head.rotation.x = headTilt;
+    this.head.rotation.z = 0;
+    // Flasche halten / trinken
+    if (fx.includes('d')) {
+      const k = 0.5 + 0.5 * Math.sin(t * 2.2);
+      this.armR.rotation.set(-2.5 - k * 0.3, 0, 0.45);
+      this.head.rotation.x = -0.45 - k * 0.1;
+    } else if (this.bottle) {
+      this.armR.rotation.set(-0.9, 0, 0.25);
+    }
+    // Schwindel: schwankender Gang
+    if (fx.includes('z')) {
+      this.body.rotation.z = Math.sin(t * 2.1) * 0.18 + Math.sin(t * 5.3) * 0.04;
+      this.body.position.x = Math.sin(t * 1.4) * 0.06;
+      this.head.rotation.z = Math.sin(t * 1.7 + 1) * 0.25;
+    } else this.body.position.x = 0;
     if (this.anim === 'sit') { L.rotation.x = -1.4; R.rotation.x = -1.4; this.body.position.y = -0.2; }
     // Blinzeln
     this.blinkT -= dt;
@@ -377,6 +406,44 @@ function starGeometry() {
     if (i === 0) s.moveTo(Math.cos(a) * r, Math.sin(a) * r); else s.lineTo(Math.cos(a) * r, Math.sin(a) * r);
   }
   return new THREE.ExtrudeGeometry(s, { depth: 0.02, bevelEnabled: false });
+}
+
+// MAKKA: klare, leicht grünliche Limonadenflasche mit pinker Füllung und eigenem Etikett
+let makkaLabel = null;
+function makkaLabelTexture() {
+  if (makkaLabel) return makkaLabel;
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff4f9'; g.fillRect(0, 0, 512, 128);
+  g.fillStyle = '#e8187a'; g.fillRect(0, 0, 512, 16); g.fillRect(0, 112, 512, 16);
+  g.fillStyle = '#c3005f'; g.font = '64px "Bungee", Impact, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (const x of [128, 384]) { g.fillText('MAKKA', x, 58); }
+  g.font = 'bold 18px "Nunito", Arial'; g.fillStyle = '#7a1230';
+  for (const x of [128, 384]) g.fillText('AYRI LIMONADE', x, 97);
+  makkaLabel = new THREE.CanvasTexture(c);
+  makkaLabel.colorSpace = THREE.SRGBColorSpace;
+  return makkaLabel;
+}
+
+export function makkaBottle(scale = 1) {
+  const g = new THREE.Group();
+  const prof = [[0.0, 0], [0.034, 0], [0.036, 0.01], [0.036, 0.1], [0.03, 0.13], [0.016, 0.165], [0.013, 0.2], [0.014, 0.205], [0.0, 0.205]];
+  const glassPts = prof.map(([r, y]) => new THREE.Vector2(r, y));
+  const glass = new THREE.Mesh(new THREE.LatheGeometry(glassPts, 24), new THREE.MeshStandardMaterial({ color: '#cff7d6', transparent: true, opacity: 0.35, roughness: 0.05, metalness: 0.1, depthWrite: false }));
+  g.add(glass);
+  const liquidPts = [[0, 0.004], [0.031, 0.004], [0.032, 0.1], [0.026, 0.125], [0.012, 0.15], [0, 0.15]].map(([r, y]) => new THREE.Vector2(r, y));
+  const liquid = new THREE.Mesh(new THREE.LatheGeometry(liquidPts, 20), new THREE.MeshStandardMaterial({ color: '#ff3fa4', emissive: '#a0105a', emissiveIntensity: 0.35, transparent: true, opacity: 0.9, roughness: 0.2 }));
+  g.add(liquid);
+  const label = new THREE.Mesh(new THREE.CylinderGeometry(0.0365, 0.0365, 0.05, 24, 1, true), new THREE.MeshStandardMaterial({ map: makkaLabelTexture(), roughness: 0.5 }));
+  label.position.y = 0.06;
+  g.add(label);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.012, 14), new THREE.MeshStandardMaterial({ color: '#e8187a', roughness: 0.3, metalness: 0.5 }));
+  cap.position.y = 0.211;
+  g.add(cap);
+  g.scale.setScalar(scale);
+  g.userData.liquid = liquid;
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return g;
 }
 
 // Fertige NPC-Looks

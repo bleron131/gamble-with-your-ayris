@@ -3,7 +3,7 @@ import { h, clear, esc } from './dom.js';
 import { fmtMoney, fmtShort, floorDef, ITEMS, RETRY_GAMES_HAT, FLOORS } from '../../shared/config.js';
 import { sfx, initAudio } from '../audio.js';
 import * as Save from '../save.js';
-import { openElevator, openShop, openEditor, openStats, openSettings, renderScoreboard } from './modals.js';
+import { openElevator, openShop, openEditor, openStats, openSettings, renderScoreboard, openBar } from './modals.js';
 
 export class UI {
   constructor(app) {
@@ -31,6 +31,8 @@ export class UI {
       )));
     this.itemBar = h('div.itembar');
     this.hud.append(this.itemBar);
+    this.makkaEl = h('button.makka.hidden', { onclick: () => this.app.drinkMakka() });
+    this.hud.append(this.makkaEl);
     this.feedEl = h('div.feed');
     this.hud.append(this.feedEl);
     this.hintEl = h('div.hint');
@@ -167,6 +169,10 @@ export class UI {
       this.potShown = Math.abs(d) < 1 ? this.potTarget : this.potShown + d * Math.min(1, dt * 8);
       this.potEl.textContent = fmtMoney(Math.round(this.potShown));
     } else if (this.potTarget !== undefined) this.potEl.textContent = fmtMoney(this.potTarget);
+    // MAKKA-Anzeige: Flasche in der Hand bzw. Schwindel-Countdown
+    const p = this.app.player;
+    const txt = p.drinkT > 0 ? '🍾 Gluck, gluck…' : p.hasBottle ? '🍾 MAKKA trinken (T)' : p.dizzyT > 0 ? `😵‍💫 Schwindelig ${Math.ceil(p.dizzyT)}s` : '';
+    if (this.makkaEl.textContent !== txt) { this.makkaEl.textContent = txt; this.makkaEl.classList.toggle('hidden', !txt || !this.app.state); this.makkaEl.disabled = !p.hasBottle || p.drinkT > 0; }
     if (this.voteDeadline) {
       const left = Math.max(0, Math.ceil((this.voteDeadline - Date.now()) / 1000));
       if (this.voteTimer) this.voteTimer.textContent = `${left}s`;
@@ -386,6 +392,7 @@ export class UI {
   }
   openElevator() { openElevator(this); }
   openShop() { openShop(this); }
+  openBar(nextLine) { openBar(this, nextLine); }
   openEditor(fromMenu) { openEditor(this, fromMenu); }
   openStats() { openStats(this); }
   openSettings() { openSettings(this); }

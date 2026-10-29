@@ -256,6 +256,7 @@ export class TextSprite {
     this.tex = new THREE.CanvasTexture(this.c);
     this.tex.colorSpace = THREE.SRGBColorSpace;
     this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tex, transparent: true, depthWrite: false, toneMapped: false }));
+    this.sprite.material.color.setScalar(0.88);
     this.sprite.scale.set(w, h, 1);
     this.sprite.renderOrder = 8;
     this.text = null;

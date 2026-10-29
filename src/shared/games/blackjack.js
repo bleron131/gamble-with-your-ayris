@@ -1,4 +1,5 @@
-// Blackjack: 6 Decks, Dealer steht auf Soft 17, Blackjack zahlt 3:2, Double, Split (bis 4 Hände).
+// Blackjack: 6 Decks, Dealer steht auf Soft 17, Double, Split (bis 4 Hände).
+// Party-Regeln: Blackjack zahlt 2:1, fünf Karten ohne Bust gewinnen automatisch (Five Card Charlie).
 import { Shoe } from '../rng.js';
 
 export function cardValue(c) {
@@ -35,7 +36,10 @@ export const blackjackGame = {
     if (!ctx.debit(bet, { label: `${ctx.money(bet)} AUF BLACKJACK` })) return;
     if (table.shoe.needsShuffle()) table.shoe.reshuffle();
     const d = () => table.shoe.draw();
-    const p1 = d(), d1 = d(), p2 = d(), hole = d();
+    let p1 = d(), d1 = d(), p2 = d(), hole = d();
+    // Ayri-Glück: eine schwache Starthand (12–16) wird manchmal neu gegeben
+    const t0 = handTotal([p1, p2]).total;
+    if (t0 >= 12 && t0 <= 16 && ctx.lucky?.()) { p1 = d(); p2 = d(); table.secret.lucky = true; } else table.secret.lucky = false;
     table.secret.hole = hole;
     table.secret.firstBet = bet;
     s.hands = [{ cards: [p1, p2], bet, doubled: false, done: false, result: null }];
@@ -131,7 +135,7 @@ function afterDraw(ctx, table, isDouble) {
   if (t > 21) {
     if (s.jokerable) { s.phase = 'joker'; s.message = 'BUST! Joker Card benutzen?'; ctx.changed(); return; }
     hand.done = true;
-  } else if (t === 21 || isDouble) {
+  } else if (t === 21 || isDouble || hand.cards.length >= 5) {
     hand.done = true;
   }
   if (hand.done) s.jokerable = false;
@@ -196,8 +200,9 @@ function finish(ctx, table) {
     stake += h.bet;
     const pt = handTotal(h.cards).total;
     const pBJ = isBlackjack(h.cards) && s.hands.length === 1;
-    if (pBJ && !dBJ) { h.result = 'BLACKJACK'; payout += h.bet + Math.floor(h.bet * 1.5); blackjacks++; wins++; }
+    if (pBJ && !dBJ) { h.result = 'BLACKJACK'; payout += h.bet * 3; blackjacks++; wins++; }
     else if (pt > 21) h.result = 'BUST';
+    else if (h.cards.length >= 5 && !dBJ) { h.result = 'FIVE CARD CHARLIE'; payout += h.bet * 2; wins++; }
     else if (dBJ && !pBJ) h.result = 'VERLOREN';
     else if (pBJ && dBJ) { h.result = 'PUSH'; payout += h.bet; }
     else if (dt > 21 || pt > dt) { h.result = 'GEWONNEN'; payout += h.bet * 2; wins++; }
@@ -208,7 +213,7 @@ function finish(ctx, table) {
   s.message = s.hands.map(h => h.result).join(' / ');
   s.jokerable = false;
   ctx.settle({
-    stake, payout, blackjacks, handsWon: wins,
+    stake, payout, blackjacks, handsWon: wins, lucky: table.secret.lucky,
     detail: `Dealer ${dt > 21 ? 'BUST' : dt} – ${s.message}`,
     replay: { bet: table.secret.firstBet },
   });

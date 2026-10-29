@@ -71,7 +71,7 @@ export class PokerView extends TableView {
     this.panel = h('div.tablepanel',
       h('div.ptitle', "♠️ CASINO HOLD'EM"),
       limitLine(this.limits, ' (Ante) · Call = 2× Ante'),
-      h('div.phint', 'Dealer qualifiziert sich ab einem Paar Vieren. Ante zahlt bis 100:1 (Royal Flush).'),
+      h('div.phint', 'Dealer qualifiziert sich erst ab einem Paar Sechsen. Ante zahlt bis 100:1 (Royal Flush).'),
       this.info,
       this.betWrap,
       h('div.actions', ...Object.values(this.btn)),

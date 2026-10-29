@@ -1,4 +1,4 @@
-// Europäisches Roulette (37 Fächer) mit "La Partage": bei 0 gibt es auf einfache Chancen die Hälfte zurück.
+// Europäisches Roulette (37 Fächer), Party-Regeln: Einzelzahl zahlt 36:1 und bei 0 gibt es auf alle Aussenwetten den Einsatz zurück.
 import { randInt } from '../rng.js';
 
 export const WHEEL_ORDER = [0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26];
@@ -31,10 +31,10 @@ export function isValidSpot(spot) {
 }
 
 export function payoutFor(spot, amount, n) {
-  if (spot.startsWith('n')) return +spot.slice(1) === n ? amount * 36 : 0;
+  if (spot.startsWith('n')) return +spot.slice(1) === n ? amount * 37 : 0;
   const o = OUTSIDE[spot];
   if (o.test(n)) return amount * (o.pay + 1);
-  if (n === 0 && o.even) return Math.floor(amount / 2); // La Partage
+  if (n === 0) return amount; // Zero: Aussenwetten zurück
   return 0;
 }
 
@@ -62,7 +62,15 @@ export const rouletteGame = {
       return ctx.fail(`Maximum auf Einzelzahl: ${ctx.money(lim.straightMax)}`);
     const label = bets.slice(0, 3).map(b => `${ctx.money(b.amount)} AUF ${spotLabel(b.spot)}`).join(', ') + (bets.length > 3 ? ' …' : '');
     if (!ctx.debit(total, { label })) return;
-    const n = randInt(37);
+    const total0 = total;
+    const evalSpin = n => bets.reduce((a, b) => a + payoutFor(b.spot, b.amount, n), 0);
+    let n = randInt(37);
+    let lucky = false;
+    // Ayri-Glück: verlorener Spin wird manchmal neu geworfen
+    if (evalSpin(n) < total0 && ctx.lucky?.()) {
+      const n2 = randInt(37);
+      if (evalSpin(n2) > evalSpin(n)) { n = n2; lucky = evalSpin(n2) > total0; }
+    }
     let payout = 0, straight = false;
     for (const b of bets) {
       const p = payoutFor(b.spot, b.amount, n);
@@ -79,7 +87,7 @@ export const rouletteGame = {
       s.phase = 'idle';
       s.history = [n, ...s.history].slice(0, 14);
       ctx.settle({
-        stake: total, payout, straight, roulette: n,
+        stake: total, payout, straight, roulette: n, lucky,
         detail: `Kugel: ${n} ${n === 0 ? 'GRÜN' : RED.has(n) ? 'ROT' : 'SCHWARZ'}`,
         replay: { bets },
       });

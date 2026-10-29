@@ -281,3 +281,9 @@ button.opt.locked { opacity: .55; }
   .logo .l1 { font-size: 46px; } .logo .l3 { font-size: 54px; }
 }
 .tablewrap:not(.hidden) ~ .emotehelp { display: none; }
+
+button.makka { position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%); background: linear-gradient(180deg, #ff6ac1, #c3005f); border-color: #ffb3dd; color: #fff; font-size: 15px; padding: 8px 18px; border-radius: 22px; box-shadow: 0 0 18px rgba(255, 63, 164, .45); }
+button.makka:disabled { opacity: .9; cursor: default; }
+.makkacard { display: flex; gap: 14px; align-items: center; background: rgba(255, 63, 164, .1); border: 1px solid rgba(255, 63, 164, .45); border-radius: 14px; padding: 12px; }
+.makkaicon { font-size: 48px; }
+.barline { margin: 12px 0 4px; font-weight: 700; color: var(--muted); font-style: italic; }

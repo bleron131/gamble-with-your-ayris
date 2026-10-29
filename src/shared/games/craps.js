@@ -1,4 +1,5 @@
 // Craps: Pass/Don't Pass mit Point, Odds (echte Quoten), Field und One-Roll-Wetten.
+// Party-Quoten: Field zahlt auf 2 und 12 je 3:1, One-Roll-Wetten zahlen faire Quoten.
 import { randInt } from '../rng.js';
 
 export const CRAPS_BETS = {
@@ -28,10 +29,10 @@ export function resolveRoll(state, a, b) {
     delete bets[k];
   };
   // One-Roll
-  if (bets.field) take('field', sum === 2 ? 3 : sum === 12 ? 4 : [3, 4, 9, 10, 11].includes(sum) ? 2 : 0);
-  if (bets.any7) take('any7', sum === 7 ? 5 : 0);
-  if (bets.anycraps) take('anycraps', [2, 3, 12].includes(sum) ? 8 : 0);
-  if (bets.yo) take('yo', sum === 11 ? 16 : 0);
+  if (bets.field) take('field', sum === 2 || sum === 12 ? 4 : [3, 4, 9, 10, 11].includes(sum) ? 2 : 0);
+  if (bets.any7) take('any7', sum === 7 ? 6 : 0);
+  if (bets.anycraps) take('anycraps', [2, 3, 12].includes(sum) ? 9 : 0);
+  if (bets.yo) take('yo', sum === 11 ? 18 : 0);
   let pointHit = false;
   if (state.point === null) {
     if (sum === 7 || sum === 11) { take('pass', 2); take('dontpass', 0); }
@@ -93,7 +94,14 @@ export const crapsGame = {
       if (!ctx.debit(total, { label })) return;
     }
     s.bets = after;
-    const a = randInt(6) + 1, b = randInt(6) + 1;
+    // Ayri-Glück: ein Wurf, der Geld kostet, wird manchmal neu gewürfelt
+    const net = (x, y) => { const r = resolveRoll({ point: s.point, bets: { ...s.bets } }, x, y); return r.payout - r.stake; };
+    let a = randInt(6) + 1, b = randInt(6) + 1;
+    let lucky = false;
+    if (net(a, b) < 0 && ctx.lucky?.()) {
+      const a2 = randInt(6) + 1, b2 = randInt(6) + 1;
+      if (net(a2, b2) > net(a, b)) { a = a2; b = b2; lucky = net(a2, b2) > 0; }
+    }
     s.phase = 'rolling';
     s.dice = [a, b];
     s.rollId++;
@@ -104,7 +112,7 @@ export const crapsGame = {
       s.history = [a + b, ...s.history].slice(0, 14);
       const keep = this.outstanding(table) > 0;
       ctx.settle({
-        stake: res.stake, payout: res.payout, craps: a + b, pointHit: res.pointHit,
+        stake: res.stake, payout: res.payout, craps: a + b, pointHit: res.pointHit, lucky,
         detail: `Würfel: ${a} + ${b} = ${a + b}${res.notes.length ? ' – ' + res.notes.join(', ') : ''}`,
         replay: { bets: add },
         keepBusy: keep,

@@ -121,7 +121,7 @@ export function palm(h = 2.6) {
 export function neonSign(text, color, w = 3, h = 0.75, opts = {}) {
   const tex = neonTexture(text, color, opts);
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false, depthWrite: false }));
-  m.material.color.setScalar(1.6);
+  m.material.color.setScalar(0.92);
   return m;
 }
 
@@ -306,6 +306,7 @@ export function elevator({ frame = '#d4af37', door = '#b8b8c0', width = 2.4, lab
   const c = document.createElement('canvas'); c.width = 256; c.height = 96;
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
   const disp = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.34), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+  disp.material.color.setScalar(0.9);
   disp.position.set(0, H + 0.15, 0.16);
   g.add(disp);
   const setDisplay = (txt, arrow = '') => {

@@ -1,6 +1,6 @@
 // Prozedurale Musik & Soundeffekte (WebAudio, keine externen Dateien).
 let ctx = null;
-let master, musicBus, sfxBus, ambBus;
+let master, musicBus, sfxBus, ambBus, lowpass;
 let noiseBuf = null;
 const settings = { master: 0.8, music: 0.55, sfx: 0.9 };
 
@@ -13,7 +13,9 @@ export function initAudio(s) {
   master = ctx.createGain();
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -14; comp.ratio.value = 4;
-  master.connect(comp).connect(ctx.destination);
+  lowpass = ctx.createBiquadFilter();
+  lowpass.type = 'lowpass'; lowpass.frequency.value = 20000; lowpass.Q.value = 0.7;
+  master.connect(lowpass).connect(comp).connect(ctx.destination);
   musicBus = ctx.createGain(); musicBus.connect(master);
   sfxBus = ctx.createGain(); sfxBus.connect(master);
   ambBus = ctx.createGain(); ambBus.connect(master);
@@ -161,6 +163,17 @@ export const sfx = {
   aww() { if (!ctx) return; const t = now(); for (let i = 0; i < 5; i++) tone(320 + i * 30, t + i * 0.03, 1.2, { type: 'sawtooth', vol: 0.025, filter: 900, slide: 0.7 }); },
   shop() { if (!ctx) return; const t = now(); tone(1568, t, 0.1, { vol: 0.1 }); tone(2093, t + 0.08, 0.3, { vol: 0.1 }); },
   pop() { if (!ctx) return; tone(600, now(), 0.08, { vol: 0.12, slide: 2 }); },
+  register() { if (!ctx) return; const t = now(); noise(t, 0.08, { freq: 3000, q: 2, vol: 0.15 }); tone(2637, t + 0.06, 0.25, { vol: 0.12 }); tone(3136, t + 0.14, 0.4, { vol: 0.1 }); },
+  bottle() { if (!ctx) return; const t = now(); tone(1760, t, 0.5, { vol: 0.08 }); tone(2349, t + 0.02, 0.4, { vol: 0.05 }); noise(t, 0.03, { freq: 6000, q: 4, vol: 0.06 }); },
+  open() { if (!ctx) return; const t = now(); noise(t, 0.12, { freq: 2500, q: 1, vol: 0.2, sweep: 600 }); tone(400, t + 0.05, 0.08, { vol: 0.08, slide: 1.8 }); },
+  gulp() { if (!ctx) return; const t = now(); tone(180, t, 0.12, { vol: 0.25, slide: 0.55 }); noise(t, 0.1, { type: 'lowpass', freq: 500, vol: 0.12 }); },
+  dizzy() {
+    if (!ctx) return;
+    const t = now();
+    tone(300, t, 0.45, { type: 'sine', vol: 0.2, slide: 2.5 });
+    tone(1400, t + 0.4, 1.4, { type: 'sine', vol: 0.12, slide: 0.25 });
+    for (let i = 0; i < 6; i++) tone(2000 + i * 260, t + 0.5 + i * 0.12, 0.12, { type: 'triangle', vol: 0.04 });
+  },
   step(v = 0.04) { if (!ctx) return; noise(now(), 0.05, { type: 'lowpass', freq: 400, vol: v }); },
 };
 
@@ -268,4 +281,10 @@ export function say(text, lang = 'de-DE', rate = 1.05) {
     u.volume = Math.min(1, settings.sfx * settings.master);
     window.speechSynthesis.speak(u);
   } catch { /* ohne Stimme weiter */ }
+}
+
+// Gedämpfter Klang während des Schwindels, weich zurück zum Normalklang
+export function setDizzyAudio(on) {
+  if (!ctx || !lowpass) return;
+  lowpass.frequency.setTargetAtTime(on ? 1100 : 20000, ctx.currentTime, on ? 0.5 : 0.9);
 }

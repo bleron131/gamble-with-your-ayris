@@ -127,7 +127,7 @@ export class BaccaratView extends TableView {
     this.panel = h('div.tablepanel',
       h('div.ptitle', '🂡 BACCARAT'),
       limitLine(this.limits, ` · Tie max ${fmtMoney(this.limits.tieMax)}`),
-      h('div.phint', 'Player 1:1 · Banker 0.95:1 · Tie 8:1 – Chip wählen und Feld anklicken'),
+      h('div.phint', 'Player 1.05:1 · Banker 1:1 · Tie 9:1 – Chip wählen und Feld anklicken'),
       this.picker.el,
       h('div.quick',
         h('button.small.blue', { onclick: () => this.addBet('player') }, 'PLAYER'),

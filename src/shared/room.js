@@ -4,7 +4,7 @@
 // Wetten auf denselben Betrag können daher nie beide akzeptiert werden (kein Geld-Duplizieren).
 import {
   START_CAPITAL, MAFIA_KEEP_FRACTION, FLOORS, floorDef, floorTables, ITEMS, RETRY_GAMES_HAT,
-  FLOOR_REWARDS, CHALLENGE_FACTOR, CHALLENGE_REWARDS, LOADOUT_SLOTS, MAX_PLAYERS, fmtMoney, GAME_NAMES,
+  FLOOR_REWARDS, CHALLENGE_FACTOR, CHALLENGE_REWARDS, LOADOUT_SLOTS, MAX_PLAYERS, fmtMoney, GAME_NAMES, luckChance,
 } from './config.js';
 import { rand } from './rng.js';
 import { slotsGame } from './games/slots.js';
@@ -70,7 +70,7 @@ export class Room {
       appearance: profile.appearance || {},
       rewarded: new Set(profile.rewardedFloors || []),
       challenged: new Set(profile.challengeFloors || []),
-      inventory: {}, loadout: [], used: {}, armed: {}, shishaRounds: 0,
+      inventory: {}, loadout: [], used: {}, armed: {}, shishaRounds: 0, lossStreak: 0,
       seat: null, pose: { p: [0, 0, 0], r: 0, a: 'idle' }, poseDirty: true,
       joinedAt: Date.now(),
     };
@@ -163,7 +163,7 @@ export class Room {
       switch (msg.t) {
         case 'move':
           if (Array.isArray(msg.p) && msg.p.length === 3 && msg.p.every(Number.isFinite)) {
-            p.pose = { p: msg.p, r: +msg.r || 0, a: String(msg.a || 'idle').slice(0, 12), pitch: +msg.pitch || 0 };
+            p.pose = { p: msg.p, r: +msg.r || 0, a: String(msg.a || 'idle').slice(0, 12), pitch: +msg.pitch || 0, fx: String(msg.fx || '').slice(0, 6) };
             p.poseDirty = true;
           }
           break;
@@ -174,6 +174,7 @@ export class Room {
           break;
         case 'loadout': this.setLoadout(p, msg); break;
         case 'emote': this.event({ kind: 'emote', pid: id, e: String(msg.e).slice(0, 12) }); break;
+        case 'drink': if (['buy', 'drink'].includes(msg.phase)) this.event({ kind: 'drink', pid: id, name: p.name, phase: msg.phase }); break;
         case 'vote.start': this.startVote(p, msg.type, msg.data || {}); break;
         case 'vote.cast': this.castVote(p, !!msg.yes); break;
         case 'table.sit': this.sit(p, msg.id); break;
@@ -490,6 +491,7 @@ export class Room {
         room.event({ kind: 'item', pid, name: p.name, item, msg: `${ITEMS[item].name} eingesetzt!` });
         return true;
       },
+      lucky() { const p = room.players.get(pid); return !!p && rand() < luckChance(p.lossStreak); },
       settle(r) { room.settle(pid, table, r); },
     };
   }
@@ -541,13 +543,14 @@ export class Room {
     table.busy = !!r.keepBusy;
     if (net < 0 && stake > 0 && r.replay) table.lastRound[pid] = { game: table.type, replay: r.replay, loss: -net };
     else table.lastRound[pid] = null;
+    if (p && stake > 0) p.lossStreak = net < 0 ? p.lossStreak + 1 : net > 0 ? 0 : p.lossStreak;
     if (this.pot > this.campaign.highestPot) this.campaign.highestPot = this.pot;
     const bigWin = net > 0 && (net >= stake * 8 || net >= f.target * 0.1);
     this.event({
       kind: 'result', pid, name: p?.name || '?', game: table.type, tableId: table.id,
       stake, payout: payout - extra, net, detail: r.detail, jackpot: !!r.jackpot, bigWin, effects,
       straight: r.straight, blackjacks: r.blackjacks, tieWin: r.tieWin, pointHit: r.pointHit,
-      pokerCat: r.pokerCat, wheel: r.wheel, newStake: r.newStake, pot: this.pot,
+      pokerCat: r.pokerCat, wheel: r.wheel, newStake: r.newStake, pot: this.pot, lucky: !!r.lucky && net > 0,
     });
     this.markDirty();
     this.checkTarget();

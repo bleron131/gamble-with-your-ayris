@@ -1,24 +1,30 @@
 // Slots: 3 Walzen × 3 Reihen, 1/3/5 Gewinnlinien.
+// Party-Balancing: Die Krone ist WILD (ersetzt jedes Symbol), zwei gleiche Symbole auf Walze 1+2 zahlen ebenfalls.
 import { randInt } from '../rng.js';
 
 export const SYMBOLS = ['cherry', 'lemon', 'bell', 'bar', 'seven', 'diamond', 'crown'];
 const C = 0, L = 1, B = 2, R = 3, S = 4, D = 5, K = 6;
 
-// Walzenstreifen (Häufigkeit bestimmt Wahrscheinlichkeit)
-const STRIP_NORMAL = [C, L, B, C, R, L, S, C, B, L, D, C, R, L, B, C, K, L, R, C, B, S, L, D];
-const STRIP_HIGH = [C, L, B, R, C, S, L, D, B, C, K, L, R, B, C, S, D, L, C, R, D, B, L, C];
+// Walzenstreifen gleichmässig aus Symbol-Häufigkeiten aufbauen
+function buildStrip(counts) {
+  const pos = [];
+  counts.forEach((c, s) => { for (let i = 0; i < c; i++) pos.push([(i + 0.5) / c + s * 0.013, s]); });
+  return pos.sort((a, b) => a[0] - b[0]).map(p => p[1]);
+}
 
 export const VARIANTS = {
+  // ohne Ayri-Glück ~100 % RTP, mit Glück ~105 %; gut jeder dritte Spin gewinnt
   normal: {
-    strip: STRIP_NORMAL,
+    strip: buildStrip([9, 6, 3, 2, 2, 1, 1]),
     // Auszahlung in Vielfachen des Linieneinsatzes
-    pay3: { [C]: 8, [L]: 10, [B]: 20, [R]: 40, [S]: 100, [D]: 150, [K]: 1000 },
-    cherry2: 3, cherry1: 1,
+    pay3: { [C]: 4, [L]: 5, [B]: 6, [R]: 10, [S]: 20, [D]: 40, [K]: 500 },
+    pay2: { [C]: 2, [L]: 2, [B]: 2, [R]: 3, [S]: 3, [D]: 4 },
   },
+  // High-Limit: seltener, dafür grössere Gewinne und häufigere Wilds
   high: {
-    strip: STRIP_HIGH,
-    pay3: { [C]: 6, [L]: 10, [B]: 20, [R]: 35, [S]: 70, [D]: 90, [K]: 2500 },
-    cherry2: 3, cherry1: 0.5,
+    strip: buildStrip([8, 6, 4, 2, 2, 1, 2]),
+    pay3: { [C]: 2, [L]: 2, [B]: 3, [R]: 6, [S]: 12, [D]: 25, [K]: 300 },
+    pay2: { [C]: 2, [L]: 2, [B]: 2, [R]: 2, [S]: 3, [D]: 3 },
   },
 };
 
@@ -32,10 +38,12 @@ export const LINES = [
 ];
 
 export function lineWin(v, syms) {
-  const [a, b, c] = syms;
-  if (a === b && b === c) return v.pay3[a];
-  if (a === C && b === C) return v.cherry2;
-  if (a === C) return v.cherry1;
+  const rest = syms.filter(x => x !== K);
+  if (!rest.length) return v.pay3[K];
+  const t = rest[0];
+  if (syms.every(x => x === t || x === K)) return v.pay3[t];
+  const first = syms[0] === K ? syms[1] : syms[0];
+  if ((syms[0] === syms[1] || syms[0] === K || syms[1] === K) && first !== K && v.pay2[first]) return v.pay2[first];
   return 0;
 }
 
@@ -49,13 +57,12 @@ export function spin(variantName, totalBet, lineCount) {
   const wins = [];
   let jackpot = false;
   for (let li = 0; li < lineCount; li++) {
-    const rows = LINES[li];
-    const syms = rows.map((row, reel) => grid[reel][row]);
+    const syms = LINES[li].map((row, reel) => grid[reel][row]);
     const m = lineWin(v, syms);
     if (m > 0) {
       payout += m * lineBet;
       wins.push({ line: li, mult: m });
-      if (syms[0] === K && syms[1] === K && syms[2] === K) jackpot = true;
+      if (syms.every(x => x === K)) jackpot = true;
     }
   }
   return { stops, grid, payout: Math.floor(payout), wins, jackpot };
@@ -74,7 +81,13 @@ export const slotsGame = (variant) => ({
     if (!(bet >= lim.min && bet <= lim.max)) return ctx.fail(`Einsatz muss zwischen ${lim.min} und ${lim.max} liegen`);
     if (bet % lines !== 0 && bet < lines) return ctx.fail('Einsatz zu klein für Linien');
     if (!ctx.debit(bet, { label: `SPIN ${ctx.money(bet)}` })) return;
-    const r = spin(variant, bet, lines);
+    let r = spin(variant, bet, lines);
+    let lucky = false;
+    // Ayri-Glück: ein verlorener Spin wird manchmal (häufiger nach Pechsträhnen) neu gedreht
+    if (r.payout < bet && ctx.lucky?.()) {
+      const r2 = spin(variant, bet, lines);
+      if (r2.payout > r.payout) { r = r2; lucky = r2.payout > bet; }
+    }
     const s = table.state;
     s.phase = 'spinning';
     s.stops = r.stops;
@@ -89,6 +102,7 @@ export const slotsGame = (variant) => ({
         stake: bet,
         payout: r.payout,
         jackpot: r.jackpot,
+        lucky,
         detail: r.jackpot ? 'JACKPOT!' : r.payout > 0 ? `Gewinn ${ctx.money(r.payout)}` : 'Kein Gewinn',
         replay: { bet, lines },
       });

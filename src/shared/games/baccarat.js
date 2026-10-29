@@ -1,4 +1,4 @@
-// Punto Banco Baccarat mit klassischen Drittkarten-Regeln. Banker zahlt 0.95:1, Tie 8:1.
+// Punto Banco Baccarat mit klassischen Drittkarten-Regeln. Party-Regeln: Banker 1:1 (ohne Kommission), Player 1.05:1, Tie 9:1.
 import { Shoe } from '../rng.js';
 
 export const bacValue = c => (c.r >= 10 ? 0 : c.r);
@@ -48,7 +48,15 @@ export const baccaratGame = {
     const label = Object.entries(bets).map(([k, a]) => `${ctx.money(a)} AUF ${k.toUpperCase()}`).join(', ');
     if (!ctx.debit(total, { label })) return;
     if (table.shoe.needsShuffle()) table.shoe.reshuffle();
-    const coup = playCoup(() => table.shoe.draw());
+    const coupPay = c => c.winner === 'tie'
+      ? (bets.tie || 0) * 10 + (bets.player || 0) + (bets.banker || 0)
+      : c.winner === 'player' ? Math.floor((bets.player || 0) * 2.05) : (bets.banker || 0) * 2;
+    let coup = playCoup(() => table.shoe.draw());
+    let lucky = false;
+    if (coupPay(coup) < total && ctx.lucky?.()) {
+      const c2 = playCoup(() => table.shoe.draw());
+      if (coupPay(c2) > coupPay(coup)) { coup = c2; lucky = coupPay(c2) > total; }
+    }
     const s = table.state;
     s.phase = 'dealing';
     s.bets = bets;
@@ -57,21 +65,14 @@ export const baccaratGame = {
     s.winner = null;
     s.dealId++;
     ctx.busy(true);
-    let payout = 0;
-    if (coup.winner === 'tie') {
-      payout += (bets.tie || 0) * 9 + (bets.player || 0) + (bets.banker || 0);
-    } else if (coup.winner === 'player') {
-      payout += (bets.player || 0) * 2;
-    } else {
-      payout += (bets.banker || 0) + Math.floor((bets.banker || 0) * 0.95);
-    }
+    const payout = coupPay(coup);
     const cards = coup.player.length + coup.banker.length;
     ctx.later(1800 + cards * 650, () => {
       s.phase = 'idle';
       s.winner = coup.winner;
       s.history = [coup.winner, ...s.history].slice(0, 16);
       ctx.settle({
-        stake: total, payout, baccarat: coup.winner, tieWin: coup.winner === 'tie' && bets.tie > 0,
+        stake: total, payout, baccarat: coup.winner, lucky, tieWin: coup.winner === 'tie' && bets.tie > 0,
         detail: `Player ${coup.pt} – Banker ${coup.bt}: ${coup.winner.toUpperCase()}`,
         replay: { bets },
       });

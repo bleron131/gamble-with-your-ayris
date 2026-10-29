@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 
 const EYE = 1.32;
+const BASE_FOV = 70;
+const DIZZY_TIME = 10;
 
 export class LocalPlayer {
   constructor(app) {
@@ -18,6 +20,26 @@ export class LocalPlayer {
     this.camPos = new THREE.Vector3();
     this.camLook = new THREE.Vector3();
     this.stepT = 0;
+    this.lastMouse = -10;
+    this.lastKeys = '';
+    this.basisYaw = 0;
+    this.dizzyEnd = 0;
+    this.drinkEnd = 0;
+    this.hasBottle = false;
+    this.time = 0;
+  }
+
+  // Trinken & Schwindel laufen auf Echtzeit, damit sie unabhängig von der Bildrate exakt 2.4 s bzw. 10 s dauern
+  get dizzyT() { return Math.max(0, (this.dizzyEnd - performance.now()) / 1000); }
+  get drinkT() { return Math.max(0, (this.drinkEnd - performance.now()) / 1000); }
+  startDrink(sec) { this.drinkEnd = performance.now() + sec * 1000; }
+
+  // Schwindel nach MAKKA: weich ein- und ausblenden
+  startDizzy() { this.dizzyEnd = performance.now() + DIZZY_TIME * 1000; }
+  get dizzyK() {
+    if (!(this.dizzyT > 0)) return 0;
+    const k = Math.min(1, (DIZZY_TIME - this.dizzyT) / 0.8, this.dizzyT / 1.6);
+    return k * k * (3 - 2 * k);
   }
 
   spawn(world, index = 0) {
@@ -55,6 +77,9 @@ export class LocalPlayer {
     const sens = 0.0022 * (settings.sensitivity || 1);
     const first = world.mode === 'first';
     this.moving = false;
+    this.time += dt;
+    const dz = this.dizzyK;
+    this.applyFov(camera, dz);
     if (this.emoteT > 0) { this.emoteT -= dt; this.anim = this.emote; } else if (this.anim !== 'walk') this.anim = 'idle';
     if (this.app.cinematic) {
       this.camPos.lerp(this.app.cinematic.pos, Math.min(1, dt * 3));
@@ -72,8 +97,9 @@ export class LocalPlayer {
       this.anim = 'idle';
       return;
     }
-    // Maus-Look
+    // Maus-Look (manuelle Kamera hat immer Vorrang vor der automatischen Ausrichtung)
     if (input.enabled && (input.locked || input.dragging)) {
+      if (input.mouseDX || input.mouseDY) this.lastMouse = this.time;
       if (first) {
         this.yaw -= input.mouseDX * sens;
         this.pitch = THREE.MathUtils.clamp(this.pitch - input.mouseDY * sens, -1.3, 1.2);
@@ -86,20 +112,28 @@ export class LocalPlayer {
     // Bewegung
     const f = (input.down('KeyW') || input.down('ArrowUp') ? 1 : 0) - (input.down('KeyS') || input.down('ArrowDown') ? 1 : 0);
     const r = (input.down('KeyD') || input.down('ArrowRight') ? 1 : 0) - (input.down('KeyA') || input.down('ArrowLeft') ? 1 : 0);
+    const manual = this.time - this.lastMouse < 0.8;
+    const keys = f + ',' + r;
+    // Bewegungsbasis bleibt fest, solange dieselben Tasten gedrückt sind – so kann die Kamera
+    // der Laufrichtung folgen, ohne dass sich die Richtung dabei mitdreht.
+    if (keys !== this.lastKeys || manual) this.basisYaw = first ? this.yaw : this.camYaw;
+    this.lastKeys = keys;
     if (f || r) {
-      const baseYaw = first ? this.yaw : this.camYaw;
-      const fwd = new THREE.Vector3(Math.sin(baseYaw), 0, Math.cos(baseYaw));
+      const fwd = new THREE.Vector3(Math.sin(this.basisYaw), 0, Math.cos(this.basisYaw));
       const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
       const dir = fwd.multiplyScalar(f).addScaledVector(right, r).normalize();
-      const speed = input.down('ShiftLeft') || input.down('ShiftRight') ? 5.2 : 3.2;
+      if (dz > 0) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), dz * (0.35 * Math.sin(this.time * 1.3) + 0.15 * Math.sin(this.time * 3.7)));
+      const speed = (input.down('ShiftLeft') || input.down('ShiftRight') ? 5.2 : 3.2) * (1 - dz * 0.15);
       this.pos.addScaledVector(dir, speed * dt);
       this.moving = true;
+      const target = Math.atan2(dir.x, dir.z);
       if (!first) {
-        const target = Math.atan2(dir.x, dir.z);
-        let d = target - this.yaw;
-        while (d > Math.PI) d -= Math.PI * 2;
-        while (d < -Math.PI) d += Math.PI * 2;
-        this.yaw += d * Math.min(1, dt * 12);
+        // Charakter dreht sich zügig in Laufrichtung, die Kamera folgt weich mit kurzer Verzögerung
+        this.yaw += angleDiff(target, this.yaw) * Math.min(1, dt * 12);
+        if (!manual) this.camYaw += angleDiff(this.yaw, this.camYaw) * Math.min(1, dt * 2.4 * (1 - dz * 0.5));
+      } else if (!manual && r !== 0) {
+        // First-Person ohne Mausbewegung: seitliches Laufen dreht die Sicht weich in die Laufrichtung
+        this.yaw += angleDiff(target, this.yaw) * Math.min(1, dt * 2.6);
       }
       this.stepT -= dt * (speed / 3.2);
       if (this.stepT < 0) { this.stepT = 0.36; this.app.sfx.step(0.03); }
@@ -107,12 +141,15 @@ export class LocalPlayer {
     world.collide(this.pos, 0.3);
     if (this.moving) this.emoteT = 0;
     if (!(this.emoteT > 0)) this.anim = this.moving ? 'walk' : 'idle';
+    // Schwindel: Kamera schwankt, rollt leicht und reagiert verzögert
+    const sway = dz ? { roll: dz * (0.13 * Math.sin(this.time * 0.9) + 0.04 * Math.sin(this.time * 2.3)), side: dz * 0.28 * Math.sin(this.time * 0.7), up: dz * 0.09 * Math.sin(this.time * 1.1) } : null;
     // Kamera
     if (first) {
       const target = new THREE.Vector3(this.pos.x, EYE + (this.moving ? Math.sin(performance.now() / 90) * 0.025 : 0), this.pos.z);
       camera.position.copy(target);
       camera.rotation.order = 'YXZ';
-      camera.rotation.set(this.pitch, this.yaw + Math.PI, 0);
+      camera.rotation.set(this.pitch + (sway ? sway.up * 0.6 : 0), this.yaw + Math.PI + (sway ? sway.side * 0.25 : 0), sway ? sway.roll : 0);
+      if (sway) camera.position.add(new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).multiplyScalar(sway.side * 0.4)).add(new THREE.Vector3(0, sway.up, 0));
       this.camPos.copy(camera.position);
       const dir = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
       this.camLook.copy(camera.position).add(dir);
@@ -123,10 +160,16 @@ export class LocalPlayer {
       want.y = Math.max(0.4, Math.min(4.2, want.y));
       this.clampCamera(head, want, world);
       if (this.snapCamera) { this.camPos.copy(want); this.camLook.copy(head); this.snapCamera = false; }
-      this.camPos.lerp(want, Math.min(1, dt * 8));
-      this.camLook.lerp(head, Math.min(1, dt * 10));
+      const lag = 1 - dz * 0.6;
+      this.camPos.lerp(want, Math.min(1, dt * 8 * lag));
+      this.camLook.lerp(head, Math.min(1, dt * 10 * lag));
       camera.position.copy(this.camPos);
+      if (sway) {
+        const side = new THREE.Vector3(Math.cos(this.camYaw), 0, -Math.sin(this.camYaw));
+        camera.position.addScaledVector(side, sway.side).add(new THREE.Vector3(0, sway.up, 0));
+      }
       camera.lookAt(this.camLook);
+      if (sway) camera.rotateZ(sway.roll);
     }
   }
 
@@ -149,9 +192,25 @@ export class LocalPlayer {
     if (ok < 1) { want.lerpVectors(head, want, Math.max(0.12, ok)); want.y += (1 - ok) * 0.8; }
   }
 
+  // Sichtfeld: Normalwert, beim Schwindel langsames Zoomen hinein und heraus
+  applyFov(camera, dz) {
+    const fov = BASE_FOV + dz * (5 * Math.sin(this.time * 0.8) + 2.5);
+    if (Math.abs(camera.fov - fov) > 0.001) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  }
+
   playEmote(a, dur = 2.6) { this.emote = a; this.emoteT = dur; }
 
+  // Sichtbare Effekte für Mitspieler: b = Flasche in der Hand, d = trinkt, z = schwindelig
+  get fx() { return (this.hasBottle ? 'b' : '') + (this.drinkT > 0 ? 'd' : '') + (this.dizzyT > 0 ? 'z' : ''); }
+
   pose() {
-    return { p: [+this.pos.x.toFixed(3), 0, +this.pos.z.toFixed(3)], r: +this.yaw.toFixed(3), a: this.seated ? 'idle' : this.anim, pitch: +this.pitch.toFixed(2) };
+    return { p: [+this.pos.x.toFixed(3), 0, +this.pos.z.toFixed(3)], r: +this.yaw.toFixed(3), a: this.seated ? 'idle' : this.anim, pitch: +this.pitch.toFixed(2), fx: this.fx };
   }
+}
+
+function angleDiff(a, b) {
+  let d = a - b;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
 }
