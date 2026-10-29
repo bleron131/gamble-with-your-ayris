@@ -147,21 +147,24 @@ export function wallpaperTexture(base, accent) {
 
 // Neon-Schrift: dunkle Rückwand für Kontrast, weicher farbiger Halo, klarer heller Textkern.
 // Der Kern bleibt unter der Bloom-Schwelle, damit der Text leuchtet statt zu einem weissen Fleck zu verschwimmen.
-export function neonTexture(text, color = '#ff3cac', { w = 1024, h = 256, font = FONT, size = 120, sub = null } = {}) {
-  return cached('neon' + text + color + w + h + sub, () => {
+export function neonTexture(text, color = '#ff3cac', { w = 1024, h = 256, font = FONT, size = 120, sub = null, glow = 1 } = {}) {
+  return cached('neon' + text + color + w + h + sub + size + glow, () => {
     const [c, g] = canvas(w, h);
     g.clearRect(0, 0, w, h);
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.font = `${size}px ${font}`;
+    // Schrift automatisch verkleinern, bis der ganze Text mit Sicherheitsabstand hineinpasst (nie abgeschnitten)
+    const margin = size * 0.45 + 16;
+    while (size > 12 && g.measureText(text).width > w - margin * 2) { size -= 2; g.font = `${size}px ${font}`; }
     const y = sub ? h * 0.4 : h / 2;
     const tw = Math.min(w - 8, g.measureText(text).width + size * 0.7);
     // Rückwand
     g.fillStyle = 'rgba(8, 4, 14, 0.62)';
     roundRect(g, (w - tw) / 2, h * 0.06, tw, h * 0.88, Math.min(40, h * 0.2)); g.fill();
     // Halo (dezent)
-    g.shadowColor = color; g.shadowBlur = size * 0.22; g.globalAlpha = 0.55;
+    g.shadowColor = color; g.shadowBlur = size * 0.22 * glow; g.globalAlpha = 0.55 * glow;
     g.fillStyle = color; g.fillText(text, w / 2, y);
-    g.shadowBlur = size * 0.08; g.globalAlpha = 0.8; g.fillText(text, w / 2, y);
+    g.shadowBlur = size * 0.08 * glow; g.globalAlpha = Math.min(1, 0.8 * glow + 0.1); g.fillText(text, w / 2, y);
     g.shadowBlur = 0; g.globalAlpha = 1;
     // Klarer Textkern: helle Tönung der Neonfarbe mit farbiger Kontur
     g.lineWidth = Math.max(2, size * 0.05); g.strokeStyle = color; g.lineJoin = 'round';
@@ -339,7 +342,7 @@ export function rouletteLayout() {
       } else { g.fillStyle = '#fff'; g.font = `bold 32px ${UIFONT}`; g.fillText(t, x + cw, ye + 45); }
       regions.push({ spot, x, y: ye, w: cw * 2, h: 90, cx: x + cw, cy: ye + 45 });
     });
-    return { texture: toTex(c), regions, W, H };
+    return { texture: toTex(c), regions, W, H, x0, y0, cw, ch };
   });
 }
 

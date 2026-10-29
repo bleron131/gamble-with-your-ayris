@@ -1,7 +1,7 @@
 // Spielautomat zum Hingehen: drei echte 3D-Walzen, BET-Anzeige, BET −/+ und ein grosser SPIN-Knopf am Gerät.
 // Jeder Automat hat seinen eigenen Einsatz; mehrere Automaten können gleichzeitig drehen.
 import * as THREE from 'three';
-import { TableView, TextSprite, ease } from './common.js';
+import { TableView, TextSprite, ease, capButton } from './common.js';
 import { M, mesh, neonSign } from '../world/props.js';
 import { reelTexture } from '../textures.js';
 import { VARIANTS, SYMBOLS, LINES } from '../../shared/games/slots.js';
@@ -139,26 +139,8 @@ export class SlotView extends TableView {
 
   // Physischer Knopf mit beschrifteter Kappe (Raycast-Ziel)
   addButton(id, small, big, x, r, color, action) {
-    const c = document.createElement('canvas'); c.width = c.height = 256;
-    const g = c.getContext('2d');
-    const grd = g.createRadialGradient(128, 110, 20, 128, 128, 128);
-    grd.addColorStop(0, '#ffffff'); grd.addColorStop(0.25, color); grd.addColorStop(1, new THREE.Color(color).multiplyScalar(0.45).getStyle());
-    g.fillStyle = grd; g.fillRect(0, 0, 256, 256);
-    g.fillStyle = '#0b0b14'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.lineWidth = 6; g.strokeStyle = 'rgba(255,255,255,0.85)';
-    if (small) {
-      g.font = '62px "Bungee", Impact'; g.strokeText(small, 128, 82); g.fillText(small, 128, 82);
-      g.font = 'bold 130px "Nunito", Arial'; g.strokeText(big, 128, 168); g.fillText(big, 128, 168);
-    } else { g.font = '72px "Bungee", Impact'; g.strokeText(big, 128, 132); g.fillText(big, 128, 132); }
-    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-    const cap = new THREE.MeshStandardMaterial({ map: tex, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.35, roughness: 0.35 });
-    const side = M.std(new THREE.Color(color).multiplyScalar(0.5), 0.4);
-    const grp = new THREE.Group();
+    const { group: grp, mesh: m, ring, cap } = capButton(small, big, r, color);
     grp.position.set(x, 0, id === 'spin' ? 0.02 : 0.04);
-    const ring = mesh(new THREE.CylinderGeometry(r + 0.012, r + 0.012, 0.012, 32), M.std('#c9c9d2', 0.25, 0.9), 0, 0.006, 0, { cast: false });
-    const m = mesh(new THREE.CylinderGeometry(r, r, 0.03, 32), [side, cap, side], 0, 0.022, 0, { cast: false });
-    m.rotation.y = Math.PI / 2; // Beschriftung zum Spieler ausrichten
-    grp.add(ring, m);
     this.desk.add(grp);
     const btn = { id, mesh: m, cap, action, t: 0, label: () => this.buttonLabel(id) };
     m.userData.slotButton = btn;

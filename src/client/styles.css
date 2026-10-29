@@ -290,3 +290,14 @@ button.makka:disabled { opacity: .9; cursor: default; }
 .makkacard { display: flex; gap: 14px; align-items: center; background: rgba(255, 63, 164, .1); border: 1px solid rgba(255, 63, 164, .45); border-radius: 14px; padding: 12px; }
 .makkaicon { font-size: 48px; }
 .barline { margin: 12px 0 4px; font-weight: 700; color: var(--muted); font-style: italic; }
+
+/* ───── Roulette ───── */
+.selchip { font-family: var(--title); font-size: 26px; color: #fff; background: rgba(255, 217, 122, .14); border: 2px solid var(--gold); border-radius: 12px; padding: 2px 14px; box-shadow: 0 0 14px rgba(255, 217, 122, .35); }
+.betrow .lbl { font-weight: 900; font-size: 13px; letter-spacing: .5px; color: var(--muted); }
+.betval.big { font-size: 28px; }
+.betlist .tag { cursor: pointer; }
+.bigtext.rred .bt { color: #ff4b5c; text-shadow: 0 0 22px rgba(255, 60, 80, .8), 0 5px 0 #5a0010; }
+.bigtext.rblack .bt { color: #f2f2f2; text-shadow: 0 0 18px rgba(255, 255, 255, .5), 0 5px 0 #111; }
+.bigtext.rgreen .bt { color: #3cff7a; text-shadow: 0 0 22px rgba(60, 255, 122, .8), 0 5px 0 #004a1a; }
+body.ballcam .tablewrap { opacity: .25; pointer-events: none; transition: opacity .3s; }
+body.ballcam .crosshair { display: none !important; }

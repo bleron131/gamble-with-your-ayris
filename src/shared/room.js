@@ -185,6 +185,7 @@ export class Room {
         case 'table.leave': this.leaveTable(p); break;
         case 'table.start': this.tableStart(p, msg.id, msg.payload || {}); break;
         case 'table.action': this.tableAction(p, msg.id, String(msg.action)); break;
+        case 'table.edit': this.tableEdit(p, msg.id, msg.edit || {}); break;
         case 'item.arm': this.armItem(p, msg.item); break;
         case 'item.disarm': this.disarmItem(p, msg.item); break;
         case 'item.retry': this.retry(p, msg.item, msg.id); break;
@@ -516,6 +517,17 @@ export class Room {
     this.markDirty();
   }
 
+  // Vorbereitete Wette am Tisch bearbeiten (z. B. Roulette-Chips) – nur wer am Tisch sitzt, nichts wird abgebucht
+  tableEdit(p, id, edit) {
+    const t = this.getTable(p, id);
+    if (!t) return;
+    if (t.occupant !== p.id) return this.error(p.id, 'Setz dich zuerst an den Tisch');
+    const game = GAMES[t.type];
+    if (!game.edit) return;
+    game.edit(this.makeCtx(p.id, t), t, { op: String(edit.op), spot: String(edit.spot || ''), amount: +edit.amount || 0 });
+    this.markDirty();
+  }
+
   makeCtx(pid, table) {
     const room = this;
     const f = floorDef(this.floor);
@@ -611,7 +623,7 @@ export class Room {
       kind: 'result', pid, name: p?.name || '?', game: table.type, tableId: table.id,
       stake, payout: payout - extra, net, detail: r.detail, jackpot: !!r.jackpot, bigWin, effects, tier, multiplier: r.multiplier,
       straight: r.straight, blackjacks: r.blackjacks, tieWin: r.tieWin, pointHit: r.pointHit,
-      pokerCat: r.pokerCat, wheel: r.wheel, newStake: r.newStake, pot: this.pot, lucky: !!r.lucky && net > 0,
+      pokerCat: r.pokerCat, wheel: r.wheel, roulette: r.roulette, newStake: r.newStake, pot: this.pot, lucky: !!r.lucky && net > 0,
     });
     this.markDirty();
     this.checkTarget();

@@ -60,8 +60,12 @@ export class LobbyWorld extends World {
       s.add(mesh(new THREE.BoxGeometry(W, 0.03, 0.04), M.glow(i % 2 ? '#ff3cac' : '#7b5cff', 1.8), 0, H - 0.21, i * 4 + 0.16, { cast: false }));
     }
     // Neon-Schilder
-    const n1 = neonSign('GAMBLE WITH YOUR AYRIS', '#ff3cac', 7, 1.2);
-    n1.position.set(0, 3.95, D / 2 - 0.05); n1.rotation.y = Math.PI; s.add(n1);
+    // Hauptlogo: eine zentrierte Zeile, Leinwand im Seitenverhältnis der Fläche (keine Verzerrung), Schrift passt sich an
+    const n1 = neonSign('GAMBLE WITH YOUR AYRIS', '#ff3cac', 10.8, 1.25, { w: 2048, h: 237, size: 150, glow: 0.7 });
+    n1.position.set(0, 3.88, D / 2 - 0.05); n1.rotation.y = Math.PI; s.add(n1);
+    // Logo wird nie von den Hängelampen davor verdeckt
+    n1.material.depthTest = false;
+    n1.renderOrder = 5;
     const n2 = neonSign('SHISHA LOUNGE', '#2bd9fe', 4.2, 1);
     n2.position.set(-W / 2 + 0.05, 3.3, 3.5); n2.rotation.y = Math.PI / 2; s.add(n2);
     const n3 = neonSign('AYRI SHOP', '#ffd97a', 3.2, 0.8);

@@ -120,6 +120,7 @@ export function palm(h = 2.6) {
 
 export function neonSign(text, color, w = 3, h = 0.75, opts = {}) {
   const tex = neonTexture(text, color, opts);
+  tex.anisotropy = 8;
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true, toneMapped: false, depthWrite: false }));
   m.material.color.setScalar(0.92);
   return m;

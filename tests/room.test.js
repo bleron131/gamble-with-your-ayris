@@ -310,3 +310,80 @@ test('Sprung: natürlicher Bogen, kein Luft- oder Doppelsprung, neuer Sprung ers
   j.step(0.5);
   assert.ok(j.y >= 0);
 });
+
+// ───────────────────────── Roulette: vorbereitete Wetten & Rebet ─────────────────────────
+test('Roulette: Chips setzen bucht nichts ab, SPIN bucht den Total Bet ab, Chips bleiben für den nächsten Spin liegen', () => {
+  const { room, ids, conns } = setup(2, { unlocked: 2 });
+  room.enterFloor(2);
+  room.pot = 100_000;
+  const t = room.session.tables['roulette-0'];
+  room.handle(ids[0], { t: 'table.sit', id: 'roulette-0' });
+  const edit = (who, e) => room.handle(ids[who], { t: 'table.edit', id: 'roulette-0', edit: e });
+  edit(0, { op: 'add', spot: 'red', amount: 5000 });
+  edit(0, { op: 'add', spot: 'n17', amount: 500 });
+  edit(0, { op: 'add', spot: 'n17', amount: 500 });
+  edit(0, { op: 'add', spot: 'even', amount: 2000 });
+  edit(0, { op: 'add', spot: 'n8', amount: 500 });
+  edit(1, { op: 'add', spot: 'black', amount: 5000 }); // Zuschauer darf nichts verändern
+  assert.deepEqual(t.state.prepared, { red: 5000, n17: 1000, even: 2000, n8: 500 });
+  assert.equal(room.pot, 100_000);
+  edit(0, { op: 'undo' });
+  assert.equal(t.state.prepared.n8, undefined);
+  edit(0, { op: 'remove', spot: 'n17', amount: 500 });
+  assert.equal(t.state.prepared.n17, 500);
+  edit(0, { op: 'add', spot: 'n17', amount: 500 });
+  // SPIN: 8'000 werden genau einmal abgebucht
+  room.handle(ids[0], { t: 'table.start', id: 'roulette-0', payload: {} });
+  assert.equal(room.pot, 92_000);
+  assert.equal(t.busy, true);
+  // Während die Kugel rollt: keine Änderungen, kein zweiter Spin
+  edit(0, { op: 'add', spot: 'odd', amount: 1000 });
+  room.handle(ids[0], { t: 'table.start', id: 'roulette-0', payload: {} });
+  assert.equal(room.pot, 92_000);
+  assert.equal(t.state.prepared.odd, undefined);
+  assert.ok(conns[0].errors().some(e => e.includes('rollt')));
+  mock.timers.tick(9000);
+  const res = conns[0].msgs.filter(m => m.t === 'event' && m.ev.kind === 'result').at(-1).ev;
+  assert.equal(res.stake, 8000);
+  assert.equal(typeof res.roulette, 'number');
+  assert.equal(room.pot, 92_000 + res.payout);
+  // Rebet: dieselben Chips liegen noch, nächster SPIN bucht erneut 8'000 ab
+  assert.deepEqual(t.state.prepared, { red: 5000, n17: 1000, even: 2000 });
+  const before = room.pot;
+  room.handle(ids[0], { t: 'table.start', id: 'roulette-0', payload: {} });
+  assert.equal(room.pot, before - 8000);
+  mock.timers.tick(9000);
+  edit(0, { op: 'clear' });
+  assert.deepEqual(t.state.prepared, {});
+  edit(0, { op: 'undo' });
+  assert.equal(t.state.prepared.red, 5000);
+  teardown(room);
+});
+
+test('Roulette: nicht genug im Pot → kein Spin, nichts abgebucht; Aufstehen räumt die Chips ab', () => {
+  const { room, ids, conns } = setup(1, { unlocked: 2 });
+  room.enterFloor(2);
+  room.pot = 3000;
+  const t = room.session.tables['roulette-0'];
+  room.handle(ids[0], { t: 'table.sit', id: 'roulette-0' });
+  room.handle(ids[0], { t: 'table.edit', id: 'roulette-0', edit: { op: 'add', spot: 'red', amount: 5000 } });
+  room.handle(ids[0], { t: 'table.start', id: 'roulette-0', payload: {} });
+  assert.equal(room.pot, 3000);
+  assert.equal(t.busy, false);
+  assert.ok(conns[0].errors().some(e => e.includes('Nicht genug')));
+  room.handle(ids[0], { t: 'table.leave' });
+  assert.deepEqual(t.state.prepared, {});
+  teardown(room);
+});
+
+test('Roulette: Split, Street, Corner und Six Line werden geprüft und richtig ausgezahlt', async () => {
+  const { isValidSpot, payoutFor, insideSpot } = await import('../src/shared/games/roulette.js');
+  for (const s of ['i:17-20', 'i:17-18', 'i:1-2-3', 'i:1-2-4-5', 'i:31-32-33-34-35-36']) assert.ok(isValidSpot(s), s);
+  for (const s of ['i:3-4', 'i:1-5', 'i:2-3-4', 'i:3-4-6-7', 'i:34-35-36-37', 'i:2-1', 'x']) assert.ok(!isValidSpot(s), s);
+  assert.equal(insideSpot([20, 17]), 'i:17-20');
+  assert.equal(payoutFor('i:17-20', 100, 20), 1800);
+  assert.equal(payoutFor('i:1-2-3', 100, 2), 1200);
+  assert.equal(payoutFor('i:1-2-4-5', 100, 5), 900);
+  assert.equal(payoutFor('i:1-2-3-4-5-6', 100, 6), 600);
+  assert.equal(payoutFor('i:1-2-3-4-5-6', 100, 7), 0);
+});

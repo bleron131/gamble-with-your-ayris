@@ -207,6 +207,9 @@ export const sfx = {
     tone(mtof(36), t, 2.2, { type: 'sawtooth', vol: 0.07, filter: 600 });
     sfx.coins(30);
   },
+  // Roulette: Kugel springt über die Fachstege, landet mit deutlichem KLACK
+  ballTick(v = 0.08) { if (!ctx) return; const t = now(); tone(2600 + Math.random() * 600, t, 0.018, { type: 'triangle', vol: v }); noise(t, 0.015, { freq: 5000, q: 6, vol: v * 0.8 }); },
+  ballClack() { if (!ctx) return; const t = now(); noise(t, 0.05, { freq: 2200, q: 4, vol: 0.35 }); tone(1300, t, 0.07, { type: 'triangle', vol: 0.2 }); tone(700, t + 0.01, 0.12, { type: 'sine', vol: 0.12 }); },
   jump() { if (!ctx) return; const t = now(); noise(t, 0.08, { type: 'lowpass', freq: 600, vol: 0.06 }); tone(260, t, 0.16, { type: 'sine', vol: 0.06, slide: 1.8 }); },
   land() { if (!ctx) return; const t = now(); noise(t, 0.09, { type: 'lowpass', freq: 350, vol: 0.12 }); tone(90, t, 0.1, { vol: 0.12, slide: 0.6 }); },
   step(v = 0.04) { if (!ctx) return; noise(now(), 0.05, { type: 'lowpass', freq: 400, vol: v }); },

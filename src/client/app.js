@@ -108,6 +108,41 @@ export class App {
     this.hands?.play('pull');
     this.send({ t: 'slot.spin', id });
   }
+  // ───────────────────────── Roulette-Kugelkamera (C) ─────────────────────────
+  // Rein lokal: die Kamerawahl eines Spielers beeinflusst niemals andere Spieler.
+  spinningRoulette(prefer) {
+    const list = Object.values(this.world?.views || {}).filter(v => v.def.type === 'roulette' && v.spinning);
+    if (prefer && list.includes(prefer)) return prefer;
+    return list.sort((a, b) => this.distanceTo(a.group.position) - this.distanceTo(b.group.position))[0] || null;
+  }
+  toggleBallCam(prefer) {
+    if (this.ballCam) { this.exitBallCam(); return; }
+    if (this.cinematic || this.mafiaLock) return;
+    const view = this.spinningRoulette(prefer);
+    if (!view) { this.ui.toast('Die Kugelkamera (C) gibt es, während eine Roulette-Kugel rollt', 'info', 2200); return; }
+    const cam = this.engine.camera;
+    this.ballCam = { view, pos: cam.position.clone(), look: this.player.camLook.clone(), until: 0, started: performance.now() };
+    this.input.exitLock();
+    document.body.classList.add('ballcam');
+    sfx.whoosh();
+    this.player.seated?.refreshPanel?.();
+  }
+  exitBallCam() {
+    if (!this.ballCam) return;
+    this.ballCam = null;
+    this.player.blendFrom(this.engine.camera);
+    document.body.classList.remove('ballcam');
+    this.player.seated?.refreshPanel?.();
+  }
+  updateBallCam(dt) {
+    const bc = this.ballCam;
+    if (!bc) return;
+    bc.view.ballCamPose(dt, bc);
+    const now = performance.now();
+    // Nach dem Ergebnis kurz halten, dann automatisch zurück (Fallback, falls kein Ergebnis eintrifft)
+    if ((bc.until && now > bc.until) || (!bc.view.spinning && !bc.until && now - bc.started > 3000 && bc.view.landed && !bc.view.state?.busy)) this.exitBallCam();
+  }
+
   slotNear() {
     const it = this.world?.nearestInteract?.(this.player.pos);
     return it?.table?.walkUp ? it.table : null;
@@ -220,6 +255,7 @@ export class App {
     const idx = this.state ? Math.max(0, this.state.players.findIndex(p => p.id === this.me)) : 0;
     this.player.spawn(this.world, idx);
     this.cinematic = null;
+    if (this.ballCam) { this.ballCam = null; document.body.classList.remove('ballcam'); }
     this.mafiaLock = false;
     this.mafiaCam = null;
     this.hands.group.visible = this.world.mode === 'first';
@@ -514,6 +550,7 @@ export class App {
 
   // ───────────────────────── Mafia ─────────────────────────
   mafiaSequence(ev) {
+    this.exitBallCam();
     this.ui.closeTablePanel();
     this.player.seated = null;
     this.input.exitLock();
@@ -650,6 +687,7 @@ export class App {
     }
     if (!this.state) return;
     if (this.mafiaLock) return;
+    if (e.code === 'KeyC') { this.toggleBallCam(); return; }
     if (e.code === 'KeyE') { const it = this.world.nearestInteract(this.player.pos); if (it) { if (!it.table?.walkUp) sfx.click(); it.action(); } }
     if (e.code === 'KeyR' || e.code === 'KeyF') { const v = this.slotNear(); if (v) this.slotBet(v.def.id, e.code === 'KeyR' ? 1 : -1); }
     const emotes = { Digit1: 'cheer', Digit2: 'dance', Digit3: 'sad', Digit4: 'facepalm', Digit5: 'point' };
@@ -690,6 +728,7 @@ export class App {
     this.input.enabled = !this.ui.modalOpen;
     this.world.update(dt, t);
     this.mafiaCam?.();
+    this.updateBallCam(dt);
     if (this.state) this.player.update(dt, this.input, this.world, this.engine.camera);
     else this.menuCamera(t);
     // Eigener Charakter
@@ -702,19 +741,23 @@ export class App {
       this.selfChar.root.visible = this.world.mode === 'third' || !!this.cinematic;
     }
     for (const a of this.avatars.values()) a.update(dt);
-    this.hands.group.visible = this.world.mode === 'first' && !this.cinematic;
+    this.hands.group.visible = this.world.mode === 'first' && !this.cinematic && !this.ballCam;
     this.hands.update(dt, this.player.moving, !!this.player.seated);
     // Interaktionshinweis
     this.hoverButton = null;
-    if (this.state && !this.player.seated && !this.cinematic) {
+    const rouletteSpin = this.state && !this.cinematic && this.spinningRoulette();
+    if (this.ballCam) this.ui.setHint('C – Kamera verlassen');
+    else if (this.state && !this.player.seated && !this.cinematic) {
       const it = this.world.nearestInteract(this.player.pos);
       if (this.world.kind === 'floor') this.hoverButton = this.pickSlotButton(this.aimNdc());
       if (this.hoverButton) this.ui.setHint(`Klick: ${this.hoverButton.label()}`);
+      else if (rouletteSpin && (!it || this.distanceTo(rouletteSpin.group.position) < 6)) this.ui.setHint('C – Kugelkamera');
       else this.ui.setHint(it ? `[E] ${typeof it.label === 'function' ? it.label() : it.label}` : this.world.mode === 'first' && !this.input.locked ? 'Klicken, um die Maus zu fangen · WASD laufen · LEERTASTE springen' : '');
     } else if (this.player.seated) {
       this.raycaster.setFromCamera(new THREE.Vector2(...this.mouseNdc()), this.engine.camera);
-      const lbl = this.player.seated.hover(this.raycaster);
-      this.ui.setHint(lbl ? `Klick: Chip auf ${lbl}` : '');
+      const v = this.player.seated;
+      const lbl = v.hover(this.raycaster);
+      this.ui.setHint(lbl ? (v.hoverLabel ? v.hoverLabel(lbl) : `Klick: Chip auf ${lbl}`) : rouletteSpin === v ? 'C – Kugelkamera' : '');
     } else this.ui.setHint('');
     // Position senden (15 Hz)
     this.moveTimer -= dt;

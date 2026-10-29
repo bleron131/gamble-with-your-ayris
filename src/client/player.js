@@ -77,6 +77,26 @@ export class LocalPlayer {
   }
 
   update(dt, input, world, camera) {
+    this.updateInner(dt, input, world, camera);
+    this.applyBlend(dt, camera);
+  }
+
+  // Weicher Übergang zurück von einer Spezialkamera (z. B. Roulette-Kugelkamera)
+  blendFrom(camera) {
+    this.blend = { pos: camera.position.clone(), quat: camera.quaternion.clone(), t: 0, dur: 0.5 };
+  }
+  applyBlend(dt, camera) {
+    const b = this.blend;
+    if (!b) return;
+    b.t += dt;
+    const k = Math.min(1, b.t / b.dur);
+    const e = k * k * (3 - 2 * k);
+    camera.position.lerpVectors(b.pos, camera.position.clone(), e);
+    camera.quaternion.slerpQuaternions(b.quat, camera.quaternion.clone(), e);
+    if (k >= 1) this.blend = null;
+  }
+
+  updateInner(dt, input, world, camera) {
     const settings = this.app.save.settings;
     const sens = 0.0022 * (settings.sensitivity || 1);
     const first = world.mode === 'first';
@@ -90,6 +110,14 @@ export class LocalPlayer {
       this.camLook.lerp(this.app.cinematic.look, Math.min(1, dt * 3));
       camera.position.copy(this.camPos);
       camera.lookAt(this.camLook);
+      return;
+    }
+    // Roulette-Kugelkamera: Pose wird bereits geglättet berechnet; der Spieler steht solange still
+    if (this.app.ballCam) {
+      camera.position.copy(this.app.ballCam.pos);
+      camera.up.set(0, 1, 0);
+      camera.lookAt(this.app.ballCam.look);
+      this.anim = 'idle';
       return;
     }
     if (this.seated) {

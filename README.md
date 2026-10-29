@@ -43,8 +43,10 @@ Port ändern: `PORT=3000 npm start`.
 | Leertaste | Springen; am Tisch: Spin / Deal / Würfeln |
 | Klick auf Automatenknöpfe | BET − / BET + / SPIN direkt am 3D-Automaten (Fadenkreuz oder Mauszeiger) |
 | R / F | Vor einem Spielautomaten: BET + / BET − |
+| C | Roulette-Kugelkamera an/aus, solange eine Kugel rollt (nur für dich) |
+| Z / Backspace | Roulette: letzten Chip zurücknehmen |
 | H / S / D / P / J | Blackjack: Hit / Stand / Double / Split / Joker |
-| C / F | Hold'em: Call / Fold |
+| C / F | Hold'em: Call / Fold (am Pokertisch) |
 | ESC / Q | Vom Tisch aufstehen |
 | T | MAKKA trinken (nach dem Kauf an der Bar) |
 | 1–5 | Emotes (Jubeln, Tanzen, Traurig, Facepalm, Zeigen) |
@@ -61,6 +63,13 @@ Port ändern: `PORT=3000 npm start`.
 - **Casino** (First-Person mit sichtbaren Händen): echte 3D-Tische mit NPC-Dealern. Spielbar sind
   Slots, Roulette, Blackjack, Baccarat, Craps, Casino Hold'em, das Glücksrad und High-Limit-Slots.
   Andere Spieler sehen jede Wette (`BLERON SETZT $10'000 AUF ROT`) und können am Tisch zuschauen.
+- **Roulette**: Chipwert wählen (`SELECTED CHIP`, Werte passend zum Stockwerk), Chips direkt aufs 3D-Tableau legen –
+  Zahlen, Rot/Schwarz, Gerade/Ungerade, 1–18/19–36, Dutzende, Spalten sowie Split, Street, Corner und Six Line auf den
+  Linien und Ecken. `TOTAL BET` steht im Panel und auf einer Anzeige am Tisch. Die Chips bleiben nach jedem Spin liegen:
+  einfach erneut SPIN (Knopf am Tisch, Panel oder Leertaste) und dieselbe Kombination läuft nochmal. Abgebucht wird erst
+  beim Start des Spins; `CLEAR BET`, `UNDO LAST CHIP`, ×2 und Rechtsklick (Chip wegnehmen) bearbeiten die Wette zwischen
+  den Spins. Mit **C** folgt eine Kugelkamera der Kugel bis ins Fach, hält kurz auf dem Ergebnis (`17 BLACK – BIG WIN +$72'000`)
+  und kehrt dann zurück. Alle sehen Chips, Total Bet, Rad, Kugel und Ergebnis synchron; die Kamera ist pro Spieler.
 - **Spielautomaten** werden direkt am Gerät bedient: BET-Anzeige (z. B. `BET $500`), BET −/BET + schalten durch
   die Einsatzstufen des Stockwerks, der grosse SPIN-Knopf bucht den Einsatz sofort aus dem Team-Pot ab und startet
   die Walzen nacheinander. Jeder Automat hat seinen eigenen Einsatz, mehrere Automaten (auch von verschiedenen

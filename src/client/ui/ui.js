@@ -116,7 +116,7 @@ export class UI {
     this.hud.dataset.scene = scene;
     this.crosshair.style.display = scene === 'floor' ? '' : 'none';
     this.emoteHelp.textContent = scene === 'floor'
-      ? 'Klick = Maus fangen · WASD laufen · LEERTASTE springen · E Tisch/SPIN · R/F Einsatz · 1–5 Emotes · TAB Gruppe'
+      ? 'Klick = Maus fangen · WASD laufen · LEERTASTE springen · E Tisch/SPIN · R/F Einsatz · C Kugelkamera · 1–5 Emotes · TAB Gruppe'
       : 'Maus ziehen = Kamera · Mausrad = Zoom · WASD laufen · LEERTASTE springen · E interagieren · 1–5 Emotes · TAB Gruppe';
     this.closeTablePanel();
     this.refreshHud();
