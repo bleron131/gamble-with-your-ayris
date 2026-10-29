@@ -116,8 +116,8 @@ export class UI {
     this.hud.dataset.scene = scene;
     this.crosshair.style.display = scene === 'floor' ? '' : 'none';
     this.emoteHelp.textContent = scene === 'floor'
-      ? 'Klick = Maus fangen · WASD laufen · E Tisch · 1–5 Emotes · TAB Gruppe'
-      : 'Maus ziehen = Kamera · Mausrad = Zoom · WASD laufen · E interagieren · 1–5 Emotes · TAB Gruppe';
+      ? 'Klick = Maus fangen · WASD laufen · LEERTASTE springen · E Tisch/SPIN · R/F Einsatz · 1–5 Emotes · TAB Gruppe'
+      : 'Maus ziehen = Kamera · Mausrad = Zoom · WASD laufen · LEERTASTE springen · E interagieren · 1–5 Emotes · TAB Gruppe';
     this.closeTablePanel();
     this.refreshHud();
   }
@@ -190,7 +190,9 @@ export class UI {
       return;
     }
     const inFloor = st.scene === 'floor';
-    const seat = me.seat && st.session?.tables[me.seat];
+    // Retry-Items wirken am Tisch, an dem man sitzt, oder am zuletzt gespielten Automaten
+    const seatId = me.seat || app.lastSlotId;
+    const seat = seatId && st.session?.tables[seatId];
     for (const k of me.loadout) {
       const def = ITEMS[k];
       const count = me.inventory[k] || 0;
@@ -203,7 +205,7 @@ export class UI {
       if (def.mode === 'retry') {
         const canRetry = seat && seat.canRetry?.[app.me] && !seat.busy && (k === 'crown' || RETRY_GAMES_HAT.includes(seat.type));
         usable = usable && !!canRetry;
-        action = () => app.send({ t: 'item.retry', item: k, id: me.seat });
+        action = () => app.send({ t: 'item.retry', item: k, id: seatId });
         if (!used && inFloor) status = canRetry ? 'JETZT!' : 'nach Verlust';
       }
       if (def.mode === 'passive') { usable = false; status = count ? 'aktiv' : '–'; }

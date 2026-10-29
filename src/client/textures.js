@@ -432,6 +432,10 @@ export function drawSymbol(g, sym, cx, cy, s) {
       g.beginPath(); g.moveTo(0, -s * 0.34); g.lineTo(s * 0.3, -s * 0.08); g.lineTo(0, s * 0.36); g.lineTo(-s * 0.3, -s * 0.08); g.closePath(); g.fill();
       g.fillStyle = 'rgba(255,255,255,0.55)'; g.beginPath(); g.moveTo(0, -s * 0.34); g.lineTo(s * 0.12, -s * 0.08); g.lineTo(-s * 0.12, -s * 0.08); g.closePath(); g.fill();
       break;
+    case 'blank':
+      // Leerfeld: dezentes AYRI-Logo, zahlt nichts
+      g.fillStyle = 'rgba(120,110,140,0.28)'; g.font = `${s * 0.16}px ${FONT}`; g.fillText('AYRI', 0, 0);
+      break;
     case 'crown':
       g.fillStyle = '#ffd700';
       g.beginPath(); g.moveTo(-s * 0.36, s * 0.24); g.lineTo(-s * 0.36, -s * 0.2); g.lineTo(-s * 0.18, s * 0.02); g.lineTo(0, -s * 0.32); g.lineTo(s * 0.18, s * 0.02); g.lineTo(s * 0.36, -s * 0.2); g.lineTo(s * 0.36, s * 0.24); g.closePath(); g.fill();

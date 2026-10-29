@@ -39,8 +39,10 @@ Port ändern: `PORT=3000 npm start`.
 |---|---|
 | WASD / Pfeile | Laufen (Shift = rennen) |
 | Maus | Umschauen (im Casino Klick → Maus fangen; in der Shishabar rechte Maustaste/Drag) |
-| E | Interagieren (Aufzug, Tische, Shop, Spiegel, Hall of Fame, Barkeeper) |
-| Leertaste | Spin / Deal / Würfeln am Tisch |
+| E | Interagieren (Aufzug, Tische, Shop, Spiegel, Hall of Fame, Barkeeper); vor einem Spielautomaten: SPIN |
+| Leertaste | Springen; am Tisch: Spin / Deal / Würfeln |
+| Klick auf Automatenknöpfe | BET − / BET + / SPIN direkt am 3D-Automaten (Fadenkreuz oder Mauszeiger) |
+| R / F | Vor einem Spielautomaten: BET + / BET − |
 | H / S / D / P / J | Blackjack: Hit / Stand / Double / Split / Joker |
 | C / F | Hold'em: Call / Fold |
 | ESC / Q | Vom Tisch aufstehen |
@@ -51,7 +53,7 @@ Port ändern: `PORT=3000 npm start`.
 
 ## Spielablauf
 
-- **Shishabar-Lobby** (Third-Person): begehbar, mit Bar, Lounge, Shishas, Spiegel/Charaktereditor,
+- **Shishabar-Lobby** (Third-Person): begehbar, mit Bar, Lounge, Shishas (mit räumlichem Blubbern – je näher, desto lauter), Spiegel/Charaktereditor,
   AYRI SHOP, Hall of Fame und dem grossen Aufzug. Nach jedem Stockwerk – auch nach einem verlorenen –
   kehrt die Gruppe hierher zurück.
 - **Aufzug = Levelauswahl**: genau 15 Stockwerke; gesperrte sind sichtbar, freigeschaltete können jederzeit
@@ -59,13 +61,21 @@ Port ändern: `PORT=3000 npm start`.
 - **Casino** (First-Person mit sichtbaren Händen): echte 3D-Tische mit NPC-Dealern. Spielbar sind
   Slots, Roulette, Blackjack, Baccarat, Craps, Casino Hold'em, das Glücksrad und High-Limit-Slots.
   Andere Spieler sehen jede Wette (`BLERON SETZT $10'000 AUF ROT`) und können am Tisch zuschauen.
+- **Spielautomaten** werden direkt am Gerät bedient: BET-Anzeige (z. B. `BET $500`), BET −/BET + schalten durch
+  die Einsatzstufen des Stockwerks, der grosse SPIN-Knopf bucht den Einsatz sofort aus dem Team-Pot ab und startet
+  die Walzen nacheinander. Jeder Automat hat seinen eigenen Einsatz, mehrere Automaten (auch von verschiedenen
+  Spielern) drehen gleichzeitig. Während ein Automat dreht oder kurz danach, kann niemand anderes daran den Einsatz
+  verstellen. Gewinne gibt es in Stufen – WIN, NICE WIN, BIG WIN, MEGA WIN und JACKPOT – mit eigenen Sounds,
+  Münzregen, Lichtern und grosser Anzeige (z. B. `BIG WIN +$75'000`).
 - **Team-Pot**: Es gibt nur einen gemeinsamen Geldtopf für den ganzen Run. Der Server prüft und bucht
   jeden Einsatz atomar ab – zwei Spieler können denselben Betrag nie gleichzeitig setzen.
 - **Target**: Wird das Ziel erreicht, ist das Level dauerhaft geschafft, das nächste Stockwerk wird
   freigeschaltet – und ihr entscheidet: **RETURN TO SHISHA BAR** oder **KEEP GAMBLING**. Ihr nehmt
   immer genau den Betrag mit, den ihr beim Verlassen besitzt.
-- **Mafia**: Fällt der Pot unter den Mindesteinsatz des Stockwerks, stoppt die Musik, die Türen schliessen,
-  die Mafia rückt an – cartoonhafte Explosion – **LEVEL FAILED**. Ihr behaltet 75 % des Stockwerk-Startkapitals
+- **Mafia**: Fällt der Pot unter den Mindesteinsatz des Stockwerks, stoppt die Musik, das Licht wird rot,
+  die Steuerung wird gesperrt und eine eigene Kinokamera zeigt das ganze Team auf einer freien Bühne vor dem Aufzug.
+  Die Mafia kommt aus dem Aufzug, Tische, Automaten oder Deko, die im Bild stören würden, werden ausgeblendet –
+  cartoonhafte Explosion – **LEVEL FAILED**. Ihr behaltet 75 % des Stockwerk-Startkapitals
   (mind. $7'500), damit der Run weitergehen kann.
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Bonus-Challenges
   (Stockwerk mit ≥150 % des Ziels verlassen) und Achievements – jeweils nur einmal pro Spieler, also kein Farming.
@@ -88,7 +98,9 @@ seinen Run (Team-Pot) mit; der Level-Fortschritt wird für alle Mitglieder über
 Alle Werte stehen in [`src/shared/config.js`](src/shared/config.js): Startkapital, Mafia-Anteil,
 Zielbeträge, Min/Max-Einsätze pro Spiel als Anteil des Stockwerk-Ziels, Belohnungen und Item-Preise.
 Das Spiel ist bewusst als Party-Casino balanciert: Alle Spiele zahlen leicht über 100 % aus, Verlieren bleibt aber
-jederzeit möglich. Das **Ayri-Glück** würfelt einen verlorenen Ausgang gelegentlich neu – nach mehreren Niederlagen
+jederzeit möglich. Slots zahlen in Vielfachen des Gesamteinsatzes (ein Treffer bringt mindestens das Doppelte zurück,
+dazu AYRI-Multiplikatoren bis ×38 und ein Kronen-Jackpot, der mit jedem Stockwerk wächst); die Tischlimits steigen
+mit dem Stockwerk, damit die 15 Ziele bis $500'000'000 realistisch erreichbar sind. Das **Ayri-Glück** würfelt einen verlorenen Ausgang gelegentlich neu – nach mehreren Niederlagen
 in Folge häufiger –, damit lange Pechsträhnen selten werden (`luckChance` in `config.js`).
 `npm run rtp` zeigt Quoten und Tischlimits, `node scripts/balance.js` simuliert alle Spiele (Auszahlung, Gewinnquote, längste Pechsträhne).
 

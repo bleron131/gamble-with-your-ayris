@@ -339,13 +339,15 @@ export class Character {
       case 'dance': sway = Math.sin(t * 6) * 0.25; armUp = 1.2 + Math.sin(t * 12) * 0.8; bob = Math.abs(Math.sin(t * 6)) * 0.08; legSwing = Math.sin(t * 12) * 0.2; break;
       case 'facepalm': headTilt = 0.3; break;
       case 'sit': break;
+      case 'jump': armUp = 0.9; legSwing = 0; bob = 0.04; break;
       case 'deal': armSwing = 0; break;
       default: bob = Math.sin(t * 2) * 0.012; armSwing = Math.sin(t * 1.5) * 0.04;
     }
     L.rotation.x = legSwing; R.rotation.x = -legSwing;
     this.body.position.y = bob;
     this.body.rotation.z = sway;
-    if (this.anim === 'cheer' || this.anim === 'dance') {
+    if (this.anim === 'jump') { L.rotation.x = -0.75; R.rotation.x = 0.35; }
+    if (this.anim === 'cheer' || this.anim === 'dance' || this.anim === 'jump') {
       this.armL.rotation.set(0, 0, -armUp);
       this.armR.rotation.set(0, 0, armUp);
     } else if (this.anim === 'facepalm') {

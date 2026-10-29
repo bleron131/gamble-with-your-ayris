@@ -46,6 +46,7 @@ export class CasinoWorld extends World {
     this.lightsList = [];
     this.buildRoom();
     this.buildLights();
+    this.initFlash();
     this.buildDecor();
     if (this.tier >= 4) this.buildLuxury();
     this.views = {};
@@ -287,6 +288,10 @@ export class CasinoWorld extends World {
         pos: ip, radius: v.radius, table: v,
         label: () => {
           const ts = v.state;
+          if (v.walkUp) {
+            if (ts?.busy) return `${GAME_ICONS[def.type]} ${ts.state.spinnerName || 'Jemand'} dreht gerade…`;
+            return `SPIN ${fmtMoney(ts?.state.bet || 0)} · [R] BET + · [F] BET − · oder Knöpfe am Automaten klicken`;
+          }
           const occ = ts?.occupant && ts.occupant !== this.app.me ? this.app.playerName(ts.occupant) : null;
           return occ ? `${GAME_ICONS[def.type]} ${GAME_NAMES[def.type]} – ${occ} spielt (zuschauen)` : `${GAME_ICONS[def.type]} ${GAME_NAMES[def.type]} spielen (${fmtMoney(v.limits.min)} – ${fmtMoney(v.limits.max)})`;
         },
@@ -368,6 +373,7 @@ export class CasinoWorld extends World {
     }
     blocked.push({ p: new THREE.Vector3(0, 0, D / 2 - 2), r: 3.5 });
     blocked.push({ p: this.mafiaDoorPos, r: 1.5 });
+    blocked.push({ p: new THREE.Vector3(0, 0, D / 2 - 5), r: 3.4 }); // Bühne der Mafia-Szene freihalten
     this.guests = [];
     const count = 2 + tier;
     let seed = 0;
@@ -392,9 +398,49 @@ export class CasinoWorld extends World {
     }
   }
 
+  // Kurzer farbiger Lichtblitz an einem Automaten (BIG WIN und mehr) – ein gemeinsames Licht für alle Geräte
+  flashAt(pos, level = 3) {
+    this.initFlash();
+    const f = this.flashLight;
+    f.position.copy(pos).add(new THREE.Vector3(0, 0.3, 0));
+    f.userData = { t: level >= 5 ? 6 : level >= 4 ? 4 : 2.5, max: level >= 5 ? 6 : level >= 4 ? 4 : 2.5, peak: level >= 5 ? 9 : level >= 4 ? 7 : 4.5 };
+  }
+
+  // Schon beim Aufbau anlegen, damit beim ersten Gewinn keine Shader neu kompiliert werden
+  initFlash() {
+    if (!this.flashLight) {
+      this.flashLight = new THREE.PointLight('#ffd23c', 0, 5, 2);
+      this.scene.add(this.flashLight);
+      this.updaters.push((dt, t) => {
+        const f = this.flashLight;
+        if (f.userData.t > 0) {
+          f.userData.t -= dt;
+          f.intensity = Math.max(0, f.userData.t) / f.userData.max * f.userData.peak * (0.6 + 0.4 * Math.abs(Math.sin(t * 18)));
+          f.color.setHSL((t * 0.7) % 1, 1, 0.6);
+        } else f.intensity = 0;
+      });
+    }
+  }
+
   // ───────────────────────── Mafia ─────────────────────────
-  startMafia(targetPos) {
-    this.elevator.userData.setOpen(false);
+  // Bühne für die Mafia-Szene: freier Bereich vor dem Aufzug, unabhängig davon, wo die Spieler gerade stehen
+  mafiaStage(n) {
+    const z0 = this.D / 2;
+    const players = Array.from({ length: n }, (_, i) => new THREE.Vector3((i - (n - 1) / 2) * 0.95, 0, z0 - 6.1));
+    // Halbkreis vor dem Team, damit aus der Kameraperspektive alle vier zu sehen sind
+    const mafia = [0, 1, 2, 3].map(i => new THREE.Vector3((i - 1.5) * 0.95, 0, z0 - 3.8 - (i === 0 || i === 3 ? 0.45 : 0)));
+    return {
+      players, mafia,
+      from: new THREE.Vector3(0, 0, z0 - 1.0),
+      center: new THREE.Vector3(0, 0, z0 - 5.0),
+      cam: { pos: new THREE.Vector3(-1.4, 4.2, z0 - 9.9), look: new THREE.Vector3(0, 0.85, z0 - 4.8) },
+      camEnd: new THREE.Vector3(-1.1, 3.8, z0 - 9.2),
+      box: new THREE.Box3(new THREE.Vector3(-2.8, 0, z0 - 7.0), new THREE.Vector3(2.8, 2.4, z0 - 2.6)),
+    };
+  }
+
+  // Rotes Licht: Musik ist schon aus, das Casino färbt sich bedrohlich rot
+  mafiaLights() {
     for (const l of this.lightsList) { l.color.set('#ff2020'); l.intensity *= 0.5; }
     this.keyLight.color.set('#ff4040');
     this.keyLight.intensity = 0.3;
@@ -405,34 +451,79 @@ export class CasinoWorld extends World {
     this.scene.fog.color.set('#200000');
     this.scene.background = new THREE.Color('#120000');
     for (const g of this.guests) g.setAnim('sad');
-    this.mafia = [];
-    const doorAnim = { t: 0 };
-    const dest = targetPos.clone();
     this.updaters.push((dt, t) => {
-      doorAnim.t += dt;
-      this.mafiaDoor.rotation.y = -Math.min(1.6, doorAnim.t * 1.5);
       for (const l of this.lightsList) l.intensity = (Math.sin(t * 9 + l.position.x) > -0.3 ? 4 : 1.5);
     });
+  }
+
+  // Alles ausblenden, was zwischen Kamera und Bühne steht oder in die Bühne hineinragt (Tische, Automaten, Deko, Gäste)
+  clearStage(stage, keep) {
+    const cam = stage.cam.pos;
+    const box = new THREE.Box3();
+    for (const o of this.scene.children) {
+      if (keep.has(o) || o.isLight || o.isCamera || o.isSprite || !o.visible) continue;
+      box.setFromObject(o);
+      if (box.isEmpty()) continue;
+      const size = box.getSize(new THREE.Vector3());
+      if (size.x > 8 || size.z > 8) continue; // Boden, Decke, Wände
+      if (box.intersectsBox(stage.box) || box.clone().expandByScalar(0.4).containsPoint(cam)) { o.visible = false; o.userData.hiddenForMafia = true; }
+    }
+  }
+
+  hideOccluders(camPos, targets, keep) {
+    const rc = new THREE.Raycaster();
+    rc.camera = this.app.engine.camera; // für Namensschilder (Sprites) in Gruppen
+    const objs = this.scene.children.filter(o => o.visible && !keep.has(o) && !o.isSprite && !o.isLight && !o.isCamera);
+    for (const t of targets) {
+      const dir = t.clone().sub(camPos);
+      const dist = dir.length();
+      rc.set(camPos, dir.normalize());
+      rc.far = dist - 0.25;
+      for (const hit of rc.intersectObjects(objs, true)) {
+        let o = hit.object;
+        if (o.isSprite) continue;
+        while (o.parent && o.parent !== this.scene) o = o.parent;
+        if (keep.has(o)) continue;
+        const size = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3());
+        if (size.x > 8 || size.z > 8) continue;
+        o.visible = false;
+      }
+    }
+  }
+
+  // Die Mafia kommt aus dem Aufzug und baut sich vor dem Team auf
+  startMafia(stage) {
+    this.elevator.userData.setOpen(true);
+    this.mafia = [];
+    const center = stage.center;
     for (let i = 0; i < 4; i++) {
       setTimeout(() => {
         const m = new Character(npcAppearance('mafia', i));
         m.setName(['Don Ayrone', 'Big Tony', 'Luigi', 'Vinnie'][i], '#ff6b6b');
-        m.root.position.copy(this.mafiaDoorPos).add(new THREE.Vector3(i * 0.3, 0, 0));
+        m.root.position.copy(stage.from).add(new THREE.Vector3((i - 1.5) * 0.45, 0, 0));
+        m.root.rotation.y = Math.PI;
         m.setAnim('walk');
         this.scene.add(m.root);
         this.mafia.push(m);
-        const offset = new THREE.Vector3((i - 1.5) * 0.9, 0, -1.8);
+        const goal = stage.mafia[i];
+        const from = m.root.position.clone();
+        // Zeitbasiert (Echtzeit), damit die Mafia auch bei niedriger Bildrate pünktlich vor der Explosion ankommt
+        const t0 = performance.now(), dur = 2300;
+        let arrived = false;
         this.updaters.push(dt => {
           m.update(dt);
-          const goal = dest.clone().add(offset);
-          const d = goal.clone().sub(m.root.position).setY(0);
-          if (d.length() > 0.15) {
-            d.normalize();
-            m.root.position.addScaledVector(d, dt * 2.2);
-            m.root.rotation.y = Math.atan2(d.x, d.z);
-          } else { m.setAnim('point'); m.root.rotation.y = Math.atan2(dest.x - m.root.position.x, dest.z - m.root.position.z); }
+          if (arrived) return;
+          const k = Math.min(1, (performance.now() - t0) / dur);
+          const d = goal.clone().sub(from).setY(0);
+          m.root.position.lerpVectors(from, goal, k);
+          m.root.rotation.y = Math.atan2(d.x, d.z);
+          if (k >= 1) {
+            arrived = true;
+            m.setAnim(i === 0 ? 'point' : i === 3 ? 'facepalm' : 'idle');
+            m.root.rotation.y = Math.atan2(center.x - m.root.position.x, center.z - 0.85 - m.root.position.z);
+          }
         });
-      }, 600 + i * 450);
+      }, i * 380);
     }
   }
 

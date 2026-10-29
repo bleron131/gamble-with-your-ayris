@@ -9,7 +9,7 @@ import { CasinoWorld } from './world/casino.js';
 import { FinalWorld } from './world/final.js';
 import { WSTransport, LocalTransport } from './net.js';
 import * as Save from './save.js';
-import { initAudio, sfx, setMusic, setAmbience, setDuck, setVolumes, setDizzyAudio } from './audio.js';
+import { initAudio, sfx, setMusic, setAmbience, setDuck, setVolumes, setDizzyAudio, setShishaSounds, clearShishaSounds, updateListener } from './audio.js';
 import { bindSfx } from './tables/common.js';
 import { UI } from './ui/ui.js';
 import { esc } from './ui/dom.js';
@@ -79,6 +79,52 @@ export class App {
   tableStart(id, payload) { this.send({ t: 'table.start', id, payload }); }
   tableAction(id, action) { this.send({ t: 'table.action', id, action }); }
 
+  // Spielautomaten: Knöpfe direkt am Gerät
+  slotUsable(id) {
+    const v = this.world.views?.[id];
+    const ts = v?.state;
+    if (!v || !ts) return null;
+    if (ts.busy) {
+      sfx.denied();
+      this.ui.toast(ts.state.spinner === this.me ? 'Die Walzen drehen noch…' : `${ts.state.spinnerName || 'Jemand'} dreht gerade an diesem Automaten`, 'warn', 1600);
+      return null;
+    }
+    return v;
+  }
+  slotBet(id, dir) {
+    const v = this.slotUsable(id);
+    if (!v) return;
+    v.pressButton(dir > 0 ? 'bet+' : 'bet-');
+    sfx.button();
+    this.send({ t: 'slot.bet', id, dir });
+  }
+  slotSpin(id) {
+    const v = this.slotUsable(id);
+    if (!v) return;
+    if (v.state.state.bet > this.pot) { sfx.denied(); this.ui.toast(`Nicht genug im Team-Pot für ${fmtMoney(v.state.state.bet)} – BET − drücken`, 'error'); return; }
+    v.pressButton('spin');
+    sfx.button();
+    this.lastSlotId = id;
+    this.hands?.play('pull');
+    this.send({ t: 'slot.spin', id });
+  }
+  slotNear() {
+    const it = this.world?.nearestInteract?.(this.player.pos);
+    return it?.table?.walkUp ? it.table : null;
+  }
+
+  // Raycast auf Automatenknöpfe: Fadenkreuz (Maus gefangen) oder Mauszeiger
+  pickSlotButton(ndc) {
+    const views = Object.values(this.world.views || {}).filter(v => v.walkUp && this.distanceTo(v.group.position) < 3);
+    if (!views.length) return null;
+    this.raycaster.setFromCamera(ndc, this.engine.camera);
+    this.raycaster.far = 2.8;
+    const hits = this.raycaster.intersectObjects(views.flatMap(v => v.pickMeshes()), false);
+    this.raycaster.far = Infinity;
+    return hits[0]?.object.userData.slotButton || null;
+  }
+  aimNdc() { return this.input.locked ? new THREE.Vector2(0, 0) : new THREE.Vector2(...this.mouseNdc()); }
+
   onMessage(m) {
     switch (m.t) {
       case 'welcome':
@@ -95,6 +141,7 @@ export class App {
         for (const [id, pose] of Object.entries(m.moves)) {
           if (id === this.me) continue;
           const a = this.avatars.get(id);
+          if (a && this.mafiaLock) continue; // während der Mafia-Szene stehen alle fest auf der Bühne
           if (a) { a.target = pose; a.setFx(pose.fx); if (!a.emoteUntil || a.emoteUntil < performance.now()) a.setAnim(pose.a); }
         }
         break;
@@ -173,6 +220,8 @@ export class App {
     const idx = this.state ? Math.max(0, this.state.players.findIndex(p => p.id === this.me)) : 0;
     this.player.spawn(this.world, idx);
     this.cinematic = null;
+    this.mafiaLock = false;
+    this.mafiaCam = null;
     this.hands.group.visible = this.world.mode === 'first';
     // Eigener Charakter (in Third-Person sichtbar)
     if (!this.selfChar) { this.selfChar = new Character(this.save.appearance); }
@@ -183,6 +232,9 @@ export class App {
     if (scene === 'floor') { setMusic('casino', floorDef(floor).tier); setAmbience('casino'); }
     else if (scene === 'final') { setMusic('final'); setAmbience(null); }
     else { setMusic('lounge'); setAmbience('lounge'); }
+    // Räumliche Shisha-Geräusche nur in der Shishabar
+    if (scene === 'lobby' && this.world.shishas) setShishaSounds(this.world.shishas.map(sh => sh.position.clone().setY(0.8)));
+    else clearShishaSounds();
     setDuck(false);
     this.highRiskTables.clear();
     if (this.world.elevator && this.world.spawn.inElevator) {
@@ -222,6 +274,7 @@ export class App {
 
   // ───────────────────────── Tische ─────────────────────────
   sitAt(id) {
+    if (this.world.views?.[id]?.walkUp) return this.slotSpin(id);
     const ts = this.state?.session?.tables[id];
     if (ts?.occupant && ts.occupant !== this.me) {
       // Zuschauen: zur Tischseite stellen
@@ -331,7 +384,8 @@ export class App {
   }
 
   onResult(ev, mine) {
-    this.world.views?.[ev.tableId]?.onEvent(ev);
+    const view = this.world.views?.[ev.tableId];
+    view?.onEvent(ev);
     if (this.highRiskTables.has(ev.tableId)) {
       this.highRiskTables.delete(ev.tableId);
       if (!this.highRiskTables.size) { setDuck(false); clearInterval(this.heartbeat); this.heartbeat = null; }
@@ -341,7 +395,9 @@ export class App {
       this.ui.feed(`<b>${esc(ev.name)}</b> ${GAME_NAMES[ev.game]}: ${txt} – ${esc(ev.detail || '')}${ev.effects?.length ? ' ' + esc(ev.effects.join(' ')) : ''}`);
     }
     const near = this.distanceTo(this.world.views?.[ev.tableId]?.group.position || this.player.pos) < 8;
-    if (ev.jackpot) {
+    if (view?.ownFeedback) {
+      // Automaten zeigen Gewinnstufen selbst (Sound, Licht, Münzen, grosse Anzeige)
+    } else if (ev.jackpot) {
       this.ui.bigText('JACKPOT', `${ev.name}: +${fmtMoney(ev.net)}`, 'jackpot', 4500);
       sfx.jackpot();
       const v = this.world.views?.[ev.tableId];
@@ -461,32 +517,67 @@ export class App {
     this.ui.closeTablePanel();
     this.player.seated = null;
     this.input.exitLock();
-    setMusic('tension');
+    this.mafiaLock = true;
+    // 1. Musik stoppt sofort
+    setMusic('none');
     setAmbience(null);
+    setDuck(false);
+    clearInterval(this.heartbeat); this.heartbeat = null;
+    this.highRiskTables.clear();
     this.bumpStat('floorsFailed', 1);
     this.bumpStat('mafiaVisits', 1);
     this.achieve('mafia');
     this.ui.bigText('BANKROTT!', 'Die Mafia will ihr Geld…', 'risk', 3000);
     const w = this.world;
-    const center = this.player.pos.clone();
-    w.startMafia?.(center);
-    sfx.doors();
-    // Kamera seitlich erhöht: Spieler und anrückende Mafia im Bild
+    if (!w.mafiaStage) return;
+    const players = this.state?.players || [];
+    const stage = w.mafiaStage(Math.max(1, players.length));
+    // 2. Rotes Licht
+    setTimeout(() => { w.mafiaLights(); sfx.heartbeat(); }, 500);
+    // 3. Kinokamera: fester Blick auf die Bühne vor dem Aufzug, alle Spieler stehen dort, Steuerung gesperrt
     setTimeout(() => {
-      const door = (w.mafiaDoorPos || center.clone().add(new THREE.Vector3(0, 0, -6))).clone().setY(0);
-      const dir = door.clone().sub(center).setY(0).normalize();
-      const side = new THREE.Vector3(dir.z, 0, -dir.x);
-      this.cinematic = {
-        pos: center.clone().addScaledVector(dir, -2.2).addScaledVector(side, 2.4).add(new THREE.Vector3(0, 2.8, 0)),
-        look: center.clone().addScaledVector(dir, 2.5).add(new THREE.Vector3(0, 0.9, 0)),
+      const keep = new Set([this.selfChar?.root, ...[...this.avatars.values()].map(a => a.root), w.elevator, this.engine.camera].filter(Boolean));
+      players.forEach((p, i) => {
+        const pos = stage.players[i];
+        if (p.id === this.me) { this.player.pos.copy(pos); this.player.yaw = 0; this.player.jump.reset(); this.player.emoteT = 0; }
+        const a = this.avatars.get(p.id);
+        if (a) { a.target = { ...a.target, p: [pos.x, 0, pos.z], r: 0 }; a.root.position.copy(pos); a.root.rotation.y = 0; a.setAnim('idle'); a.emoteUntil = performance.now() + 12000; }
+      });
+      w.clearStage(stage, keep);
+      this.cinematic = { pos: stage.cam.pos.clone(), look: stage.cam.look.clone() };
+      this.player.camPos.copy(stage.cam.pos);
+      this.player.camLook.copy(stage.cam.look);
+      const t0 = performance.now();
+      let lastCheck = 0;
+      this.mafiaCam = () => {
+        if (!this.cinematic) return;
+        // Langsame Kamerafahrt auf die Szene zu
+        const k = Math.min(1, (performance.now() - t0) / 5500);
+        this.cinematic.pos.lerpVectors(stage.cam.pos, stage.camEnd, k * k * (3 - 2 * k));
+        // Regelmässig prüfen, dass nichts Spieler oder Mafia verdeckt
+        if (performance.now() - lastCheck > 150) {
+          lastCheck = performance.now();
+          const targets = [];
+          for (const p of stage.players) targets.push(p.clone().setY(0.5), p.clone().setY(1.6));
+          for (const m of w.mafia || []) { keep.add(m.root); targets.push(m.root.position.clone().setY(0.5), m.root.position.clone().setY(1.6)); }
+          w.hideOccluders(this.engine.camera.position.clone(), targets, keep);
+        }
       };
-    }, 900);
+    }, 1000);
+    // 4. Die Mafia kommt aus dem Aufzug
+    setTimeout(() => { setMusic('tension'); sfx.doors(); w.startMafia(stage); }, 1400);
+    setTimeout(() => {
+      this.player.playEmote('sad', 6);
+      for (const a of this.avatars.values()) { a.setAnim('sad'); a.emoteUntil = performance.now() + 9000; }
+    }, 4300);
+    // 5. Cartoon-Explosion mit Rauch, Blitz und Wackeln
     setTimeout(() => {
       sfx.explosion();
       this.engine.shake = 2.5;
-      w.explode?.(center.clone().add(new THREE.Vector3(0, 0, -1.5)));
+      w.explode?.(stage.center.clone());
       this.ui.explosion();
     }, 6200);
+    // 6. LEVEL FAILED – danach schickt der Server alle zurück in die Shishabar
     setTimeout(() => this.ui.levelFailed(ev.keep), 7600);
   }
 
@@ -558,7 +649,9 @@ export class App {
       return;
     }
     if (!this.state) return;
-    if (e.code === 'KeyE') { const it = this.world.nearestInteract(this.player.pos); if (it) { sfx.click(); it.action(); } }
+    if (this.mafiaLock) return;
+    if (e.code === 'KeyE') { const it = this.world.nearestInteract(this.player.pos); if (it) { if (!it.table?.walkUp) sfx.click(); it.action(); } }
+    if (e.code === 'KeyR' || e.code === 'KeyF') { const v = this.slotNear(); if (v) this.slotBet(v.def.id, e.code === 'KeyR' ? 1 : -1); }
     const emotes = { Digit1: 'cheer', Digit2: 'dance', Digit3: 'sad', Digit4: 'facepalm', Digit5: 'point' };
     if (emotes[e.code]) {
       this.player.playEmote(emotes[e.code]);
@@ -577,6 +670,11 @@ export class App {
       this.player.seated.pick(this.raycaster, e.button);
       return;
     }
+    if (this.mafiaLock) return;
+    if (e.button === 0 && this.world.kind === 'floor') {
+      const b = this.pickSlotButton(this.aimNdc());
+      if (b) { b.action(); return; }
+    }
     if (this.world.mode === 'first' && e.button === 0) this.input.requestLock();
   }
 
@@ -591,6 +689,7 @@ export class App {
     this.input.wantLock = this.world.mode === 'first' && !this.player.seated;
     this.input.enabled = !this.ui.modalOpen;
     this.world.update(dt, t);
+    this.mafiaCam?.();
     if (this.state) this.player.update(dt, this.input, this.world, this.engine.camera);
     else this.menuCamera(t);
     // Eigener Charakter
@@ -606,9 +705,12 @@ export class App {
     this.hands.group.visible = this.world.mode === 'first' && !this.cinematic;
     this.hands.update(dt, this.player.moving, !!this.player.seated);
     // Interaktionshinweis
+    this.hoverButton = null;
     if (this.state && !this.player.seated && !this.cinematic) {
       const it = this.world.nearestInteract(this.player.pos);
-      this.ui.setHint(it ? `[E] ${typeof it.label === 'function' ? it.label() : it.label}` : this.world.mode === 'first' && !this.input.locked ? 'Klicken, um die Maus zu fangen · WASD laufen' : '');
+      if (this.world.kind === 'floor') this.hoverButton = this.pickSlotButton(this.aimNdc());
+      if (this.hoverButton) this.ui.setHint(`Klick: ${this.hoverButton.label()}`);
+      else this.ui.setHint(it ? `[E] ${typeof it.label === 'function' ? it.label() : it.label}` : this.world.mode === 'first' && !this.input.locked ? 'Klicken, um die Maus zu fangen · WASD laufen · LEERTASTE springen' : '');
     } else if (this.player.seated) {
       this.raycaster.setFromCamera(new THREE.Vector2(...this.mouseNdc()), this.engine.camera);
       const lbl = this.player.seated.hover(this.raycaster);
@@ -625,6 +727,7 @@ export class App {
     const dz = this.player.dizzyK;
     const filter = dz > 0.01 ? `blur(${(dz * 0.9).toFixed(2)}px) saturate(${(1 + dz * 0.35).toFixed(2)}) hue-rotate(${(Math.sin(t * 0.6) * 14 * dz).toFixed(1)}deg)` : '';
     if (this.engine.renderer.domElement.style.filter !== filter) this.engine.renderer.domElement.style.filter = filter;
+    updateListener(this.engine.camera);
     this.ui.tick(dt);
     this.input.endFrame();
   }
