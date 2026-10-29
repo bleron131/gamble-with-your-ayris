@@ -6,6 +6,7 @@ import { handTotal, cardValue } from '../../shared/games/blackjack.js';
 import { h, clear } from '../ui/dom.js';
 import { BetAmount, actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
+import { say } from '../audio.js';
 
 export class BlackjackView extends TableView {
   constructor(app, def, floor) {
@@ -69,6 +70,10 @@ export class BlackjackView extends TableView {
       this.chips.add(st);
     });
     this.updateLabels(s);
+    if (this.mine && prev && prev.state.phase !== 'done' && s.phase === 'done') {
+      const r = s.hands.map(h => h.result);
+      say(r.includes('BLACKJACK') ? 'Blackjack!' : handTotal(s.dealer).total > 21 ? 'Dealer bust!' : r.includes('GEWONNEN') ? 'Gewonnen!' : r.every(x => x === 'PUSH') ? 'Push.' : 'Das Haus gewinnt.');
+    }
     this.refreshPanel();
   }
 

@@ -7,7 +7,7 @@ import { CRAPS_BETS } from '../../shared/games/craps.js';
 import { h, clear } from '../ui/dom.js';
 import { ChipPicker, actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
-import { sfx } from '../audio.js';
+import { sfx, say } from '../audio.js';
 
 const LW = 2.2, LD = 1.0;
 // Würfelflächen: +x=3, -x=4, +y=1, -y=6, +z=2, -z=5
@@ -164,6 +164,7 @@ export class CrapsView extends TableView {
       this.renderChips();
       const sum = s.dice[0] + s.dice[1];
       this.label.set(`${sum}${s.point ? '' : prev.state.point && (sum === 7 || sum === prev.state.point) ? (sum === 7 ? ' – SEVEN OUT' : ' – POINT!') : ''}`, '#ffd97a');
+      if (this.app.distanceTo?.(this.group.position) < 6) say(prev.state.point && sum === 7 ? 'Seven out!' : sum === 11 ? 'Yo eleven!' : String(sum), 'en-US');
     } else this.renderChips();
     this.refreshPanel();
   }

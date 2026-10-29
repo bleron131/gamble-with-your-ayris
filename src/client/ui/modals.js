@@ -146,7 +146,9 @@ export function openEditor(ui, fromMenu) {
     const p = app.player.pos;
     const yaw = app.player.yaw;
     const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    app.cinematic = { pos: p.clone().addScaledVector(fwd, 2.1).add(new THREE.Vector3(0.5, 1.25, 0)), look: p.clone().add(new THREE.Vector3(0, 0.95, 0)) };
+    const camRight = new THREE.Vector3(fwd.z, 0, -fwd.x);
+    // Charakter links im Bild, Editor rechts
+    app.cinematic = { pos: p.clone().addScaledVector(fwd, 2.2).add(new THREE.Vector3(0, 1.3, 0)), look: p.clone().addScaledVector(camRight, 0.6).add(new THREE.Vector3(0, 0.85, 0)) };
   }
   const nameIn = h('input', { value: s.name, maxlength: 16, oninput: e => { s.name = e.target.value.slice(0, 16); } });
   const body = h('div.editbody');

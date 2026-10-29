@@ -160,7 +160,7 @@ button.leave { align-self: flex-end; }
 @keyframes bigin { from { transform: translate(-50%, -50%) scale(.2); opacity: 0; } }
 @keyframes rainbow { 50% { filter: hue-rotate(90deg); } }
 .reward { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); background: var(--bg2); border: 2px solid var(--pink); border-radius: 16px; padding: 10px 22px; text-align: center; animation: bigin .5s cubic-bezier(.2, 1.6, .4, 1); transition: opacity .5s; }
-.reward.ach { border-color: var(--gold); top: 22%; }
+.reward.ach { border-color: var(--gold); top: auto; bottom: 110px; }
 .reward.out { opacity: 0; }
 .reward .rn { font-family: var(--title); font-size: 32px; color: var(--pink); }
 .reward .rr { font-weight: 800; font-size: 14px; }

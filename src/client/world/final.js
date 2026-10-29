@@ -149,7 +149,7 @@ export class FinalWorld extends World {
     }
     this.updaters.push((dt, t) => { for (const b of Object.values(this.buttons)) b.material.emissiveIntensity = 1 + Math.sin(t * 3) * 0.4; });
     // Münze
-    const coinGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.018, 48);
+    const coinGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.026, 48);
     const side = M.gold();
     this.coin = new THREE.Mesh(coinGeo, [side, new THREE.MeshStandardMaterial({ map: coinFaceTexture(true), roughness: 0.3, metalness: 0.4 }), new THREE.MeshStandardMaterial({ map: coinFaceTexture(false), roughness: 0.3, metalness: 0.4 })]);
     this.coin.castShadow = true;
@@ -172,7 +172,7 @@ export class FinalWorld extends World {
     const coin = this.coin;
     const staff = this.staff;
     const hand = new THREE.Vector3(0.25, 1.35, this.tableTop.z - 0.65);
-    const land = this.tableTop.clone().add(new THREE.Vector3(0, 0.009, 0.05));
+    const land = this.tableTop.clone().add(new THREE.Vector3(0, 0.013, 0.05));
     const start = coin.position.clone();
     staff.setAnim('point');
     const flips = 9;
@@ -233,6 +233,6 @@ export class FinalWorld extends World {
   }
 
   get cinematic() {
-    return { pos: this.tableTop.clone().add(new THREE.Vector3(1.6, 1.4, 3.2)), look: this.tableTop.clone().add(new THREE.Vector3(0, 0.7, 0)) };
+    return { pos: this.tableTop.clone().add(new THREE.Vector3(1.1, 1.9, 2.3)), look: this.tableTop.clone().add(new THREE.Vector3(0, 0.55, -0.2)) };
   }
 }

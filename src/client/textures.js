@@ -72,19 +72,32 @@ export function carpetTexture(tier) {
 }
 
 export function marbleTexture(base = '#f1ece4', vein = 'rgba(120,110,100,0.35)') {
-  return cached('marble' + base, () => {
+  return cached('marble' + base + vein, () => {
     const [c, g] = canvas(512, 512);
     g.fillStyle = base; g.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 26; i++) {
-      g.strokeStyle = vein; g.lineWidth = Math.random() * 2.5 + 0.5;
+    // Wolkige Grundstruktur
+    for (let i = 0; i < 40; i++) {
+      const x = Math.random() * 512, y = Math.random() * 512, r = 30 + Math.random() * 90;
+      const grd = g.createRadialGradient(x, y, 0, x, y, r);
+      grd.addColorStop(0, 'rgba(128,128,128,0.06)'); grd.addColorStop(1, 'rgba(128,128,128,0)');
+      g.fillStyle = grd; g.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    // Weiche, geschwungene Adern
+    g.filter = 'blur(1.2px)';
+    for (let i = 0; i < 14; i++) {
+      g.strokeStyle = vein; g.lineWidth = Math.random() * 2 + 0.6;
       g.beginPath();
       let x = Math.random() * 512, y = Math.random() * 512;
       g.moveTo(x, y);
-      for (let k = 0; k < 12; k++) { x += (Math.random() - 0.3) * 60; y += (Math.random() - 0.5) * 60; g.lineTo(x, y); }
+      for (let k = 0; k < 5; k++) {
+        const nx = x + (Math.random() - 0.2) * 160, ny = y + (Math.random() - 0.5) * 120;
+        g.quadraticCurveTo(x + (Math.random() - 0.5) * 80, y + (Math.random() - 0.5) * 80, nx, ny);
+        x = nx; y = ny;
+      }
       g.stroke();
     }
-    // Fliesenfugen
-    g.strokeStyle = 'rgba(0,0,0,0.15)'; g.lineWidth = 2;
+    g.filter = 'none';
+    g.strokeStyle = 'rgba(0,0,0,0.12)'; g.lineWidth = 2;
     g.strokeRect(0, 0, 512, 512);
     return toTex(c, { repeat: [8, 8] });
   });

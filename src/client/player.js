@@ -57,8 +57,8 @@ export class LocalPlayer {
     this.moving = false;
     if (this.emoteT > 0) { this.emoteT -= dt; this.anim = this.emote; } else if (this.anim !== 'walk') this.anim = 'idle';
     if (this.app.cinematic) {
-      this.camPos.lerp(this.app.cinematic.pos, Math.min(1, dt * 2));
-      this.camLook.lerp(this.app.cinematic.look, Math.min(1, dt * 2));
+      this.camPos.lerp(this.app.cinematic.pos, Math.min(1, dt * 3));
+      this.camLook.lerp(this.app.cinematic.look, Math.min(1, dt * 3));
       camera.position.copy(this.camPos);
       camera.lookAt(this.camLook);
       return;

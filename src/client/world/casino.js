@@ -99,7 +99,8 @@ export class CasinoWorld extends World {
   buildLights() {
     const { W, D, H, tier, theme } = this;
     const s = this.scene;
-    s.add(new THREE.HemisphereLight(theme.light, '#20101a', 0.5 + tier * 0.05));
+    this.hemi = new THREE.HemisphereLight(theme.light, '#20101a', 0.5 + tier * 0.05);
+    s.add(this.hemi);
     s.add(new THREE.AmbientLight('#ffffff', 0.08));
     const key = new THREE.DirectionalLight(theme.light, 0.8);
     key.position.set(5, 16, 8);
@@ -371,6 +372,10 @@ export class CasinoWorld extends World {
     for (const l of this.lightsList) { l.color.set('#ff2020'); l.intensity *= 0.5; }
     this.keyLight.color.set('#ff4040');
     this.keyLight.intensity = 0.3;
+    this.hemi.color.set('#ff3030');
+    this.hemi.groundColor.set('#300000');
+    this.hemi.intensity = 0.45;
+    this.scene.environmentIntensity = 0.08;
     this.scene.fog.color.set('#200000');
     this.scene.background = new THREE.Color('#120000');
     for (const g of this.guests) g.setAnim('sad');

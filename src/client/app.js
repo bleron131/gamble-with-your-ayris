@@ -431,10 +431,15 @@ export class App {
     const center = this.player.pos.clone();
     w.startMafia?.(center);
     sfx.doors();
-    // Kamera schaut zur Mafia
+    // Kamera seitlich erhöht: Spieler und anrückende Mafia im Bild
     setTimeout(() => {
-      const door = w.mafiaDoorPos || center;
-      this.cinematic = { pos: center.clone().add(new THREE.Vector3(0, 1.6, 0)).add(door.clone().sub(center).normalize().multiplyScalar(-2)), look: door.clone().setY(1.2).lerp(center, 0.5) };
+      const door = (w.mafiaDoorPos || center.clone().add(new THREE.Vector3(0, 0, -6))).clone().setY(0);
+      const dir = door.clone().sub(center).setY(0).normalize();
+      const side = new THREE.Vector3(dir.z, 0, -dir.x);
+      this.cinematic = {
+        pos: center.clone().addScaledVector(dir, -2.2).addScaledVector(side, 2.4).add(new THREE.Vector3(0, 2.8, 0)),
+        look: center.clone().addScaledVector(dir, 2.5).add(new THREE.Vector3(0, 0.9, 0)),
+      };
     }, 900);
     setTimeout(() => {
       sfx.explosion();

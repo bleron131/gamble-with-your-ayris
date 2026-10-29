@@ -252,3 +252,20 @@ function playStep(t, i, step) {
     if (Math.random() < 0.5) tone(mtof(MELODY_SCALE.casino[Math.floor(Math.random() * 6)] + 12), t, step, { type: 'triangle', vol: 0.04, bus: B });
   }
 }
+
+// Dealer-Stimme über die Web Speech API (falls vorhanden)
+let lastSay = 0;
+export function say(text, lang = 'de-DE', rate = 1.05) {
+  try {
+    if (!window.speechSynthesis || settings.sfx * settings.master < 0.05) return;
+    const now = performance.now();
+    if (now - lastSay < 900) return;
+    lastSay = now;
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang;
+    u.rate = rate;
+    u.pitch = 0.9;
+    u.volume = Math.min(1, settings.sfx * settings.master);
+    window.speechSynthesis.speak(u);
+  } catch { /* ohne Stimme weiter */ }
+}

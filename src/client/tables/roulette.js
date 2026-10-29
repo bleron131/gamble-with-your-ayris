@@ -7,7 +7,7 @@ import { WHEEL_ORDER, RED, spotLabel } from '../../shared/games/roulette.js';
 import { h, clear } from '../ui/dom.js';
 import { ChipPicker, actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
-import { sfx } from '../audio.js';
+import { sfx, say } from '../audio.js';
 
 const LAYOUT_W = 1.6, LAYOUT_D = 0.64, LAYOUT_X = 0.42;
 const WHEEL_X = -0.95;
@@ -210,7 +210,7 @@ export class RouletteView extends TableView {
     this.ballPocket = null;
     this.spinning = true;
     const near = this.app.distanceTo?.(this.group.position) < 7;
-    if (near) sfx.rouletteSpin(Tb);
+    if (near) { sfx.rouletteSpin(Tb); setTimeout(() => say('Rien ne va plus!', 'fr-FR'), 2500); }
     this.dealer.setAnim('deal');
     setTimeout(() => this.dealer.setAnim('idle'), 1200);
     let bounced = false;
@@ -228,7 +228,11 @@ export class RouletteView extends TableView {
       } else {
         this.ballPocket = s.result;
       }
-    }, () => { this.spinning = false; this.ballPocket = s.result; });
+    }, () => {
+      this.spinning = false;
+      this.ballPocket = s.result;
+      if (near) say(`${s.result}, ${s.result === 0 ? 'Zero' : RED.has(s.result) ? 'Rot' : 'Schwarz'}`);
+    });
   }
 
   currentBallAngle() {

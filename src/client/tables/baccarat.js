@@ -6,7 +6,7 @@ import { bacTotal } from '../../shared/games/baccarat.js';
 import { h, clear } from '../ui/dom.js';
 import { ChipPicker, actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
-import { sfx } from '../audio.js';
+import { sfx, say } from '../audio.js';
 
 const SPOTS = { player: [250, 355], tie: [512, 355], banker: [774, 355] };
 const toLocal = (x, y) => new THREE.Vector3(x / 1024 * 2.5 - 1.25, 0.86, y / 512 * 1.6 - 0.35);
@@ -79,6 +79,7 @@ export class BaccaratView extends TableView {
       this.dealer.setAnim('idle');
       const col = { player: '#4cc9f0', banker: '#ff6b6b', tie: '#7cff6b' }[s.winner];
       this.winLabel.set(s.winner === 'tie' ? 'TIE!' : `${s.winner.toUpperCase()} GEWINNT`, col);
+      if (this.mine) say(s.winner === 'tie' ? 'Égalité!' : s.winner === 'player' ? 'Player gewinnt' : 'Banker gewinnt');
       this.pLabel.set(`Player ${bacTotal(s.player)}`);
       this.bLabel.set(`Banker ${bacTotal(s.banker)}`);
       setTimeout(() => { if (!this.state?.busy) this.renderChips(this.mine ? this.pending : {}); }, 2500);
