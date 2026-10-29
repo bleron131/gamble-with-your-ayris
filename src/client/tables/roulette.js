@@ -18,8 +18,8 @@ export class RouletteView extends TableView {
   constructor(app, def, floor) {
     super(app, def, floor);
     this.seatLocal.set(0.35, 0, 0.95);
-    this.camLocal.set(0.15, 1.85, 1.15);
-    this.lookLocal.set(-0.05, 0.82, -0.12);
+    this.camLocal.set(0.3, 2.15, 1.4);
+    this.lookLocal.set(0.45, 0.8, -0.1);
     this.footprint = { w: 2.9, d: 1.3 };
     this.pending = {}; // spot → Betrag (eigene, noch nicht gesetzte Wette)
     this.lastBets = null;
@@ -104,8 +104,8 @@ export class RouletteView extends TableView {
     this.drawHistory([]);
     // Dealer
     this.dealer = makeDealer(this.tier, this.def.index + 1);
-    this.dealer.root.position.set(WHEEL_X - 0.75, 0, -0.35);
-    this.dealer.root.rotation.y = Math.PI / 2 - 0.3;
+    this.dealer.root.position.set(WHEEL_X - 1.0, 0, -0.1);
+    this.dealer.root.rotation.y = Math.PI / 2;
     g.add(this.dealer.root);
     for (const x of [-0.2, 0.35, 0.9]) { const s = stool(this.tier); s.position.set(x, 0, 0.95); s.scale.setScalar(0.85); g.add(s); }
   }

@@ -112,6 +112,9 @@ export class UI {
   onSceneChange(scene, floor) {
     this.hud.dataset.scene = scene;
     this.crosshair.style.display = scene === 'floor' ? '' : 'none';
+    this.emoteHelp.textContent = scene === 'floor'
+      ? 'Klick = Maus fangen · WASD laufen · E Tisch · 1–5 Emotes · TAB Gruppe'
+      : 'Maus ziehen = Kamera · Mausrad = Zoom · WASD laufen · E interagieren · 1–5 Emotes · TAB Gruppe';
     this.closeTablePanel();
     this.refreshHud();
   }

@@ -17,7 +17,7 @@ export class WheelView extends TableView {
     super(app, def, floor);
     this.seatLocal.set(0, 0, 1.9);
     this.camLocal.set(0, 1.75, 3.3);
-    this.lookLocal.set(0, 1.55, 0);
+    this.lookLocal.set(0.7, 1.55, 0);
     this.footprint = { w: 3, d: 1.6, oz: 0.3 };
     this.pending = {};
     this.build();

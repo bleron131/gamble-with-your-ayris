@@ -28,7 +28,7 @@ export class CrapsView extends TableView {
     super(app, def, floor);
     this.seatLocal.set(0.2, 0, 1.15);
     this.camLocal.set(0.2, 2.0, 1.35);
-    this.lookLocal.set(0.05, 0.8, -0.1);
+    this.lookLocal.set(0.45, 0.8, -0.1);
     this.footprint = { w: 2.8, d: 1.6 };
     this.layout = crapsLayout();
     this.pending = {};

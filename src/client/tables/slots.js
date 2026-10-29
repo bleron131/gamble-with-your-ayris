@@ -20,7 +20,7 @@ export class SlotView extends TableView {
     this.N = this.variant.strip.length;
     this.seatLocal.set(0, 0, 0.95);
     this.camLocal.set(0, 1.5, 1.12);
-    this.lookLocal.set(0, 1.32, 0);
+    this.lookLocal.set(0.22, 1.32, 0);
     this.footprint = { w: 1.0, d: 1.3, oz: -0.3 };
     this.radius = 1.3;
     this.lines = 5;

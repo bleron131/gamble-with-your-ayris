@@ -7,6 +7,14 @@ Ihr trefft euch mit euren Cartoon-Charakteren in einer Shishabar, fahrt mit dem 
 
 > ⚠️ Es wird ausschliesslich **virtuelle Spielwährung** verwendet. Kein echtes Geld, keine Echtgeld-Käufe.
 
+| | |
+|---|---|
+| ![Hauptmenü](docs/screenshots/01-menu.jpg) | ![Shishabar](docs/screenshots/02-shishabar.jpg) |
+| ![Multiplayer](docs/screenshots/03-multiplayer.jpg) | ![Stock 15](docs/screenshots/04-stock15.jpg) |
+| ![Roulette](docs/screenshots/05-roulette.jpg) | ![Blackjack](docs/screenshots/06-blackjack.jpg) |
+| ![Casino Hold'em](docs/screenshots/07-holdem.jpg) | ![Craps](docs/screenshots/08-craps.jpg) |
+| ![Finale](docs/screenshots/09-finale.jpg) | ![Double or Loss](docs/screenshots/10-double.jpg) |
+
 ## Schnellstart
 
 ```bash
@@ -90,7 +98,7 @@ src/client/            Three.js-Client
   world/               Shishabar, Casino-Stockwerke, finale Shishabar, Requisiten
   tables/              3D-Tische mit Animationen und Einsatz-Panels
   character.js         Cartoon-Charaktere + First-Person-Hände
-  audio.js             Prozedurale Musik & Sounds (WebAudio)
+  audio.js             Prozedurale Musik & Sounds (WebAudio) + Dealer-Stimme (Web Speech API)
   ui/                  HUD, Menüs, Aufzug, Shop, Editor, Statistiken
 tests/                 node:test – Team-Pot-Sperre, Ziele, Mafia, Items, Finale, Kartenlogik
 ```

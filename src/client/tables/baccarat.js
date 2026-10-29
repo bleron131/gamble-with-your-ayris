@@ -16,7 +16,7 @@ export class BaccaratView extends TableView {
     super(app, def, floor);
     this.seatLocal.set(0, 0, 1.5);
     this.camLocal.set(0, 1.95, 1.55);
-    this.lookLocal.set(0, 0.8, 0.2);
+    this.lookLocal.set(0.38, 0.8, 0.2);
     this.footprint = { w: 2.7, d: 1.8, oz: 0.4 };
     this.pending = {};
     this.last = null;

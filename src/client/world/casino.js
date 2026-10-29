@@ -52,6 +52,7 @@ export class CasinoWorld extends World {
     this.buildTables(tables);
     this.buildElevator();
     this.buildInfoBoard();
+    this.buildGuests();
     this.addRoomWalls(-this.W / 2, this.W / 2, -this.D / 2, this.D / 2);
     this.updaters.push((dt, t) => { for (const v of Object.values(this.views)) v.tick(dt, t); });
   }
@@ -186,21 +187,6 @@ export class CasinoWorld extends World {
       this.addBox(vx - 1.2, vz, 0.2, 2.4);
       const vip = neonSign('VIP', '#ffd97a', 1.2, 0.5); vip.position.set(W / 2 - 0.06, 2.6, vz); vip.rotation.y = -Math.PI / 2; s.add(vip);
     }
-    // Gäste-NPCs
-    this.guests = [];
-    const count = 2 + tier;
-    for (let i = 0; i < count; i++) {
-      const look = npcAppearance(tier >= 3 && i % 2 ? 'vipdealer' : 'guest', i + this.n * 3);
-      if (tier >= 4) Object.assign(look, { hat: ['tophat', 'fedora', 'crown', 'none'][i % 4], jewelry: 'goldchain', jacket: i % 2 ? 'gold' : 'blazer' });
-      const g = new Character(look);
-      const a = (i / count) * Math.PI * 2;
-      g.root.position.set(Math.cos(a) * (W / 2 - 2.2), 0, Math.sin(a) * (D / 2 - 2.5));
-      g.root.rotation.y = Math.random() * 6;
-      g.setAnim(i % 3 === 0 ? 'dance' : 'idle');
-      s.add(g.root);
-      this.guests.push(g);
-      this.updaters.push(dt => g.update(dt));
-    }
     // Personaltür für die Mafia
     const door = new THREE.Group();
     door.position.set(-W / 2 + 3, 0, -D / 2 + 0.05);
@@ -290,6 +276,11 @@ export class CasinoWorld extends World {
       v.place(x, z, rot);
       this.scene.add(v.group);
       v.addColliders(this);
+      for (const npc of [v.dealer, v.stick, v.host]) {
+        if (!npc) continue;
+        const wp = npc.root.getWorldPosition(new THREE.Vector3());
+        this.addCircle(wp.x, wp.z, 0.35);
+      }
       this.views[def.id] = v;
       const ip = v.interactPos();
       this.addInteract({
@@ -364,6 +355,40 @@ export class CasinoWorld extends World {
     board.position.set(3.4, 2.2, this.D / 2 - 0.06);
     board.rotation.y = Math.PI;
     s.add(board);
+  }
+
+  // Gäste-NPCs nur an freien Stellen (nicht an Tischen, Sitzplätzen oder im Aufzug)
+  buildGuests() {
+    const { W, D, tier } = this;
+    const blocked = [];
+    for (const v of Object.values(this.views)) {
+      blocked.push({ p: v.group.position, r: 2.4 });
+      blocked.push({ p: v.seatPose().stand, r: 1.6 });
+    }
+    blocked.push({ p: new THREE.Vector3(0, 0, D / 2 - 2), r: 3.5 });
+    blocked.push({ p: this.mafiaDoorPos, r: 1.5 });
+    this.guests = [];
+    const count = 2 + tier;
+    let seed = 0;
+    for (let i = 0; i < count; i++) {
+      let pos = null;
+      for (let k = 0; k < 40 && !pos; k++) {
+        const c = new THREE.Vector3((Math.random() - 0.5) * (W - 4), 0, (Math.random() - 0.5) * (D - 4));
+        if (blocked.every(b => c.distanceTo(b.p) > b.r)) pos = c;
+      }
+      if (!pos) continue;
+      const look = npcAppearance(tier >= 3 && i % 2 ? 'vipdealer' : 'guest', i + this.n * 3 + seed++);
+      if (tier >= 4) Object.assign(look, { hat: ['tophat', 'fedora', 'crown', 'none'][i % 4], jewelry: 'goldchain', jacket: i % 2 ? 'gold' : 'blazer' });
+      const g = new Character(look);
+      g.root.position.copy(pos);
+      g.root.rotation.y = Math.random() * 6;
+      g.setAnim(i % 3 === 0 ? 'dance' : 'idle');
+      this.scene.add(g.root);
+      this.addCircle(pos.x, pos.z, 0.35);
+      blocked.push({ p: pos, r: 1.2 });
+      this.guests.push(g);
+      this.updaters.push(dt => g.update(dt));
+    }
   }
 
   // ───────────────────────── Mafia ─────────────────────────
