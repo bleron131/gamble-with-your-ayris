@@ -57,7 +57,7 @@ Port ändern: `PORT=3000 npm start`.
   immer genau den Betrag mit, den ihr beim Verlassen besitzt.
 - **Mafia**: Fällt der Pot unter den Mindesteinsatz des Stockwerks, stoppt die Musik, die Türen schliessen,
   die Mafia rückt an – cartoonhafte Explosion – **LEVEL FAILED**. Ihr behaltet 75 % des Stockwerk-Startkapitals
-  (mind. $5'000), damit der Run weitergehen kann.
+  (mind. $7'500), damit der Run weitergehen kann.
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Bonus-Challenges
   (Stockwerk mit ≥150 % des Ziels verlassen) und Achievements – jeweils nur einmal pro Spieler, also kein Farming.
 - **AYRI SHOP**: Pokal, Glücks-Shisha, Lucky Hat, Golden Coin, Ayri-Versicherung, Joker Card,

@@ -12,7 +12,7 @@ export const VARIANTS = {
   normal: {
     strip: STRIP_NORMAL,
     // Auszahlung in Vielfachen des Linieneinsatzes
-    pay3: { [C]: 8, [L]: 10, [B]: 18, [R]: 35, [S]: 90, [D]: 140, [K]: 1000 },
+    pay3: { [C]: 8, [L]: 10, [B]: 20, [R]: 40, [S]: 100, [D]: 150, [K]: 1000 },
     cherry2: 3, cherry1: 1,
   },
   high: {

@@ -18,7 +18,7 @@ export class RouletteView extends TableView {
   constructor(app, def, floor) {
     super(app, def, floor);
     this.seatLocal.set(0.35, 0, 0.95);
-    this.camLocal.set(0.15, 1.62, 1.05);
+    this.camLocal.set(0.15, 1.85, 1.15);
     this.lookLocal.set(-0.05, 0.82, -0.12);
     this.footprint = { w: 2.9, d: 1.3 };
     this.pending = {}; // spot → Betrag (eigene, noch nicht gesetzte Wette)
@@ -104,7 +104,8 @@ export class RouletteView extends TableView {
     this.drawHistory([]);
     // Dealer
     this.dealer = makeDealer(this.tier, this.def.index + 1);
-    this.dealer.root.position.set(WHEEL_X + 0.3, 0, -0.95);
+    this.dealer.root.position.set(WHEEL_X - 0.75, 0, -0.35);
+    this.dealer.root.rotation.y = Math.PI / 2 - 0.3;
     g.add(this.dealer.root);
     for (const x of [-0.2, 0.35, 0.9]) { const s = stool(this.tier); s.position.set(x, 0, 0.95); s.scale.setScalar(0.85); g.add(s); }
   }
@@ -258,7 +259,7 @@ export class RouletteView extends TableView {
     this.panel = h('div.tablepanel',
       h('div.ptitle', '🎡 ROULETTE'),
       limitLine(this.limits, ` · Einzelzahl max ${fmtMoney(this.limits.straightMax)}`),
-      h('div.hint', 'Chip wählen und auf das Tableau klicken (Rechtsklick entfernt). Bei 0 gibt es auf einfache Chancen die Hälfte zurück.'),
+      h('div.phint', 'Chip wählen und auf das Tableau klicken (Rechtsklick entfernt). Bei 0 gibt es auf einfache Chancen die Hälfte zurück.'),
       this.picker.el,
       quick,
       h('div.betrow', h('span', 'Einsatz:'), this.totalEl),

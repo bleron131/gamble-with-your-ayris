@@ -214,8 +214,9 @@ export class UI {
   feed(html, cls = '') {
     const el = h('div.fi', { class: cls, html });
     this.feedEl.prepend(el);
-    while (this.feedEl.children.length > 7) this.feedEl.lastChild.remove();
-    setTimeout(() => el.classList.add('old'), 9000);
+    while (this.feedEl.children.length > 5) this.feedEl.lastChild.remove();
+    setTimeout(() => el.classList.add('old'), 8000);
+    setTimeout(() => el.remove(), 16000);
   }
 
   toast(msg, type = 'info', ms = 3200) {
@@ -264,7 +265,9 @@ export class UI {
         h('button.primary', { onclick: () => { sfx.click(); app.send({ t: 'vote.cast', yes: true }); } }, 'JA'),
         h('button', { onclick: () => { sfx.click(); app.send({ t: 'vote.cast', yes: false }); } }, 'NEIN')),
     );
-    if (!voted) sfx.pop();
+    const key = v.type + v.by + v.expires;
+    if (!voted && this.lastVoteKey !== key) sfx.ding();
+    this.lastVoteKey = key;
   }
 
   confirm(text) {

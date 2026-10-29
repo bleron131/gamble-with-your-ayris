@@ -43,7 +43,7 @@ export class BetAmount {
         h('button.small', { onclick: () => this.set(this.value * 2) }, '×2'),
         h('button.small', { onclick: () => this.set(Math.min(this.limits.max, this.getPot())), title: 'Maximum' }, 'MAX'),
       ),
-      h('div.hint', 'Chip klicken = Einsatz erhöhen'),
+      h('div.phint', 'Chip klicken = Einsatz erhöhen'),
       this.picker.el,
     );
     this.picker.value = null;

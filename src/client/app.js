@@ -257,7 +257,14 @@ export class App {
   }
 
   requestTravel(floor) { this.send({ t: 'vote.start', type: floor === 'final' ? 'final' : 'travel', data: { floor } }); }
-  requestFinal(kind) { this.send({ t: 'vote.start', type: kind }); }
+  async requestFinal(kind) {
+    const pot = this.pot;
+    const text = kind === 'double'
+      ? `CURRENT WINNINGS: ${fmtMoney(pot)}\nDOUBLE: ${fmtMoney(pot * 2)}\nLOSE: $0\n\nARE YOU SURE?`
+      : `TAKE THE WINNINGS: ${fmtMoney(pot)} sichern und den Run beenden?`;
+    if (!(await this.ui.confirm(text))) return;
+    this.send({ t: 'vote.start', type: kind });
+  }
 
   // ───────────────────────── Events ─────────────────────────
   onEvent(ev) {
@@ -272,8 +279,9 @@ export class App {
       case 'bet': {
         this.ui.feed(`<b>${esc(ev.name)}</b> SETZT ${esc(ev.label || fmtMoney(ev.amount))}`, ev.highRisk ? 'risk' : '');
         if (mine) { this.bumpStat('wagered', ev.amount); if (ev.share >= 0.5) this.achieve('big_bet'); }
+        if (!mine && !ev.highRisk && ev.share >= 0.1) this.ui.bigText(`${ev.name.toUpperCase()}`, `SETZT ${ev.label || fmtMoney(ev.amount)}`, 'bet', 2200);
         if (ev.highRisk) {
-          this.ui.bigText('HIGH RISK BET', fmtMoney(ev.amount), 'risk', 2200);
+          this.ui.bigText('HIGH RISK BET', `${mine ? '' : ev.name + ': '}${fmtMoney(ev.amount)}${ev.label ? ' – ' + ev.label : ''}`, 'risk', 2600);
           this.highRiskTables.add(ev.tableId);
           setDuck(true);
           if (!this.heartbeat) this.heartbeat = setInterval(() => sfx.heartbeat(), 850);
@@ -298,6 +306,7 @@ export class App {
         this.ui.feed(`${ITEMS[ev.item]?.icon || ''} <b>${esc(ev.name)}</b>: ${esc(ev.msg)}`, 'item');
         this.ui.itemPop(ev);
         if (mine) this.hands.holdItem(itemModel(ev.item));
+        else this.avatarIcon(ev.pid, ITEMS[ev.item]?.icon || '✨');
         if (ev.result === 'win' || ev.result === 'gold') sfx.win(); else if (ev.result === 'lose' || ev.result === 'black') sfx.lose(); else sfx.pop();
         break;
       }
@@ -382,6 +391,30 @@ export class App {
   }
 
   bumpStat(k, v) { this.save.stats[k] = (this.save.stats[k] || 0) + v; if (k === 'itemsUsed' && this.save.stats.itemsUsed >= 5) this.achieve('item5'); Save.save(); }
+
+  // Schwebendes Item-Symbol über einem Mitspieler
+  avatarIcon(pid, icon) {
+    const a = this.avatars.get(pid);
+    if (!a) return;
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d');
+    g.font = '96px serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(icon, 64, 70);
+    const tex = new THREE.CanvasTexture(c);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    sp.scale.setScalar(0.5);
+    sp.position.y = 2.1;
+    a.root.add(sp);
+    const t0 = performance.now();
+    const tick = () => {
+      const k = (performance.now() - t0) / 3000;
+      if (k >= 1) { a.root.remove(sp); tex.dispose(); sp.material.dispose(); return; }
+      sp.position.y = 2.1 + k * 0.5;
+      sp.material.opacity = 1 - k * k;
+      requestAnimationFrame(tick);
+    };
+    tick();
+  }
 
   // ───────────────────────── Mafia ─────────────────────────
   mafiaSequence(ev) {

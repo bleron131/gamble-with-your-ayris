@@ -27,7 +27,7 @@ export class CrapsView extends TableView {
   constructor(app, def, floor) {
     super(app, def, floor);
     this.seatLocal.set(0.2, 0, 1.15);
-    this.camLocal.set(0.2, 1.65, 1.2);
+    this.camLocal.set(0.2, 2.0, 1.35);
     this.lookLocal.set(0.05, 0.8, -0.1);
     this.footprint = { w: 2.8, d: 1.6 };
     this.layout = crapsLayout();
@@ -70,7 +70,7 @@ export class CrapsView extends TableView {
     g.add(this.puck);
     this.setPuck(null);
     this.stick = makeDealer(this.tier, this.def.index + 2);
-    this.stick.root.position.set(0, 0, -1.05);
+    this.stick.root.position.set(0.9, 0, -1.15);
     g.add(this.stick.root);
     this.label = new TextSprite(0.7, 0.16); this.label.sprite.position.set(0, 1.3, -0.2); g.add(this.label.sprite);
   }
@@ -214,7 +214,7 @@ export class CrapsView extends TableView {
     this.panel = h('div.tablepanel',
       h('div.ptitle', '🎲 CRAPS'),
       limitLine(this.limits, ` · Props max ${fmtMoney(this.limits.propMax)}`),
-      h('div.hint', 'Come-out: 7/11 gewinnt, 2/3/12 verliert, sonst wird ein Point gesetzt. Point vor der 7 = Gewinn.'),
+      h('div.phint', 'Come-out: 7/11 gewinnt, 2/3/12 verliert, sonst wird ein Point gesetzt. Point vor der 7 = Gewinn.'),
       this.info,
       this.picker.el,
       quick,

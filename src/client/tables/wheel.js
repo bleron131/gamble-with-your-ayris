@@ -16,7 +16,7 @@ export class WheelView extends TableView {
   constructor(app, def, floor) {
     super(app, def, floor);
     this.seatLocal.set(0, 0, 1.9);
-    this.camLocal.set(0, 1.6, 2.5);
+    this.camLocal.set(0, 1.75, 3.3);
     this.lookLocal.set(0, 1.55, 0);
     this.footprint = { w: 3, d: 1.6, oz: 0.3 };
     this.pending = {};
@@ -31,7 +31,7 @@ export class WheelView extends TableView {
     this.wheel = new THREE.Group();
     this.wheel.position.set(0, 2.05, -0.1);
     g.add(this.wheel);
-    const face = mesh(new THREE.CircleGeometry(1.25, 108), new THREE.MeshStandardMaterial({ map: wheelTexture(), roughness: 0.45 }), 0, 0, 0.05, { cast: false });
+    const face = mesh(new THREE.CircleGeometry(1.25, 108), new THREE.MeshStandardMaterial({ map: wheelTexture(), roughness: 0.45 }), 0, 0, 0.058, { cast: false });
     this.wheel.add(face);
     this.wheel.add(mesh(new THREE.CylinderGeometry(1.28, 1.28, 0.1, 108), M.std('#5b3a12', 0.4)).rotateX(Math.PI / 2));
     // Stifte
@@ -167,7 +167,7 @@ export class WheelView extends TableView {
     this.panel = h('div.tablepanel',
       h('div.ptitle', '🎯 GLÜCKSRAD'),
       limitLine(this.limits, ' pro Feld'),
-      h('div.hint', 'Setze auf eine oder mehrere Zahlen. Bleibt das Rad dort stehen, zahlt es den Multiplikator.'),
+      h('div.phint', 'Setze auf eine oder mehrere Zahlen. Bleibt das Rad dort stehen, zahlt es den Multiplikator.'),
       this.picker.el, quick,
       h('div.betrow', h('span', 'Einsatz:'), this.totalEl),
       this.listEl,

@@ -47,6 +47,7 @@ export class CasinoWorld extends World {
     this.buildRoom();
     this.buildLights();
     this.buildDecor();
+    if (this.tier >= 4) this.buildLuxury();
     this.views = {};
     this.buildTables(tables);
     this.buildElevator();
@@ -188,7 +189,9 @@ export class CasinoWorld extends World {
     this.guests = [];
     const count = 2 + tier;
     for (let i = 0; i < count; i++) {
-      const g = new Character(npcAppearance(tier >= 3 && i % 2 ? 'vipdealer' : 'guest', i + this.n * 3));
+      const look = npcAppearance(tier >= 3 && i % 2 ? 'vipdealer' : 'guest', i + this.n * 3);
+      if (tier >= 4) Object.assign(look, { hat: ['tophat', 'fedora', 'crown', 'none'][i % 4], jewelry: 'goldchain', jacket: i % 2 ? 'gold' : 'blazer' });
+      const g = new Character(look);
       const a = (i / count) * Math.PI * 2;
       g.root.position.set(Math.cos(a) * (W / 2 - 2.2), 0, Math.sin(a) * (D / 2 - 2.5));
       g.root.rotation.y = Math.random() * 6;
@@ -212,6 +215,66 @@ export class CasinoWorld extends World {
     s.add(door);
     this.mafiaDoor = pivot;
     this.mafiaDoorPos = new THREE.Vector3(door.position.x, 0, door.position.z + 1);
+  }
+
+  // High-Roller-Etagen: roter Teppich, Geldbrunnen, Riesen-Chips, goldene Statuen
+  buildLuxury() {
+    const { W, D, tier } = this;
+    const s = this.scene;
+    const carpet = mesh(new THREE.PlaneGeometry(2.4, D / 2 - 2), M.std('#8a0f24', 0.9), 0, 0.01, D / 4, { cast: false });
+    carpet.rotation.x = -Math.PI / 2;
+    s.add(carpet);
+    for (const sx of [-1.25, 1.25]) { const e = mesh(new THREE.BoxGeometry(0.06, 0.02, D / 2 - 2), M.gold(), sx, 0.012, D / 4, { cast: false }); s.add(e); }
+    // Geldbrunnen in der Mitte
+    const fz = -D / 16;
+    const f = new THREE.Group();
+    f.position.set(0, 0, fz);
+    f.add(mesh(new THREE.CylinderGeometry(1.6, 1.7, 0.5, 40), M.std('#f1ece4', 0.2, 0, { map: marbleTexture() }), 0, 0.25, 0));
+    f.add(mesh(new THREE.CylinderGeometry(1.45, 1.45, 0.05, 40), new THREE.MeshStandardMaterial({ color: '#2bd9fe', emissive: '#0a6a8a', emissiveIntensity: 0.6, roughness: 0.05, metalness: 0.3 }), 0, 0.46, 0));
+    f.add(mesh(new THREE.CylinderGeometry(0.25, 0.4, 1.4, 20), M.gold(), 0, 1.1, 0));
+    f.add(mesh(new THREE.CylinderGeometry(0.9, 0.7, 0.15, 30), M.gold(), 0, 1.85, 0));
+    // Goldene Krone oben
+    const crown = new THREE.Group();
+    crown.position.y = 2.1;
+    crown.add(mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.3, 24), M.gold()));
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; crown.add(mesh(new THREE.ConeGeometry(0.1, 0.35, 8), M.gold(), Math.cos(a) * 0.42, 0.3, Math.sin(a) * 0.42)); }
+    crown.add(mesh(new THREE.SphereGeometry(0.12, 16, 12), M.glow('#ff2b5a', 1.5), 0, 0.05, 0.45));
+    f.add(crown);
+    s.add(f);
+    this.addCircle(0, fz, 1.8);
+    this.updaters.push((dt, t) => { crown.rotation.y += dt * 0.4; });
+    let coinT = 0;
+    this.updaters.push(dt => {
+      coinT -= dt;
+      if (coinT < 0) {
+        coinT = 0.12;
+        const a = Math.random() * Math.PI * 2;
+        this.particles.emit({ pos: new THREE.Vector3(Math.cos(a) * 0.8, 1.9, fz + Math.sin(a) * 0.8), vel: [Math.cos(a) * 0.6, 1.2, Math.sin(a) * 0.6], life: 1.4, size: 0.12, grow: 0, opacity: 0.9, color: '#ffd23c', gravity: 3, additive: true });
+      }
+    });
+    // Riesige Millionen-Chips
+    const chipCols = ['#d8262f', '#151515', '#7b3fc4', '#f2a516'];
+    for (let i = 0; i < 4; i++) {
+      const x = (i < 2 ? -1 : 1) * (W / 2 - 4.6), z = (i % 2 ? 1 : -1) * (D / 2 - 9);
+      const stack = new THREE.Group();
+      stack.position.set(x, 0, z);
+      for (let k = 0; k < 6; k++) {
+        const c = mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.16, 32), M.std(chipCols[(i + k) % 4], 0.35), 0, 0.08 + k * 0.17, 0);
+        c.rotation.y = k * 0.4;
+        stack.add(c);
+        stack.add(mesh(new THREE.TorusGeometry(0.5, 0.02, 6, 32), M.std('#ffffff', 0.4), 0, 0.08 + k * 0.17, 0).rotateX(Math.PI / 2));
+      }
+      const lbl = neonSign('$1M', '#ffd97a', 1.2, 0.4);
+      lbl.position.set(0, 1.4, 0);
+      stack.add(lbl);
+      s.add(stack);
+      this.addCircle(x, z, 0.6);
+    }
+    if (tier >= 5) {
+      const big = neonSign('THE ULTIMATE CASINO', '#ffd700', 9, 1.4);
+      big.position.set(0, this.H - 2.4, -D / 2 + 0.1);
+      s.add(big);
+    }
   }
 
   buildTables(defs) {

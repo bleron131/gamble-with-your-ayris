@@ -1,7 +1,7 @@
 // Zentrale Spielkonfiguration: Stockwerke, Limits, Items, Belohnungen.
 // Alle Beträge sind rein virtuelle Spielwährung – kein echtes Geld.
 
-export const START_CAPITAL = 5000;
+export const START_CAPITAL = 7500;
 // Anteil des Stockwerk-Startkapitals, den die Mafia nach einem Bankrott übrig lässt.
 // (Der Run endet nicht komplett, damit 15 Stockwerke realistisch schaffbar bleiben.)
 export const MAFIA_KEEP_FRACTION = 0.75;

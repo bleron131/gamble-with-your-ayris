@@ -218,10 +218,16 @@ function roundRect(g, x, y, w, h, r) {
 }
 
 // ───────────────────────── Chips ─────────────────────────
-export const CHIP_COLORS = ['#e8e8e8', '#d8262f', '#2a6fdb', '#1d9a4b', '#151515', '#7b3fc4', '#f2a516', '#e05fa8', '#2bc1c9', '#c0a060'];
-export function chipColorFor(value, base) {
-  const idx = Math.max(0, Math.min(CHIP_COLORS.length - 1, Math.round(Math.log10(Math.max(1, value / base)) * 1.5)));
-  return CHIP_COLORS[idx];
+// Feste Farbe pro Chip-Wert (wie im echten Casino)
+const DENOM_COLORS = {
+  1: '#e8e8e8', 5: '#d8262f', 25: '#1d9a4b', 100: '#151515', 500: '#7b3fc4', 1000: '#f2a516',
+  5000: '#e05fa8', 25000: '#2bc1c9', 100000: '#c0a060', 500000: '#ff6b1a', 1000000: '#2a6fdb', 5000000: '#b3122e', 25000000: '#0f7a5a', 100000000: '#3a3a3a',
+};
+export const CHIP_COLORS = Object.values(DENOM_COLORS);
+export function chipColorFor(value) {
+  let best = '#e8e8e8';
+  for (const [d, c] of Object.entries(DENOM_COLORS)) if (value >= +d) best = c;
+  return best;
 }
 
 export function chipSideTexture(color) {

@@ -15,7 +15,7 @@ export class BaccaratView extends TableView {
   constructor(app, def, floor) {
     super(app, def, floor);
     this.seatLocal.set(0, 0, 1.5);
-    this.camLocal.set(0, 1.55, 1.42);
+    this.camLocal.set(0, 1.95, 1.55);
     this.lookLocal.set(0, 0.8, 0.2);
     this.footprint = { w: 2.7, d: 1.8, oz: 0.4 };
     this.pending = {};
@@ -32,13 +32,13 @@ export class BaccaratView extends TableView {
     const shoe = cardShoe(); shoe.position.set(0.85, 0.82, -0.12); shoe.rotation.y = -0.4; g.add(shoe);
     this.cards = new CardSet(this, this.shoePos);
     this.dealer = makeDealer(this.tier, this.def.index + 5);
-    this.dealer.root.position.set(0, 0, -0.75);
+    this.dealer.root.position.set(0, 0, -0.95);
     g.add(this.dealer.root);
     for (let i = -1; i <= 1; i++) { const s = stool(this.tier); s.position.set(i * 0.75, 0, 1.45 - Math.abs(i) * 0.25); s.scale.setScalar(0.85); g.add(s); }
     this.chips = new THREE.Group(); g.add(this.chips);
-    this.pLabel = new TextSprite(0.5, 0.12); this.pLabel.sprite.position.set(-0.4, 1.1, 0.2); g.add(this.pLabel.sprite);
-    this.bLabel = new TextSprite(0.5, 0.12); this.bLabel.sprite.position.set(0.4, 1.1, 0.2); g.add(this.bLabel.sprite);
-    this.winLabel = new TextSprite(0.8, 0.18); this.winLabel.sprite.position.set(0, 1.35, 0); g.add(this.winLabel.sprite);
+    this.pLabel = new TextSprite(0.5, 0.12); this.pLabel.sprite.position.set(-0.45, 1.0, 0.45); g.add(this.pLabel.sprite);
+    this.bLabel = new TextSprite(0.5, 0.12); this.bLabel.sprite.position.set(0.45, 1.0, 0.45); g.add(this.bLabel.sprite);
+    this.winLabel = new TextSprite(0.8, 0.18); this.winLabel.sprite.position.set(0, 1.2, 0.1); g.add(this.winLabel.sprite);
   }
 
   renderChips(bets) {
@@ -61,8 +61,8 @@ export class BaccaratView extends TableView {
       const items = [];
       const n = Math.max(s.player.length, s.banker.length);
       for (let i = 0; i < n; i++) {
-        if (s.player[i]) items.push({ key: `p${i}`, card: s.player[i], pos: new THREE.Vector3(-0.55 + i * 0.14, 0.86, 0.25), rotY: i === 2 ? Math.PI / 2 : 0 });
-        if (s.banker[i]) items.push({ key: `b${i}`, card: s.banker[i], pos: new THREE.Vector3(0.27 + i * 0.14, 0.86, 0.25), rotY: i === 2 ? Math.PI / 2 : 0 });
+        if (s.player[i]) items.push({ key: `p${i}`, card: s.player[i], pos: new THREE.Vector3(-0.62 + i * 0.19, 0.86, 0.22), rotY: i === 2 ? Math.PI / 2 : 0 });
+        if (s.banker[i]) items.push({ key: `b${i}`, card: s.banker[i], pos: new THREE.Vector3(0.24 + i * 0.19, 0.86, 0.22), rotY: i === 2 ? Math.PI / 2 : 0 });
       }
       this.cards.sync(items, { delayStep: 0.65 });
       this.dealer.setAnim('deal');
@@ -126,7 +126,7 @@ export class BaccaratView extends TableView {
     this.panel = h('div.tablepanel',
       h('div.ptitle', '🂡 BACCARAT'),
       limitLine(this.limits, ` · Tie max ${fmtMoney(this.limits.tieMax)}`),
-      h('div.hint', 'Player 1:1 · Banker 0.95:1 · Tie 8:1 – Chip wählen und Feld anklicken'),
+      h('div.phint', 'Player 1:1 · Banker 0.95:1 · Tie 8:1 – Chip wählen und Feld anklicken'),
       this.picker.el,
       h('div.quick',
         h('button.small.blue', { onclick: () => this.addBet('player') }, 'PLAYER'),

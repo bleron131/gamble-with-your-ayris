@@ -34,11 +34,11 @@ export class Animator {
 }
 
 // ───────────────────────── Karten ─────────────────────────
-const CARD_W = 0.12, CARD_H = 0.17;
+const CARD_W = 0.16, CARD_H = 0.23;
 const cardGeo = new THREE.BoxGeometry(CARD_W, 0.003, CARD_H);
 cardGeo.userData.shared = true;
-const edgeMat = new THREE.MeshStandardMaterial({ color: '#f4f0e6', roughness: 0.6 });
-const backMat = () => new THREE.MeshStandardMaterial({ map: cardBackTexture(), roughness: 0.5 });
+const edgeMat = new THREE.MeshStandardMaterial({ color: '#d8d4ca', roughness: 0.6 });
+const backMat = () => new THREE.MeshStandardMaterial({ map: cardBackTexture(), roughness: 0.6, color: '#d0d0d0' });
 let sharedBack = null;
 const faceMats = new Map();
 
@@ -47,7 +47,7 @@ export function cardMesh(card) {
   let face = sharedBack;
   if (card) {
     const k = card.r + '-' + card.s;
-    if (!faceMats.has(k)) faceMats.set(k, new THREE.MeshStandardMaterial({ map: cardTexture(card), roughness: 0.5 }));
+    if (!faceMats.has(k)) faceMats.set(k, new THREE.MeshStandardMaterial({ map: cardTexture(card), roughness: 0.6, color: '#d0d0d0' }));
     face = faceMats.get(k);
   }
   // Box-Materialien: +x, -x, +y (oben = Vorderseite), -y (Rückseite), +z, -z
@@ -60,7 +60,7 @@ export function cardMesh(card) {
 export function setCardFace(m, card) {
   if (!card) return;
   const k = card.r + '-' + card.s;
-  if (!faceMats.has(k)) faceMats.set(k, new THREE.MeshStandardMaterial({ map: cardTexture(card), roughness: 0.5 }));
+  if (!faceMats.has(k)) faceMats.set(k, new THREE.MeshStandardMaterial({ map: cardTexture(card), roughness: 0.6, color: '#d0d0d0' }));
   m.material = [edgeMat, edgeMat, faceMats.get(k), sharedBack, edgeMat, edgeMat];
   m.userData.card = card;
 }

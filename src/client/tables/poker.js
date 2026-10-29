@@ -13,7 +13,7 @@ export class PokerView extends TableView {
   constructor(app, def, floor) {
     super(app, def, floor);
     this.seatLocal.set(0, 0, 1.5);
-    this.camLocal.set(0, 1.55, 1.42);
+    this.camLocal.set(0, 1.95, 1.55);
     this.lookLocal.set(0, 0.8, 0.2);
     this.footprint = { w: 2.7, d: 1.8, oz: 0.4 };
     this.build();
@@ -26,15 +26,15 @@ export class PokerView extends TableView {
     const shoe = cardShoe(); shoe.position.set(0.85, 0.82, -0.12); shoe.rotation.y = -0.4; g.add(shoe);
     this.cards = new CardSet(this, this.shoePos);
     this.dealer = makeDealer(this.tier, this.def.index + 7);
-    this.dealer.root.position.set(0, 0, -0.75);
+    this.dealer.root.position.set(0, 0, -0.95);
     g.add(this.dealer.root);
     // NPC-Mitspieler für Atmosphäre
     for (let i = -1; i <= 1; i += 2) { const s = stool(this.tier); s.position.set(i * 0.75, 0, 1.2); s.scale.setScalar(0.85); g.add(s); }
     const s0 = stool(this.tier); s0.position.set(0, 0, 1.45); s0.scale.setScalar(0.85); g.add(s0);
     this.chips = new THREE.Group(); g.add(this.chips);
-    this.pLabel = new TextSprite(0.6, 0.13); this.pLabel.sprite.position.set(0, 1.08, 0.85); g.add(this.pLabel.sprite);
-    this.dLabel = new TextSprite(0.6, 0.13); this.dLabel.sprite.position.set(0, 1.12, -0.1); g.add(this.dLabel.sprite);
-    this.rLabel = new TextSprite(0.9, 0.18); this.rLabel.sprite.position.set(0, 1.35, 0.3); g.add(this.rLabel.sprite);
+    this.pLabel = new TextSprite(0.6, 0.13); this.pLabel.sprite.position.set(0, 0.98, 1.05); g.add(this.pLabel.sprite);
+    this.dLabel = new TextSprite(0.6, 0.13); this.dLabel.sprite.position.set(0, 1.02, 0.12); g.add(this.dLabel.sprite);
+    this.rLabel = new TextSprite(0.9, 0.18); this.rLabel.sprite.position.set(0, 1.2, 0.35); g.add(this.rLabel.sprite);
   }
 
   onState(ts, prev) {
@@ -42,8 +42,8 @@ export class PokerView extends TableView {
     if (prev && prev.state.dealId !== s.dealId) { this.cards.clear(true); this.rLabel.set(''); }
     if (!prev && s.phase === 'idle' && !s.player.length) { this.refreshPanel(); return; }
     const items = [];
-    s.player.forEach((c, i) => items.push({ key: `p${i}`, card: c, pos: new THREE.Vector3(-0.08 + i * 0.14, 0.86, 0.78) }));
-    s.dealer.forEach((c, i) => items.push({ key: `d${i}`, card: c, pos: new THREE.Vector3(-0.08 + i * 0.14, 0.86, -0.08) }));
+    s.player.forEach((c, i) => items.push({ key: `p${i}`, card: c, pos: new THREE.Vector3(-0.1 + i * 0.19, 0.86, 0.8) }));
+    s.dealer.forEach((c, i) => items.push({ key: `d${i}`, card: c, pos: new THREE.Vector3(-0.1 + i * 0.19, 0.86, -0.08) }));
     s.board.forEach((c, i) => items.push({ key: `b${i}`, card: c, pos: new THREE.Vector3(fx(312 + i * 100), 0.86, fz(286)) }));
     this.cards.sync(items, { delayStep: 0.18 });
     clear(this.chips);
@@ -71,7 +71,7 @@ export class PokerView extends TableView {
     this.panel = h('div.tablepanel',
       h('div.ptitle', "♠️ CASINO HOLD'EM"),
       limitLine(this.limits, ' (Ante) · Call = 2× Ante'),
-      h('div.hint', 'Dealer qualifiziert sich ab einem Paar Vieren. Ante zahlt bis 100:1 (Royal Flush).'),
+      h('div.phint', 'Dealer qualifiziert sich ab einem Paar Vieren. Ante zahlt bis 100:1 (Royal Flush).'),
       this.info,
       this.betWrap,
       h('div.actions', ...Object.values(this.btn)),
