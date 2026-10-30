@@ -1,0 +1,13 @@
+# Render-Blueprint: Multiplayer-Server (liefert auch das Spiel selbst aus)
+services:
+  - type: web
+    name: gamble-with-your-ayris
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
