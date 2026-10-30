@@ -98,7 +98,6 @@ export class UI {
       }
       this.menu.classList.remove('busy');
     };
-    const camp = s.campaign;
     this.menu.append(
       h('div.menubox',
         h('div.logo', h('span.l1', 'GAMBLE'), h('span.l2', 'with your'), h('span.l3', 'AYRIS')),
@@ -111,7 +110,7 @@ export class UI {
         ),
         this.menuErr,
         serverHost().remote ? h('div.disclaimer', `Multiplayer läuft über ${serverHost().host}. Nach längerer Pause braucht der Server bis zu 1 Minute zum Aufwachen.`) : null,
-        h('div.progressline', `Fortschritt: ${camp.completed.length}/15 Stockwerke · 🍆 ${s.dildos} · Team-Pot ${fmtMoney(s.run.pot)}`),
+        h('div.progressline', `Aktueller Run: ${(s.run.completed || []).length}/15 Stockwerke · 🍆 ${s.dildos} · Team-Pot ${fmtMoney(s.run.pot)}`),
         h('div.menulinks',
           h('button.link', { onclick: () => this.openSettings() }, '⚙️ Einstellungen'),
           h('button.link', { onclick: () => this.openStats() }, '📊 Statistiken'),
@@ -368,7 +367,7 @@ export class UI {
   }
 
   levelFailed(keep) {
-    const el = h('div.failed', h('div.ft', 'LEVEL FAILED'), h('div.fs', `Die Mafia lässt euch mit ${fmtMoney(keep)} laufen…`));
+    const el = h('div.failed', h('div.ft', 'LEVEL FAILED'), h('div.fs', `RUN VERLOREN – neuer Run mit ${fmtMoney(keep)} · alle Stockwerke wieder gesperrt ausser Stock 1`));
     this.overlay.append(el);
     setTimeout(() => el.classList.add('out'), 2600);
     setTimeout(() => el.remove(), 3400);

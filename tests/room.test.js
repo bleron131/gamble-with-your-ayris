@@ -1,7 +1,7 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { Room } from '../src/shared/room.js';
-import { floorDef, START_CAPITAL, MAFIA_KEEP_FRACTION, slotSteps } from '../src/shared/config.js';
+import { floorDef, START_CAPITAL, slotSteps } from '../src/shared/config.js';
 import { winTier, spin } from '../src/shared/games/slots.js';
 import { bestHand, compareScore } from '../src/shared/games/poker.js';
 import { handTotal } from '../src/shared/games/blackjack.js';
@@ -89,16 +89,18 @@ test('Kein Dildo-Farming: Belohnung pro Stockwerk nur einmal', () => {
   teardown(room);
 });
 
-test('Bankrott → Mafia → zurück in die Shishabar', () => {
-  const { room, ids, conns } = setup(1, { unlocked: 3 });
+test('Bankrott → Mafia → zurück in die Shishabar mit komplett neuem Run', () => {
+  const { room, ids, conns } = setup(1, { unlocked: 3, completed: [1, 2] });
   room.pot = 40_000;
   room.enterFloor(3);
   room.pot = 10; // unter Mindesteinsatz
   room.checkBankrupt();
-  assert.ok(conns[0].msgs.some(m => m.t === 'event' && m.ev.kind === 'mafia'));
+  assert.ok(conns[0].msgs.some(m => m.t === 'event' && m.ev.kind === 'mafia' && m.ev.runLost));
   mock.timers.tick(11_000);
   assert.equal(room.scene, 'lobby');
-  assert.equal(room.pot, Math.max(START_CAPITAL, Math.floor(40_000 * MAFIA_KEEP_FRACTION)));
+  assert.equal(room.pot, START_CAPITAL);
+  assert.equal(room.campaign.unlocked, 1);
+  assert.deepEqual(room.campaign.completed, []);
   teardown(room);
 });
 
@@ -386,4 +388,112 @@ test('Roulette: Split, Street, Corner und Six Line werden geprüft und richtig a
   assert.equal(payoutFor('i:1-2-4-5', 100, 5), 900);
   assert.equal(payoutFor('i:1-2-3-4-5-6', 100, 6), 600);
   assert.equal(payoutFor('i:1-2-3-4-5-6', 100, 7), 0);
+});
+
+// ───────────────────────── Run-Reset (Prompt 5) ─────────────────────────
+const lastState = c => c.msgs.filter(m => m.t === 'state').at(-1).state;
+
+test('Run: neuer Run startet mit $7\'500, nur Stock 1 offen; Stock 1 abschliessen schaltet Stock 2 frei', () => {
+  const { room, ids, conns } = setup(1);
+  assert.equal(room.pot, START_CAPITAL);
+  assert.equal(room.campaign.unlocked, 1);
+  assert.deepEqual(room.campaign.completed, []);
+  assert.match(room.run.id, /^run_/);
+  room.handle(ids[0], { t: 'vote.start', type: 'travel', data: { floor: 2 } });
+  assert.notEqual(room.scene, 'floor');
+  assert.ok(conns[0].errors().some(e => e.includes('gesperrt')));
+  room.enterFloor(1);
+  room.pot = 10_000;
+  room.checkTarget();
+  assert.equal(room.campaign.unlocked, 2);
+  assert.deepEqual(room.campaign.completed, [1]);
+  teardown(room);
+});
+
+test('Run verloren nach Stock 8: $7\'500, 0/15, nur Stock 1, neue Run-ID, alte Tischzustände weg, alle Spieler synchron', () => {
+  const { room, ids, conns } = setup(2, { unlocked: 8, completed: [1, 2, 3, 4, 5, 6, 7] });
+  room.pot = 2_300_000;
+  const oldRun = room.run.id;
+  room.enterFloor(8);
+  const tables = room.session.tables;
+  const rid = Object.keys(tables).find(k => k.startsWith('roulette'));
+  room.handle(ids[0], { t: 'table.sit', id: rid });
+  room.handle(ids[0], { t: 'table.edit', id: rid, edit: { op: 'add', spot: 'red', amount: floorDef(8).limits.roulette.min } });
+  room.handle(ids[1], { t: 'item.arm', item: 'pokal' });
+  room.pot = 1; // alles verloren
+  room.handle(ids[0], { t: 'table.leave' });
+  room.checkBankrupt();
+  mock.timers.tick(11_000);
+  mock.timers.tick(50);
+  assert.equal(room.scene, 'lobby');
+  assert.equal(room.session, null);
+  assert.equal(room.pot, START_CAPITAL);
+  assert.equal(room.campaign.unlocked, 1);
+  assert.deepEqual(room.campaign.completed, []);
+  assert.notEqual(room.run.id, oldRun);
+  assert.equal(room.run.finalUnlocked, false);
+  for (const p of room.players.values()) { assert.deepEqual(p.armed, {}); assert.equal(p.seat, null); }
+  // Beide Spieler erhalten denselben neuen Run-Zustand
+  for (const c of conns) {
+    const st = lastState(c);
+    assert.equal(st.pot, START_CAPITAL);
+    assert.equal(st.campaign.unlocked, 1);
+    assert.equal(st.campaign.completed.length, 0);
+    assert.equal(st.run.id, room.run.id);
+  }
+  // Aufzug: Stockwerke 2–15 sind gesperrt
+  for (const n of [2, 8, 15]) {
+    room.handle(ids[0], { t: 'vote.start', type: 'travel', data: { floor: n } });
+    assert.equal(room.vote, null);
+  }
+  // Permanente Rekorde bleiben (z. B. je abgeschlossene Stockwerke für Kosmetik)
+  assert.deepEqual(room.campaign.everCompleted, [1, 2, 3, 4, 5, 6, 7]);
+  // Neue Fortschritte gelten nur für diesen Run
+  room.enterFloor(1);
+  room.pot = 10_000;
+  room.checkTarget();
+  assert.equal(room.campaign.unlocked, 2);
+  teardown(room);
+});
+
+test('Run verloren: keine 🍆-Belohnungen oder -Abzüge; nach normaler Rückkehr bleiben Stockwerke offen', () => {
+  const { room, ids, conns } = setup(1, { unlocked: 5, completed: [1, 2, 3, 4] });
+  room.pot = 300_000;
+  room.enterFloor(5);
+  room.pot = 600_000;
+  room.checkTarget(); // Stock 5 geschafft → bis 6 frei
+  room.handle(ids[0], { t: 'vote.start', type: 'return' });
+  assert.equal(room.scene, 'lobby');
+  assert.equal(room.campaign.unlocked, 6);
+  assert.deepEqual(room.campaign.completed, [1, 2, 3, 4, 5]);
+  assert.equal(room.pot, 600_000);
+  // Altes Stockwerk erneut besuchen, ohne zu verlieren → nichts wird zurückgesetzt
+  const runId = room.run.id;
+  room.enterFloor(2);
+  room.leaveFloor('return');
+  assert.equal(room.campaign.unlocked, 6);
+  assert.equal(room.run.id, runId);
+  // Jetzt verlieren: 🍆 werden weder vergeben noch abgezogen (die liegen im Spielstand des Spielers)
+  const rewardsBefore = conns[0].msgs.filter(m => m.t === 'reward' || m.t === 'itemConsumed').length;
+  room.enterFloor(6);
+  room.pot = 1;
+  room.checkBankrupt();
+  mock.timers.tick(11_000);
+  assert.equal(conns[0].msgs.filter(m => m.t === 'reward' || m.t === 'itemConsumed').length, rewardsBefore);
+  assert.equal(room.campaign.unlocked, 1);
+  teardown(room);
+});
+
+test('Spielstand: gespeicherter Run bringt seine Stockwerke mit, ein neuer Run (andere ID) übernimmt keine alten Stockwerke', () => {
+  const { room } = setup(0);
+  const c = fakeConn();
+  room.join(c, { name: 'Host', campaign: { unlocked: 1, completed: [], everCompleted: [1, 2, 3] }, run: { id: 'run_abc', pot: 50_000, unlocked: 4, completed: [1, 2, 3] } });
+  assert.equal(room.run.id, 'run_abc');
+  assert.equal(room.pot, 50_000);
+  assert.equal(room.campaign.unlocked, 4);
+  room.newRun('mafia');
+  assert.notEqual(room.run.id, 'run_abc');
+  assert.equal(room.campaign.unlocked, 1);
+  assert.deepEqual(room.campaign.completed, []);
+  teardown(room);
 });

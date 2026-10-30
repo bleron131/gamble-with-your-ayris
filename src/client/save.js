@@ -26,7 +26,8 @@ function defaults() {
     rewardedFloors: [],
     challengeFloors: [],
     campaign: defaultCampaign(),
-    run: { pot: START_CAPITAL, finalUnlocked: false, startedAt: Date.now() },
+    // Aktueller Run (wird bei einer Niederlage komplett ersetzt); campaign enthält nur permanente Rekorde
+    run: { id: null, pot: START_CAPITAL, finalUnlocked: false, startedAt: Date.now(), unlocked: 1, completed: [] },
     stats: defaultStats(),
     achievements: {},
     history: [], // abgeschlossene Runs (Take / Double)
@@ -44,12 +45,22 @@ export function load() {
       const s = JSON.parse(raw);
       data = { ...d, ...s, appearance: { ...d.appearance, ...s.appearance }, stats: { ...d.stats, ...s.stats }, settings: { ...d.settings, ...s.settings }, campaign: { ...d.campaign, ...s.campaign } };
       autoGraphics(data.settings);
+      migrateRun(data, s);
       return data;
     }
   } catch { /* ohne Speicher weiterspielen */ }
   data = d;
   autoGraphics(data.settings);
   return data;
+}
+
+// Ältere Spielstände: Stockwerke lagen in campaign – jetzt gehören sie zum Run, je abgeschlossene Stockwerke sind permanent
+function migrateRun(d, raw) {
+  const c = raw.campaign || {};
+  d.run = { ...d.run };
+  if (!Array.isArray(d.run.completed)) d.run.completed = Array.isArray(c.completed) ? c.completed : [];
+  if (!Number.isFinite(d.run.unlocked)) d.run.unlocked = Number.isFinite(c.unlocked) ? c.unlocked : 1;
+  d.campaign.everCompleted = [...new Set([...(c.everCompleted || []), ...(c.completed || []), ...d.run.completed])].sort((a, b) => a - b);
 }
 
 // Grafik beim ersten Start automatisch wählen: PC = Hoch, Handy/Tablet = Mittel (schwache Geräte: Niedrig, 30 FPS)

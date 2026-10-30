@@ -258,16 +258,19 @@ export class App {
     // Spielstand sichern
     const s = this.save;
     const c = st.campaign;
+    // Permanenter Fortschritt: Rekorde und je abgeschlossene Stockwerke (Kosmetik) bleiben über alle Runs erhalten
     s.campaign = {
-      ...s.campaign, ...c,
-      unlocked: Math.max(s.campaign.unlocked || 1, c.unlocked),
-      completed: [...new Set([...(s.campaign.completed || []), ...c.completed])].sort((a, b) => a - b),
+      ...s.campaign,
+      everCompleted: [...new Set([...(s.campaign.everCompleted || []), ...(c.everCompleted || []), ...c.completed])].sort((a, b) => a - b),
       highestPot: Math.max(s.campaign.highestPot || 0, c.highestPot),
       bestWinnings: Math.max(s.campaign.bestWinnings || 0, c.bestWinnings || 0),
       bestDouble: Math.max(s.campaign.bestDouble || 0, c.bestDouble || 0),
       gameComplete: s.campaign.gameComplete || c.gameComplete,
+      finishedAt: s.campaign.finishedAt || c.finishedAt,
+      runs: Math.max(s.campaign.runs || 0, c.runs || 0),
     };
-    if (st.hostId === this.me) s.run = { pot: st.pot, finalUnlocked: st.run.finalUnlocked, startedAt: st.run.startedAt };
+    // Run-Fortschritt kommt immer exakt vom Server (kein Zusammenführen mit alten Runs); gespeichert wird er vom Gruppenersteller
+    if (st.hostId === this.me) s.run = { id: st.run.id, pot: st.pot, finalUnlocked: st.run.finalUnlocked, startedAt: st.run.startedAt, unlocked: c.unlocked, completed: [...c.completed] };
     if (st.pot > s.stats.highestPot) s.stats.highestPot = st.pot;
     if (st.pot >= 1e6) this.achieve('millionaire');
     if (st.pot >= 1e8) this.achieve('hundred_m');
@@ -455,7 +458,10 @@ export class App {
       case 'join': if (!mine) { this.ui.toast(`${ev.name} ist der Gruppe beigetreten`, 'info'); sfx.ding(); } break;
       case 'leave': this.ui.toast(`${ev.name} hat die Gruppe verlassen`, 'warn'); break;
       case 'toast': this.ui.toast(ev.msg, 'info'); break;
-      case 'newrun': if (ev.reason === 'manual') this.ui.toast(`Neuer Run gestartet: ${fmtMoney(ev.pot)}`, 'info'); break;
+      case 'newrun':
+        if (ev.reason === 'manual') this.ui.toast(`Neuer Run gestartet: ${fmtMoney(ev.pot)}`, 'info');
+        if (ev.reason === 'mafia') this.ui.feed(`🔄 Run verloren – neuer Run mit <b>${fmtMoney(ev.pot)}</b>, nur Stock 1 freigeschaltet`, 'risk');
+        break;
       case 'take': this.finalTake(ev); break;
       case 'coin': this.finalCoin(ev); break;
       case 'doubleResult': this.finalDoubleResult(ev); break;

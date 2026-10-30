@@ -1,7 +1,7 @@
 // Dialoge: Aufzug (Levelauswahl + Ausrüstung), AYRI SHOP, Charaktereditor, Statistiken, Einstellungen.
 import * as THREE from 'three';
 import { h, clear } from './dom.js';
-import { FLOORS, ITEMS, LOADOUT_SLOTS, GAME_NAMES, GAME_ICONS, ACHIEVEMENTS, COSMETIC_UNLOCKS, fmtMoney, START_CAPITAL, MAFIA_KEEP_FRACTION } from '../../shared/config.js';
+import { FLOORS, ITEMS, LOADOUT_SLOTS, GAME_NAMES, GAME_ICONS, ACHIEVEMENTS, COSMETIC_UNLOCKS, fmtMoney, START_CAPITAL } from '../../shared/config.js';
 import { OPTIONS } from '../character.js';
 import * as Save from '../save.js';
 import { sfx } from '../audio.js';
@@ -41,7 +41,7 @@ export function openElevator(ui) {
     h('div.subtle', `Team-Pot: ${fmtMoney(st.pot)} – wird auf jedes Stockwerk mitgenommen. Alle freigeschalteten Stockwerke können jederzeit erneut besucht werden.`),
     grid,
     loadoutEditor(ui),
-    h('div.subtle.small', `Bankrott (Pot unter Mindesteinsatz) ruft die Mafia: Level verloren, ihr behaltet ${Math.round(MAFIA_KEEP_FRACTION * 100)}% eures Stockwerk-Startkapitals (mind. ${fmtMoney(START_CAPITAL)}).`),
+    h('div.subtle.small', `Bankrott (Pot unter Mindesteinsatz) ruft die Mafia: Der Run ist verloren – neuer Run mit ${fmtMoney(START_CAPITAL)}, nur Stock 1 freigeschaltet. 🍆, Items und Kosmetik bleiben.`),
   ), 'wide');
 }
 
@@ -158,7 +158,7 @@ function isLocked(cat, val) {
   const u = COSMETIC_UNLOCKS[`${cat}:${val}`];
   if (!u) return null;
   const s = Save.get();
-  if (u.floor && s.campaign.completed.includes(u.floor)) return null;
+  if (u.floor && ((s.campaign.everCompleted || []).includes(u.floor) || (s.run.completed || []).includes(u.floor))) return null;
   if (u.achievement && s.achievements[u.achievement]) return null;
   return u.label;
 }
@@ -269,7 +269,8 @@ export function openStats(ui) {
       return [
         h('h3', 'Gruppe & Fortschritt'),
         h('div.sgrid',
-          row('Abgeschlossene Stockwerke', `${c.completed.length}/15`), row('Freigeschaltet bis', `Stock ${c.unlocked}`),
+          row('Abgeschlossene Stockwerke (Run)', `${(app.state ? c.completed : s.run.completed || []).length}/15`), row('Freigeschaltet bis', `Stock ${app.state ? c.unlocked : s.run.unlocked || 1}`),
+          row('Bestes Stockwerk (alle Runs)', (s.campaign.everCompleted || []).length ? `Stock ${Math.max(...s.campaign.everCompleted)}` : '—'), row('Runs gespielt', String((c.runs || 0) + 1)),
           row('Höchster Team-Pot', fmtMoney(c.highestPot || 0)), row('Höchster erfolgreicher Gewinn', fmtMoney(c.bestWinnings || 0)),
           row('Höchste Double-or-Loss-Summe', fmtMoney(c.bestDouble || 0)), row('Spiel durchgespielt', c.gameComplete ? `Ja (${new Date(c.finishedAt).toLocaleDateString('de-CH')})` : 'Noch nicht'),
           row('Aktueller Team-Pot', fmtMoney(app.state?.pot ?? s.run.pot)),

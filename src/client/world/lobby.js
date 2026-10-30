@@ -271,7 +271,8 @@ export class LobbyWorld extends World {
     g.font = 'bold 38px "Nunito", Arial'; g.textAlign = 'left';
     const camp = st?.campaign || save.campaign;
     const rows = [
-      ['Stockwerke geschafft', `${camp.completed.length} / ${FLOORS.length}`],
+      ['Stockwerke (aktueller Run)', `${(st ? camp.completed : save.run.completed || []).length} / ${FLOORS.length}`],
+      ['Bestes Stockwerk (alle Runs)', (save.campaign.everCompleted || []).length ? `Stock ${Math.max(...save.campaign.everCompleted)}` : '—'],
       ['Höchster Team-Pot', fmtMoney(Math.max(camp.highestPot || 0, save.stats.highestPot || 0))],
       ['Bester Gewinn (Finale)', camp.bestWinnings ? fmtMoney(camp.bestWinnings) : '—'],
       ['Höchstes Double', camp.bestDouble ? fmtMoney(camp.bestDouble) : '—'],
@@ -279,8 +280,8 @@ export class LobbyWorld extends World {
       ['Gruppen-Code', st?.code && st.code !== 'SOLO' ? st.code : 'Solo'],
     ];
     rows.forEach(([k, v], i) => {
-      g.fillStyle = '#e8d9ff'; g.fillText(k, 70, 190 + i * 72);
-      g.fillStyle = '#ffffff'; g.textAlign = 'right'; g.fillText(v, 954, 190 + i * 72); g.textAlign = 'left';
+      g.fillStyle = '#e8d9ff'; g.fillText(k, 70, 178 + i * 64);
+      g.fillStyle = '#ffffff'; g.textAlign = 'right'; g.fillText(v, 954, 178 + i * 64); g.textAlign = 'left';
     });
     this.hallTex.needsUpdate = true;
   }

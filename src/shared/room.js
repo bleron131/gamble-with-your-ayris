@@ -3,7 +3,7 @@
 // beginnt. Einsätze werden synchron gegen den Team-Pot geprüft und abgebucht – zwei gleichzeitige
 // Wetten auf denselben Betrag können daher nie beide akzeptiert werden (kein Geld-Duplizieren).
 import {
-  START_CAPITAL, MAFIA_KEEP_FRACTION, FLOORS, floorDef, floorTables, ITEMS, RETRY_GAMES_HAT,
+  START_CAPITAL, FLOORS, floorDef, floorTables, ITEMS, RETRY_GAMES_HAT,
   FLOOR_REWARDS, CHALLENGE_FACTOR, CHALLENGE_REWARDS, LOADOUT_SLOTS, MAX_PLAYERS, fmtMoney, GAME_NAMES, luckChance, slotSteps,
 } from './config.js';
 import { rand } from './rng.js';
@@ -33,8 +33,18 @@ export const FINAL_COUNTER_Z = -27;
 
 const VOTE_TIMEOUT = 25000;
 
+// unlocked/completed gehören zum AKTUELLEN Run (werden bei einem neuen Run zurückgesetzt);
+// alles andere ist permanenter Fortschritt (Rekorde, je abgeschlossene Stockwerke für Kosmetik).
 export function defaultCampaign() {
-  return { unlocked: 1, completed: [], gameComplete: false, highestPot: START_CAPITAL, bestWinnings: 0, bestDouble: 0, finishedAt: null, runs: 0 };
+  return { unlocked: 1, completed: [], everCompleted: [], gameComplete: false, highestPot: START_CAPITAL, bestWinnings: 0, bestDouble: 0, finishedAt: null, runs: 0 };
+}
+
+export function makeRunId() {
+  return 'run_' + Date.now().toString(36) + Math.floor(rand() * 1e6).toString(36);
+}
+
+function cleanFloors(list) {
+  return Array.isArray(list) ? [...new Set(list.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= FLOORS.length))].sort((a, b) => a - b) : [];
 }
 
 export function makeJoinCode() {
@@ -49,7 +59,7 @@ export class Room {
     this.hostId = null;
     this.pot = START_CAPITAL;
     this.campaign = defaultCampaign();
-    this.run = { finalUnlocked: false, startedAt: Date.now() };
+    this.run = { id: makeRunId(), finalUnlocked: false, startedAt: Date.now() };
     this.scene = 'lobby';
     this.floor = null;
     this.session = null;
@@ -80,10 +90,17 @@ export class Room {
       this.hostId = id;
       // Der Gruppenersteller bringt seinen gespeicherten Fortschritt mit
       if (profile.campaign) this.campaign = { ...defaultCampaign(), ...profile.campaign };
-      if (profile.run && Number.isFinite(profile.run.pot) && profile.run.pot >= 0) {
-        this.pot = Math.floor(profile.run.pot);
-        this.run = { finalUnlocked: !!profile.run.finalUnlocked, startedAt: profile.run.startedAt || Date.now() };
+      const r = profile.run;
+      if (r && Number.isFinite(r.pot) && r.pot >= 0) {
+        this.pot = Math.floor(r.pot);
+        this.run = { id: typeof r.id === 'string' ? r.id.slice(0, 40) : makeRunId(), finalUnlocked: !!r.finalUnlocked, startedAt: r.startedAt || Date.now() };
+        // Run-Fortschritt (Stockwerke) gehört zum gespeicherten Run
+        if (Array.isArray(r.completed)) this.campaign.completed = cleanFloors(r.completed);
+        if (Number.isFinite(r.unlocked)) this.campaign.unlocked = Math.max(1, Math.min(FLOORS.length, Math.floor(r.unlocked)));
       }
+      this.campaign.completed = cleanFloors(this.campaign.completed);
+      this.campaign.unlocked = Math.max(1, Math.min(FLOORS.length, Math.floor(this.campaign.unlocked) || 1));
+      this.campaign.everCompleted = cleanFloors([...(this.campaign.everCompleted || []), ...this.campaign.completed]);
     }
     this.players.set(id, p);
     conn.send({ t: 'welcome', you: id, code: this.code, state: this.snapshot() });
@@ -301,11 +318,19 @@ export class Room {
     this.markDirty();
   }
 
+  // Neuer Run: ALLER Run-Fortschritt wird zurückgesetzt (Pot, freigeschaltete/abgeschlossene Stockwerke,
+  // Casino-Zustände, temporäre Effekte) und eine neue Run-ID vergeben. Permanentes (Rekorde, 🍆, Kosmetik) bleibt.
   newRun(reason) {
+    const oldId = this.run.id;
     this.pot = START_CAPITAL;
-    this.run = { finalUnlocked: false, startedAt: Date.now() };
+    this.run = { id: makeRunId(), finalUnlocked: false, startedAt: Date.now() };
+    this.campaign.unlocked = 1;
+    this.campaign.completed = [];
     this.campaign.runs = (this.campaign.runs || 0) + 1;
-    this.event({ kind: 'newrun', reason, pot: this.pot });
+    if (this.session) for (const t of Object.values(this.session.tables)) { t.occupant = null; t.busy = false; t.lastRound = {}; t.roundMods = null; }
+    this.vote = null;
+    for (const p of this.players.values()) { p.used = {}; p.armed = {}; p.shishaRounds = 0; p.lossStreak = 0; p.seat = null; }
+    this.event({ kind: 'newrun', reason, pot: this.pot, runId: this.run.id, oldRunId: oldId });
     this.markDirty();
   }
 
@@ -358,6 +383,7 @@ export class Room {
       this.campaign.completed.push(n);
       this.campaign.completed.sort((a, b) => a - b);
     }
+    if (!this.campaign.everCompleted.includes(n)) this.campaign.everCompleted = cleanFloors([...this.campaign.everCompleted, n]);
     const unlockedBefore = this.campaign.unlocked;
     this.campaign.unlocked = Math.min(FLOORS.length, Math.max(this.campaign.unlocked, n + 1));
     for (const p of this.players.values()) {
@@ -393,11 +419,13 @@ export class Room {
     s.ending = true;
     for (const t of Object.values(s.tables)) t.occupant = null;
     for (const p of this.players.values()) p.seat = null;
-    const keep = Math.max(START_CAPITAL, Math.floor(s.entryPot * MAFIA_KEEP_FRACTION));
-    this.event({ kind: 'mafia', floor: this.floor, keep });
+    // Bankrott = Run verloren: nach der Mafia-Sequenz beginnt ein komplett neuer Run für die ganze Gruppe
+    this.event({ kind: 'mafia', floor: this.floor, keep: START_CAPITAL, runLost: true });
     this.markDirty();
+    const runId = this.run.id;
     this.later(10500, () => {
-      this.pot = Math.max(this.pot, keep);
+      if (this.run.id !== runId) return;
+      this.newRun('mafia');
       this.leaveFloor('mafia');
     });
   }

@@ -117,8 +117,11 @@ können gemeinsam in einer Gruppe spielen.
 - **Mafia**: Fällt der Pot unter den Mindesteinsatz des Stockwerks, stoppt die Musik, das Licht wird rot,
   die Steuerung wird gesperrt und eine eigene Kinokamera zeigt das ganze Team auf einer freien Bühne vor dem Aufzug.
   Die Mafia kommt aus dem Aufzug, Tische, Automaten oder Deko, die im Bild stören würden, werden ausgeblendet –
-  cartoonhafte Explosion – **LEVEL FAILED**. Ihr behaltet 75 % des Stockwerk-Startkapitals
-  (mind. $7'500), damit der Run weitergehen kann.
+  cartoonhafte Explosion – **LEVEL FAILED**. Damit ist der **Run verloren**: Der Server startet für die ganze Gruppe
+  einen komplett neuen Run (neue Run-ID) mit $7'500, 0/15 Stockwerken und nur Stock 1 freigeschaltet; alte
+  Tischzustände, Wetten und aktive Item-Effekte verfallen. Permanent bleiben 🍆, Items im Inventar, Kosmetik,
+  Achievements, Statistiken und Hall-of-Fame-Rekorde. Normales Zurückkehren, Stockwerkwechsel oder Keep Gambling
+  setzen nichts zurück.
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Bonus-Challenges
   (Stockwerk mit ≥150 % des Ziels verlassen) und Achievements – jeweils nur einmal pro Spieler, also kein Farming.
 - **MAKKA an der Bar**: Bei Kemal gibt es die pinke Ayri-Limonade für genau 1 🍆. Mit T trinken –
@@ -131,13 +134,16 @@ können gemeinsam in einer Gruppe spielen.
 
 ## Speicherstand
 
-Charakter, Kosmetik, Dildos, Items, freigeschaltete/abgeschlossene Stockwerke, Rekorde, Statistiken,
-Achievements und Einstellungen werden im Browser (`localStorage`) gespeichert. Der Gruppenersteller bringt
-seinen Run (Team-Pot) mit; der Level-Fortschritt wird für alle Mitglieder übernommen.
+Alles wird im Browser (`localStorage`) gespeichert, getrennt in zwei Teile:
+
+- **Run-Fortschritt** (Run-ID, Team-Pot, freigeschaltete und abgeschlossene Stockwerke): gehört zum aktuellen Run und
+  wird bei einer Niederlage komplett ersetzt. Der Gruppenersteller bringt seinen Run mit; der Server ist massgebend.
+- **Permanenter Fortschritt** (Charakter, Kosmetik, 🍆, Items, Achievements, Statistiken, Rekorde, je erreichte
+  Stockwerke für Kosmetik-Freischaltungen, Einstellungen): bleibt über alle Runs erhalten.
 
 ## Balancing
 
-Alle Werte stehen in [`src/shared/config.js`](src/shared/config.js): Startkapital, Mafia-Anteil,
+Alle Werte stehen in [`src/shared/config.js`](src/shared/config.js): Startkapital,
 Zielbeträge, Min/Max-Einsätze pro Spiel als Anteil des Stockwerk-Ziels, Belohnungen und Item-Preise.
 Das Spiel ist bewusst als Party-Casino balanciert: Alle Spiele zahlen leicht über 100 % aus, Verlieren bleibt aber
 jederzeit möglich. Slots zahlen in Vielfachen des Gesamteinsatzes (ein Treffer bringt mindestens das Doppelte zurück,
