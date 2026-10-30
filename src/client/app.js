@@ -54,13 +54,13 @@ export class App {
   distanceTo(v) { return this.player.pos.distanceTo(new THREE.Vector3(v.x, 0, v.z)); }
 
   // ───────────────────────── Verbindung ─────────────────────────
-  async connect(mode, code) {
+  async connect(mode, code, onStatus) {
     initAudio(this.save.settings);
     const profile = Save.profile();
     const t = mode === 'solo' ? new LocalTransport() : new WSTransport();
     t.onMessage(m => this.onMessage(m));
     const first = mode === 'join' ? { t: 'join', code, profile } : { t: 'create', profile };
-    await t.connect(first);
+    await t.connect(first, onStatus);
     this.net = t;
     this.mode = mode;
   }

@@ -33,6 +33,19 @@ Dann **http://localhost:8787** öffnen.
 Entwicklung mit Hot-Reload: `npm run dev` (Vite auf Port 5173, WebSocket wird an den Server auf 8787 weitergeleitet).
 Port ändern: `PORT=3000 npm start`.
 
+## Online-Multiplayer mit Render (kostenlos)
+
+Die Datei [`render.yaml`](render.yaml) richtet den Multiplayer-Server auf [Render](https://render.com) ein
+(Free-Plan, Node 22, Build `npm ci && npm run build`, Start `npm start`, Health-Check `/health`).
+
+1. Bei Render mit dem GitHub-Konto anmelden → **New → Blueprint** → dieses Repository wählen → **Apply**.
+2. Nach dem ersten Build läuft das Spiel samt Multiplayer unter `https://gamble-with-your-ayris.onrender.com`.
+3. Die GitHub-Pages-Seite verbindet sich automatisch mit diesem Server. Heisst der Dienst bei Render anders,
+   den Namen in [`src/client/server.js`](src/client/server.js) (`RENDER_HOST`) anpassen.
+
+Der Gratis-Server schläft nach 15 Minuten ohne Besucher; das Spiel weckt ihn beim Erstellen/Beitreten automatisch
+(dauert bis zu etwa einer Minute). Offene Gruppen gehen dabei verloren, gespeicherte Fortschritte nicht (die liegen im Browser).
+
 ## Steuerung
 
 | Taste | Aktion |

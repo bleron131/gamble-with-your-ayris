@@ -1,18 +1,36 @@
 // Transport-Schicht: WebSocket zum Server (Multiplayer) oder lokaler Raum im Browser (Solo).
 import { Room } from '../shared/room.js';
+import { serverHost } from './server.js';
 
 export class WSTransport {
   constructor() {
     this.handlers = [];
     this.ws = null;
   }
-  connect(first) {
+  // Der Gratis-Server von Render schläft nach 15 Minuten ohne Besucher und braucht dann bis zu einer Minute
+  // zum Aufwachen. Deshalb wird bei einem entfernten Server mehrmals versucht, bevor eine Fehlermeldung kommt.
+  async connect(first, onStatus) {
+    const srv = serverHost();
+    const url = `${srv.secure ? 'wss' : 'ws'}://${srv.host}/ws`;
+    if (!srv.remote) return this.open(url, first, 5000);
+    fetch(`${srv.secure ? 'https' : 'http'}://${srv.host}/health`, { mode: 'no-cors', cache: 'no-store' }).catch(() => {}); // weckt den Server
+    const until = Date.now() + 90000;
+    let attempt = 0;
+    for (;;) {
+      try { return await this.open(url, first, 12000); } catch (e) {
+        attempt++;
+        if (Date.now() > until) throw new Error('Multiplayer-Server nicht erreichbar');
+        onStatus?.(`Server wird geweckt… (kann bis zu 1 Minute dauern, Versuch ${attempt + 1})`);
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+  }
+  open(url, first, timeout) {
     return new Promise((resolve, reject) => {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(`${proto}://${location.host}/ws`);
+      const ws = new WebSocket(url);
       this.ws = ws;
       let opened = false;
-      const timer = setTimeout(() => { if (!opened) { ws.close(); reject(new Error('Server nicht erreichbar')); } }, 5000);
+      const timer = setTimeout(() => { if (!opened) { ws.close(); reject(new Error('Server nicht erreichbar')); } }, timeout);
       ws.onopen = () => { opened = true; clearTimeout(timer); ws.send(JSON.stringify(first)); resolve(); };
       ws.onerror = () => { if (!opened) { clearTimeout(timer); reject(new Error('Server nicht erreichbar')); } };
       ws.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch { return; } for (const h of this.handlers) h(m); };

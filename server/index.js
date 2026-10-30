@@ -17,7 +17,7 @@ const MIME = {
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
-  if (url.pathname === '/health') { res.writeHead(200); res.end(JSON.stringify({ ok: true, rooms: rooms.size })); return; }
+  if (url.pathname === '/health') { res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' }); res.end(JSON.stringify({ ok: true, rooms: rooms.size })); return; }
   let file = path.join(DIST, decodeURIComponent(url.pathname));
   if (!file.startsWith(DIST)) { res.writeHead(403); res.end(); return; }
   if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(DIST, 'index.html');
