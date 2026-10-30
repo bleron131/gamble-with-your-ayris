@@ -55,23 +55,27 @@ export function niceRound(v) {
   return Math.round(best * p);
 }
 
+// Spiele bauen sich auf: Ein Spiel, das auf einem Stockwerk eingeführt wird, bleibt auf allen höheren erhalten.
+export const GAME_INTRO = { slots: 1, blackjack: 1, roulette: 2, wheel: 3, baccarat: 4, craps: 5, poker: 6, highslots: 7 };
+export const gamesForFloor = n => Object.keys(GAME_INTRO).filter(g => GAME_INTRO[g] <= n);
+
 const FLOOR_DEFS = [
-  { target: 10_000, games: ['slots'], name: 'Hinterhof-Spielhalle', tier: 0 },
-  { target: 25_000, games: ['slots', 'roulette'], name: 'Neon Corner', tier: 0 },
-  { target: 50_000, games: ['slots', 'roulette'], name: 'Lucky Basement', tier: 0 },
-  { target: 100_000, games: ['roulette', 'blackjack'], name: 'Downtown Casino', tier: 1 },
-  { target: 250_000, games: ['slots', 'roulette', 'blackjack'], name: 'Golden Palm', tier: 1 },
-  { target: 500_000, games: ['roulette', 'blackjack', 'wheel'], name: 'Fortune Hall', tier: 1 },
-  { target: 1_000_000, games: ['roulette', 'blackjack', 'baccarat'], name: 'Millionaires Club', tier: 2 },
-  { target: 2_500_000, games: ['slots', 'roulette', 'baccarat', 'craps'], name: 'Velvet Lounge', tier: 2 },
-  { target: 5_000_000, games: ['roulette', 'blackjack', 'baccarat', 'craps'], name: 'Sapphire Room', tier: 2 },
-  { target: 10_000_000, games: ['roulette', 'blackjack', 'baccarat', 'poker'], name: 'VIP Royale', tier: 3 },
-  { target: 25_000_000, games: ['roulette', 'craps', 'poker', 'highslots'], name: 'Diamond Deck', tier: 3 },
-  { target: 50_000_000, games: ['roulette', 'blackjack', 'baccarat', 'poker', 'highslots'], name: 'Platinum Sky', tier: 3 },
-  { target: 100_000_000, games: ['roulette', 'blackjack', 'baccarat', 'craps', 'poker', 'highslots'], name: 'High-Roller-Etage', tier: 4 },
-  { target: 250_000_000, games: ['roulette', 'blackjack', 'baccarat', 'craps', 'poker', 'wheel', 'highslots'], name: 'Luxus-High-Roller-Casino', tier: 4 },
-  { target: 500_000_000, games: ['slots', 'roulette', 'blackjack', 'baccarat', 'craps', 'poker', 'wheel', 'highslots'], name: 'FINAL CASINO FLOOR', tier: 5 },
-];
+  { target: 10_000, name: 'Hinterhof-Spielhalle', tier: 0 },
+  { target: 25_000, name: 'Neon Corner', tier: 0 },
+  { target: 50_000, name: 'Lucky Basement', tier: 0 },
+  { target: 100_000, name: 'Downtown Casino', tier: 1 },
+  { target: 250_000, name: 'Golden Palm', tier: 1 },
+  { target: 500_000, name: 'Fortune Hall', tier: 1 },
+  { target: 1_000_000, name: 'Millionaires Club', tier: 2 },
+  { target: 2_500_000, name: 'Velvet Lounge', tier: 2 },
+  { target: 5_000_000, name: 'Sapphire Room', tier: 2 },
+  { target: 10_000_000, name: 'VIP Royale', tier: 3 },
+  { target: 25_000_000, name: 'Diamond Deck', tier: 3 },
+  { target: 50_000_000, name: 'Platinum Sky', tier: 3 },
+  { target: 100_000_000, name: 'High-Roller-Etage', tier: 4 },
+  { target: 250_000_000, name: 'Luxus-High-Roller-Casino', tier: 4 },
+  { target: 500_000_000, name: 'FINAL CASINO FLOOR', tier: 5 },
+].map((d, i) => ({ ...d, games: gamesForFloor(i + 1) }));
 
 export const FLOORS = FLOOR_DEFS.map((d, i) => {
   const n = i + 1;
@@ -113,7 +117,17 @@ export const jackpotBoost = n => 1 + (n - 1) * 0.08; // Stock 15: Jackpot ×2.1
 export function floorTables(n) {
   const f = floorDef(n);
   const list = [];
-  const counts = { slots: 3, highslots: 2, roulette: n >= 10 ? 2 : 1, blackjack: n >= 9 ? 2 : 1, baccarat: 1, craps: 1, poker: n >= 13 ? 2 : 1, wheel: 1 };
+  // Höhere Stockwerke = mehr Auswahl: zusätzliche Automaten und Tische der beliebten Spiele
+  const counts = {
+    slots: n <= 4 ? 3 : n <= 9 ? 4 : 5,
+    blackjack: n <= 4 ? 1 : n <= 9 ? 2 : 3,
+    roulette: n <= 7 ? 1 : 2,
+    wheel: 1,
+    baccarat: n <= 10 ? 1 : 2,
+    craps: 1,
+    poker: n <= 11 ? 1 : 2,
+    highslots: n <= 11 ? 2 : 3,
+  };
   for (const g of f.games) {
     const c = counts[g] || 1;
     for (let i = 0; i < c; i++) list.push({ id: `${g}-${i}`, type: g, index: i });

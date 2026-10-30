@@ -497,3 +497,46 @@ test('Spielstand: gespeicherter Run bringt seine Stockwerke mit, ein neuer Run (
   assert.deepEqual(room.campaign.completed, []);
   teardown(room);
 });
+
+// ───────────────────────── Spiele bauen sich über die Stockwerke auf (Prompt 6) ─────────────────────────
+test('Stockwerke: Stock 1 = Slots + Blackjack, jedes eingeführte Spiel bleibt auf allen höheren Stockwerken', async () => {
+  const { floorTables, FLOORS } = await import('../src/shared/config.js');
+  const types = n => new Set(floorTables(n).map(t => t.type));
+  assert.deepEqual([...types(1)].sort(), ['blackjack', 'slots']);
+  assert.ok(['slots', 'blackjack', 'roulette'].every(g => types(2).has(g)));
+  const seen = new Set();
+  for (let n = 1; n <= 15; n++) {
+    for (const g of seen) assert.ok(types(n).has(g), `${g} fehlt auf Stock ${n}`);
+    for (const g of types(n)) seen.add(g);
+    // Limits existieren für jedes Spiel des Stockwerks und steigen mit dem Stockwerk
+    for (const g of types(n)) {
+      assert.ok(FLOORS[n - 1].limits[g], `Limits ${g} Stock ${n}`);
+      if (n > 1 && FLOORS[n - 2].limits[g]) assert.ok(FLOORS[n - 1].limits[g].max > FLOORS[n - 2].limits[g].max);
+    }
+    // Mehr Auswahl statt anderer Auswahl: nie weniger Tische als im Stockwerk darunter
+    if (n > 1) assert.ok(floorTables(n).length >= floorTables(n - 1).length);
+  }
+  assert.equal(types(15).size, 8);
+  assert.ok(floorTables(15).filter(t => t.type === 'blackjack').length >= 3);
+  // Eindeutige Tisch-IDs (Server und Client teilen sie)
+  for (let n = 1; n <= 15; n++) { const ids = floorTables(n).map(t => t.id); assert.equal(new Set(ids).size, ids.length); }
+});
+
+test('Stock 1: vollständiger Blackjack; zwei Spieler spielen gleichzeitig Blackjack und Slots mit demselben Team-Pot', () => {
+  const { room, ids } = setup(2);
+  room.enterFloor(1);
+  assert.ok(room.session.tables['blackjack-0']);
+  room.handle(ids[0], { t: 'table.sit', id: 'blackjack-0' });
+  room.handle(ids[0], { t: 'table.start', id: 'blackjack-0', payload: { bet: 500 } });
+  const slotBet = room.session.tables['slots-0'].state.bet;
+  room.handle(ids[1], { t: 'slot.spin', id: 'slots-0' });
+  assert.equal(room.pot, START_CAPITAL - 500 - slotBet);
+  const bj = room.session.tables['blackjack-0'];
+  for (let k = 0; k < 8 && bj.state.phase === 'player'; k++) room.handle(ids[0], { t: 'table.action', id: 'blackjack-0', action: 'stand' });
+  for (let k = 0; k < 30; k++) mock.timers.tick(500);
+  assert.equal(bj.state.phase, 'done');
+  assert.equal(bj.busy, false);
+  assert.equal(room.session.tables['slots-0'].busy, false);
+  assert.ok(room.pot >= 0);
+  teardown(room);
+});

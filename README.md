@@ -95,6 +95,11 @@ können gemeinsam in einer Gruppe spielen.
   erneut besucht werden. Vor der Fahrt wählt jeder bis zu 4 Items aus seinem Inventar.
 - **Casino** (First-Person mit sichtbaren Händen): echte 3D-Tische mit NPC-Dealern. Spielbar sind
   Slots, Roulette, Blackjack, Baccarat, Craps, Casino Hold'em, das Glücksrad und High-Limit-Slots.
+  Die Spiele **bauen sich auf** – was einmal eingeführt ist, bleibt auf allen höheren Stockwerken:
+  Stock 1 Slots + Blackjack · Stock 2 + Roulette · Stock 3 + Glücksrad · Stock 4 + Baccarat · Stock 5 + Craps ·
+  Stock 6 + Hold'em · Stock 7 + High-Limit-Slots. Danach kommen mehr Automaten und Tische dazu (bis zu 5 Slots,
+  3 Blackjack-, 2 Roulette-, 2 Baccarat- und 2 Poker-Tische), die Limits steigen mit jedem Stockwerk und die Räume
+  wachsen mit (bis zu drei Tischreihen, Laufwege und Aufzugsbereich bleiben frei).
   Andere Spieler sehen jede Wette (`BLERON SETZT $10'000 AUF ROT`) und können am Tisch zuschauen.
 - **Roulette**: Chipwert wählen (`SELECTED CHIP`, Werte passend zum Stockwerk), Chips direkt aufs 3D-Tableau legen –
   Zahlen, Rot/Schwarz, Gerade/Ungerade, 1–18/19–36, Dutzende, Spalten sowie Split, Street, Corner und Six Line auf den

@@ -14,6 +14,7 @@ import { CrapsView } from '../tables/craps.js';
 import { PokerView } from '../tables/poker.js';
 import { WheelView } from '../tables/wheel.js';
 
+const WALL_GAMES = ['slots', 'highslots', 'wheel'];
 const VIEWS = { slots: SlotView, highslots: SlotView, roulette: RouletteView, blackjack: BlackjackView, baccarat: BaccaratView, craps: CrapsView, poker: PokerView, wheel: WheelView };
 
 const THEMES = [
@@ -35,9 +36,12 @@ export class CasinoWorld extends World {
     this.tier = this.def.tier;
     this.theme = THEMES[this.tier];
     const tables = floorTables(n);
-    const centerCount = tables.filter(t => !['slots', 'highslots', 'wheel'].includes(t.type)).length;
-    this.W = Math.max(16, 12 + Math.ceil(centerCount / 2) * 6) + this.tier * 2;
-    this.D = 16 + this.tier * 3 + (centerCount > 4 ? 6 : 0) + (centerCount > 0 ? 2 : 0);
+    // Raumgrösse wächst mit der Zahl der Tische (Spiele bauen sich über die Stockwerke auf)
+    const centerCount = tables.filter(t => !WALL_GAMES.includes(t.type)).length;
+    this.rows = centerCount <= 3 ? 1 : centerCount <= 8 ? 2 : 3;
+    this.perRow = Math.max(1, Math.ceil(centerCount / this.rows));
+    this.W = Math.max(16, 13 + this.perRow * 6) + this.tier * 2;
+    this.D = 15 + this.rows * 5 + this.tier * 2;
     this.H = 4.5 + this.tier * 0.6;
     const s = this.scene;
     s.background = new THREE.Color(this.theme.ceil);
@@ -47,10 +51,11 @@ export class CasinoWorld extends World {
     this.buildRoom();
     this.buildLights();
     this.initFlash();
+    this.plan = this.planTables(tables);
     this.buildDecor();
     if (this.tier >= 4) this.buildLuxury();
     this.views = {};
-    this.buildTables(tables);
+    this.buildTables();
     this.buildElevator();
     this.buildInfoBoard();
     this.buildGuests();
@@ -142,7 +147,7 @@ export class CasinoWorld extends World {
     if (tier >= 1) {
       for (const sx of [-1, 1]) for (const z of [-D / 4, D / 4]) {
         const x = sx * (W / 2 - 3.2);
-        if (Math.abs(z) < 2) continue;
+        if (Math.abs(z) < 2 || !this.isFree(x, z, 1.1)) continue;
         const pl = pillar(H, tier >= 3, 0.32);
         pl.position.set(x, 0, z);
         s.add(pl);
@@ -215,8 +220,25 @@ export class CasinoWorld extends World {
     carpet.rotation.x = -Math.PI / 2;
     s.add(carpet);
     for (const sx of [-1.25, 1.25]) { const e = mesh(new THREE.BoxGeometry(0.06, 0.02, D / 2 - 2), M.gold(), sx, 0.012, D / 4, { cast: false }); s.add(e); }
-    // Geldbrunnen in der Mitte
-    const fz = -D / 16;
+    // Geldbrunnen: an einer freien Stelle zwischen den Tischreihen (nie in Tische oder Laufwege)
+    const fz = [-D / 16, ...this.rowGaps(), 0].find(z => this.isFree(0, z, 3.4));
+    if (fz !== undefined) this.buildFountain(fz);
+    // Riesige Millionen-Chips
+    const chipCols = ['#d8262f', '#151515', '#7b3fc4', '#f2a516'];
+    for (let i = 0; i < 4; i++) {
+      const x = (i < 2 ? -1 : 1) * (W / 2 - 4.6), z = (i % 2 ? 1 : -1) * (D / 2 - 9);
+      if (!this.isFree(x, z, 1.6)) continue;
+      this.buildChipStack(x, z, chipCols, i);
+    }
+    if (tier >= 5) {
+      const big = neonSign('THE ULTIMATE CASINO', '#ffd700', 9, 1.4);
+      big.position.set(0, this.H - 2.4, -D / 2 + 0.1);
+      s.add(big);
+    }
+  }
+
+  buildFountain(fz) {
+    const s = this.scene;
     const f = new THREE.Group();
     f.position.set(0, 0, fz);
     f.add(mesh(new THREE.CylinderGeometry(1.6, 1.7, 0.5, 40), M.std('#f1ece4', 0.2, 0, { map: marbleTexture() }), 0, 0.25, 0));
@@ -242,37 +264,71 @@ export class CasinoWorld extends World {
         this.particles.emit({ pos: new THREE.Vector3(Math.cos(a) * 0.8, 1.9, fz + Math.sin(a) * 0.8), vel: [Math.cos(a) * 0.6, 1.2, Math.sin(a) * 0.6], life: 1.4, size: 0.12, grow: 0, opacity: 0.9, color: '#ffd23c', gravity: 3, additive: true });
       }
     });
-    // Riesige Millionen-Chips
-    const chipCols = ['#d8262f', '#151515', '#7b3fc4', '#f2a516'];
-    for (let i = 0; i < 4; i++) {
-      const x = (i < 2 ? -1 : 1) * (W / 2 - 4.6), z = (i % 2 ? 1 : -1) * (D / 2 - 9);
-      const stack = new THREE.Group();
-      stack.position.set(x, 0, z);
-      for (let k = 0; k < 6; k++) {
-        const c = mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.16, 32), M.std(chipCols[(i + k) % 4], 0.35), 0, 0.08 + k * 0.17, 0);
-        c.rotation.y = k * 0.4;
-        stack.add(c);
-        stack.add(mesh(new THREE.TorusGeometry(0.5, 0.02, 6, 32), M.std('#ffffff', 0.4), 0, 0.08 + k * 0.17, 0).rotateX(Math.PI / 2));
-      }
-      const lbl = neonSign('$1M', '#ffd97a', 1.2, 0.4);
-      lbl.position.set(0, 1.4, 0);
-      stack.add(lbl);
-      s.add(stack);
-      this.addCircle(x, z, 0.6);
-    }
-    if (tier >= 5) {
-      const big = neonSign('THE ULTIMATE CASINO', '#ffd700', 9, 1.4);
-      big.position.set(0, this.H - 2.4, -D / 2 + 0.1);
-      s.add(big);
-    }
   }
 
-  buildTables(defs) {
+  buildChipStack(x, z, chipCols, i) {
+    const s = this.scene;
+    const stack = new THREE.Group();
+    stack.position.set(x, 0, z);
+    for (let k = 0; k < 6; k++) {
+      const c = mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.16, 32), M.std(chipCols[(i + k) % 4], 0.35), 0, 0.08 + k * 0.17, 0);
+      c.rotation.y = k * 0.4;
+      stack.add(c);
+      stack.add(mesh(new THREE.TorusGeometry(0.5, 0.02, 6, 32), M.std('#ffffff', 0.4), 0, 0.08 + k * 0.17, 0).rotateX(Math.PI / 2));
+    }
+    const lbl = neonSign('$1M', '#ffd97a', 1.2, 0.4);
+    lbl.position.set(0, 1.4, 0);
+    stack.add(lbl);
+    s.add(stack);
+    this.addCircle(x, z, 0.6);
+  }
+
+  // Tischplan: Automaten an den Seitenwänden, Glücksrad an der Rückwand, Tische in 1–3 Reihen in der Mitte.
+  // Die vorderste Reihe bleibt vom Aufzug und der Bühne der Mafia-Szene weg.
+  planTables(defs) {
     const { W, D } = this;
+    const plan = [];
     const slots = defs.filter(d => d.type === 'slots');
     const high = defs.filter(d => d.type === 'highslots');
     const wheel = defs.filter(d => d.type === 'wheel');
-    const center = defs.filter(d => !['slots', 'highslots', 'wheel'].includes(d.type));
+    // Tischspiele gemischt verteilen (Blackjack, Roulette, Baccarat … abwechselnd)
+    const byType = {};
+    for (const d of defs) if (!WALL_GAMES.includes(d.type)) (byType[d.type] ||= []).push(d);
+    const center = [];
+    for (let k = 0; center.length < Object.values(byType).flat().length; k++) for (const list of Object.values(byType)) if (list[k]) center.push(list[k]);
+    slots.forEach((d, i) => plan.push({ def: d, x: -W / 2 + 0.75, z: -((slots.length - 1) / 2 - i) * 1.4 + 1, rot: Math.PI / 2 }));
+    high.forEach((d, i) => plan.push({ def: d, x: W / 2 - 0.75, z: ((high.length - 1) / 2 - i) * 1.4 + 2, rot: -Math.PI / 2 }));
+    wheel.forEach(d => plan.push({ def: d, x: W / 4, z: -D / 2 + 1.1, rot: 0 }));
+    const { rows, perRow } = this;
+    const zFront = D / 2 - 10.5, zBack = -D / 2 + 4.5;
+    this.rowZ = rows === 1 ? [Math.max(zBack, Math.min(zFront, -1))] : Array.from({ length: rows }, (_, r) => zBack + r * (zFront - zBack) / (rows - 1));
+    const usable = W - 13;
+    center.forEach((d, i) => {
+      const row = Math.floor(i / perRow), col = i % perRow;
+      const inRow = Math.min(perRow, center.length - row * perRow);
+      const x = inRow === 1 ? 0 : -usable / 2 + col * usable / (inRow - 1);
+      plan.push({ def: d, x, z: this.rowZ[row], rot: 0, center: true });
+    });
+    return plan;
+  }
+
+  // Mitte zwischen zwei Tischreihen (für Deko wie den Geldbrunnen)
+  rowGaps() { return (this.rowZ || []).slice(1).map((z, i) => (z + this.rowZ[i]) / 2); }
+
+  // Ist an dieser Stelle Platz (Abstand zu allen Tischen/Automaten, Aufzug und Mafia-Bühne)?
+  isFree(x, z, r) {
+    const { W, D } = this;
+    if (Math.abs(x) > W / 2 - r * 0.6 || Math.abs(z) > D / 2 - r * 0.6) return false;
+    if (Math.abs(x) < 3.5 + r && z > D / 2 - 10 - r) return false;
+    for (const p of this.plan || []) {
+      const hw = p.center ? 1.6 : 0.8, hd = p.center ? 1.9 : 1.0;
+      if (Math.abs(x - p.x) < hw + r && Math.abs(z - p.z) < hd + r) return false;
+    }
+    return true;
+  }
+
+  buildTables() {
+    const first = this.colliders.length;
     const add = (def, x, z, rot) => {
       const V = VIEWS[def.type];
       const v = new V(this.app, def, this.def);
@@ -311,21 +367,8 @@ export class CasinoWorld extends World {
         this.scene.add(lamp);
       }
     };
-    // Slots an der Westwand (Blick nach Osten), High-Limit an der Ostwand
-    slots.forEach((d, i) => add(d, -W / 2 + 0.75, -((slots.length - 1) / 2 - i) * 1.4 + 1, Math.PI / 2));
-    high.forEach((d, i) => add(d, W / 2 - 0.75, ((high.length - 1) / 2 - i) * 1.4 + 2, -Math.PI / 2));
-    wheel.forEach(d => add(d, (W / 4), -D / 2 + 1.1, 0));
-    // Tische in zwei Reihen in der Mitte
-    const rows = center.length > 3 ? 2 : 1;
-    const perRow = Math.ceil(center.length / rows);
-    const usable = W - 11;
-    center.forEach((d, i) => {
-      const row = Math.floor(i / perRow), col = i % perRow;
-      const inRow = Math.min(perRow, center.length - row * perRow);
-      const x = inRow === 1 ? 0 : -usable / 2 + col * usable / (inRow - 1);
-      const z = rows === 1 ? -1 : (row === 0 ? -D / 4 + 0.5 : D / 8);
-      add(d, x, z, 0);
-    });
+    for (const p of this.plan) add(p.def, p.x, p.z, p.rot);
+    this.tableColliders = [first, this.colliders.length]; // für die Platz-Prüfung
   }
 
   buildElevator() {
