@@ -466,12 +466,14 @@ export class RouletteView extends TableView {
       limitLine(this.limits, ` · Einzelzahl max ${fmtMoney(this.limits.straightMax)}`),
       h('div.betrow', h('span.lbl', 'SELECTED CHIP:'), this.selEl),
       this.picker.el,
-      h('div.phint', 'Klick = Chip setzen · Rechtsklick = Chip weg · Linien/Ecken = Split, Street, Corner, Six Line. Chips bleiben nach dem Spin liegen.'),
+      h('div.phint', this.app.touch?.active
+        ? 'Tippen = Chip setzen · lange drücken = Chip weg · Linien/Ecken = Split, Street, Corner, Six Line. Chips bleiben liegen.'
+        : 'Klick = Chip setzen · Rechtsklick = Chip weg · Linien/Ecken = Split, Street, Corner, Six Line. Chips bleiben nach dem Spin liegen.'),
       quick,
-      h('div.betrow', h('span.lbl', 'TOTAL BET:'), this.totalEl),
+      h('div.betrow.rtotal', h('span.lbl', 'TOTAL BET:'), this.totalEl),
       this.listEl,
-      h('div.actions', this.clearBtn, this.undoBtn, this.doubleBtn),
-      h('div.actions', this.spinBtn),
+      h('div.actions.redit', this.clearBtn, this.undoBtn, this.doubleBtn),
+      h('div.actions.rspin', this.spinBtn),
       this.camHint,
       h('div.keys', 'LEERTASTE = Spin · C = Kugelkamera · ESC = Aufstehen'),
     );

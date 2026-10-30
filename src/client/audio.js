@@ -26,6 +26,9 @@ export function initAudio(s) {
   setInterval(schedule, 50);
 }
 
+// Mobile: Audio nach Unterbrechungen (Anruf, Tab-Wechsel, iOS) beim nächsten Antippen fortsetzen
+export function resumeAudio() { if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {}); }
+
 export function setVolumes(s) { Object.assign(settings, s); applyVolumes(); }
 function applyVolumes() {
   if (!ctx) return;

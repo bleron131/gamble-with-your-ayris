@@ -66,6 +66,26 @@ Der Gratis-Server schläft nach 15 Minuten ohne Besucher; das Spiel weckt ihn be
 | TAB | Gruppenübersicht |
 | Mausrad | Kamera-Zoom (Shishabar) |
 
+### Handy & Tablet (Touch, Querformat)
+
+Auf Touch-Geräten schaltet sich die Mobile-Steuerung automatisch ein (auf dem PC bleibt alles wie oben):
+
+| Touch | Aktion |
+|---|---|
+| Joystick links unten | Laufen (analog: wenig Auslenkung = langsam) |
+| Rechts über den Bildschirm wischen | Kamera drehen / neigen (gleichzeitig mit dem Joystick) |
+| JUMP rechts unten | Springen |
+| Aktions-Button rechts (AUFZUG, SETZEN, KAUFEN, BAR / MAKKA, 🍾 TRINKEN …) | Erscheint nur, wenn eine Interaktion möglich ist |
+| Am Spielautomaten | BET − / BET + / SPIN als grosse Buttons – oder direkt auf die Knöpfe am Automaten tippen |
+| Am Tisch | Auf die Felder tippen = Chip setzen, lange drücken = Chip wegnehmen; alle Aktionen im Tisch-Panel |
+| 🎥 | Roulette-Kugelkamera an/aus (nur während eines Spins) |
+| 👥 / 😀 oben rechts | Gruppe anzeigen / Emotes |
+
+Im Hochformat erscheint „Drehe dein Gerät ins Querformat“ und die Eingaben ruhen. Unter ⚙️ gibt es **Grafik**
+(Niedrig/Mittel/Hoch) und ein **FPS-Limit** (30/60/Max); beim ersten Start wird beides passend zum Gerät gewählt
+(Handys: Mittel bzw. Niedrig mit weniger Lichtern, Schatten, Partikeln und halbem Bloom). PC- und Handy-Spieler
+können gemeinsam in einer Gruppe spielen.
+
 ## Spielablauf
 
 - **Shishabar-Lobby** (Third-Person): begehbar, mit Bar, Lounge, Shishas (mit räumlichem Blubbern – je näher, desto lauter), Spiegel/Charaktereditor,

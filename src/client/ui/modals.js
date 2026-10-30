@@ -305,15 +305,28 @@ export function openSettings(ui) {
   const slider = (key, label, min = 0, max = 1, step = 0.05) => h('label.slider', label,
     h('input', { type: 'range', min, max, step, value: st[key], oninput: e => { st[key] = +e.target.value; app.applySettings(); } }));
   const toggle = (key, label) => h('label.toggle', h('input', { type: 'checkbox', checked: st[key] ? true : null, onchange: e => { st[key] = e.target.checked; app.applySettings(); } }), label);
+  // Grafikstufe (setzt Bloom/Schatten passend) und FPS-Limit
+  const seg = (title, opts, key, onPick) => h('div.setrow', h('span', title), h('div.seg', ...opts.map(([v, l]) => h('button', { class: st[key] === v ? 'sel' : '', onclick: e => { onPick(v); for (const b of e.target.parentNode.children) b.classList.toggle('sel', b === e.target); sfx.click(); } }, l))));
+  const graphics = h('div',
+    seg('Grafik', [['low', 'Niedrig'], ['medium', 'Mittel'], ['high', 'Hoch']], 'quality', v => {
+      st.quality = v;
+      st.bloom = v !== 'low'; st.shadows = v !== 'low';
+      app.applySettings();
+      ui.toast('Grafik geändert – Lichter und Schatten passen sich beim nächsten Raumwechsel ganz an.', 'info', 2500);
+    }),
+    seg('FPS-Limit', [[30, '30'], [60, '60'], [0, 'Max']], 'fpsLimit', v => { st.fpsLimit = v; app.applySettings(); }),
+  );
   ui.openModal(h('div.settings',
     h('h2', '⚙️ EINSTELLUNGEN'),
     slider('master', 'Gesamtlautstärke'), slider('music', 'Musik'), slider('sfx', 'Effekte'),
-    slider('sensitivity', 'Mausempfindlichkeit', 0.3, 2.5, 0.1),
+    app.touch?.active ? slider('touchSensitivity', 'Kamera-Empfindlichkeit (Touch)', 0.4, 2.2, 0.1) : slider('sensitivity', 'Mausempfindlichkeit', 0.3, 2.5, 0.1),
+    graphics,
     toggle('bloom', 'Neon-Glow (Bloom)'), toggle('shadows', 'Schatten'),
     h('div.actions',
       app.state ? h('button.danger', { onclick: () => { ui.closeModal(); app.disconnect(); ui.showMenu(); } }, app.mode === 'solo' ? 'Zum Hauptmenü' : 'Gruppe verlassen') : null,
       h('button', { onclick: async () => { if (await ui.confirm('Wirklich ALLE Fortschritte, Dildos und Items löschen?')) { Save.resetAll(); location.reload(); } } }, 'Spielstand zurücksetzen'),
     ),
+    app.touch?.active ? h('div.subtle.small', 'Touch: Joystick links = laufen · rechts wischen = Kamera · JUMP = springen · Buttons rechts = Aktion (SPIELEN, AUFZUG, SPIN …) · Tippen auf Tische/Automaten = setzen/drücken · lange drücken = Chip wegnehmen · 🎥 = Kugelkamera') : null,
     h('div.subtle.small', 'Steuerung: WASD laufen · Maus schauen · Shift rennen · E interagieren · ESC/Q Tisch verlassen · 1-5 Emotes · TAB Gruppe · Mausrad Kamera-Zoom (Shishabar)'),
   ), 'small');
 }

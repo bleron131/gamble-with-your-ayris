@@ -75,12 +75,18 @@ export class World {
 
 // Einfaches Sprite-Partikelsystem (Shisha-Rauch, Konfetti, Explosionen)
 export class Particles {
+  static density = 1;
   constructor(scene) {
     this.scene = scene;
     this.list = [];
     this.smokeMat = new THREE.SpriteMaterial({ map: smokeTexture(), transparent: true, depthWrite: false, opacity: 0.5 });
   }
-  emit({ pos, vel = [0, 0.3, 0], life = 3, size = 0.3, grow = 0.4, color = '#ffffff', opacity = 0.45, gravity = 0, type = 'smoke', spin = 0, additive = false }) {
+  emit(opts) {
+    // Weniger Partikel auf niedrigen Grafikstufen (Konfetti/Rauch bleiben sichtbar, nur dünner)
+    if (Particles.density < 1 && Math.random() > Particles.density) return;
+    this.spawn(opts);
+  }
+  spawn({ pos, vel = [0, 0.3, 0], life = 3, size = 0.3, grow = 0.4, color = '#ffffff', opacity = 0.45, gravity = 0, type = 'smoke', spin = 0, additive = false }) {
     const mat = type === 'confetti'
       ? new THREE.SpriteMaterial({ map: confettiTexture(), color, transparent: true, depthWrite: false })
       : new THREE.SpriteMaterial({ map: smokeTexture(), color, transparent: true, depthWrite: false, opacity, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });

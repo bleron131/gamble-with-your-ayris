@@ -107,16 +107,18 @@ export class CasinoWorld extends World {
     const key = new THREE.DirectionalLight(theme.light, 0.8);
     key.position.set(5, 16, 8);
     key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
+    const q = this.app.engine.q;
+    key.shadow.mapSize.set(q.shadowMap, q.shadowMap);
     const ext = Math.max(W, D) / 2 + 2;
     Object.assign(key.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 40 });
     key.shadow.bias = -0.0005;
     s.add(key);
     this.keyLight = key;
-    // Höchstens 3×3 Punktlichter (Performance)
-    const nx = 3, nz = 3;
+    // Höchstens 3×3 Punktlichter (Performance); auf niedrigeren Stufen weniger, dafür heller
+    const [nx, nz] = q.lights >= 9 ? [3, 3] : q.lights >= 6 ? [3, 2] : [2, 2];
+    const boost = 9 / (nx * nz);
     for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
-      const l = new THREE.PointLight(theme.light, 9 * theme.lights, Math.max(W, D) / 2.2, 1.4);
+      const l = new THREE.PointLight(theme.light, 9 * theme.lights * boost, Math.max(W, D) / (nx === 3 ? 2.2 : 1.7), 1.4);
       l.position.set(-W / 2 + (i + 0.5) * W / nx, H - 0.6, -D / 2 + (j + 0.5) * D / nz);
       s.add(l);
       this.lightsList.push(l);
@@ -286,6 +288,7 @@ export class CasinoWorld extends World {
       const ip = v.interactPos();
       this.addInteract({
         pos: ip, radius: v.radius, table: v,
+        verb: () => (v.state?.occupant && v.state.occupant !== this.app.me ? 'ZUSCHAUEN' : 'SETZEN'),
         label: () => {
           const ts = v.state;
           if (v.walkUp) {
@@ -336,7 +339,7 @@ export class CasinoWorld extends World {
     this.elevator = el;
     this.updaters.push(dt => el.userData.update(dt));
     addElevatorColliders(this, 0, this.D / 2 - 2, -1);
-    this.addInteract({ pos: new THREE.Vector3(0, 0, this.D / 2 - 2.2), radius: 2.2, label: 'Aufzug – zurück zur Shishabar', action: () => this.app.requestReturn() });
+    this.addInteract({ pos: new THREE.Vector3(0, 0, this.D / 2 - 2.2), radius: 2.2, verb: 'AUFZUG', label: 'Aufzug – zurück zur Shishabar', action: () => this.app.requestReturn() });
   }
 
   buildInfoBoard() {

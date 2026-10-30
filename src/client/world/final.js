@@ -50,7 +50,7 @@ export class FinalWorld extends World {
     const moon = new THREE.DirectionalLight('#9fb4ff', 0.5);
     moon.position.set(-10, 15, -10);
     moon.castShadow = true;
-    moon.shadow.mapSize.set(2048, 2048);
+    moon.shadow.mapSize.set(this.app.engine.q.shadowMap, this.app.engine.q.shadowMap);
     Object.assign(moon.shadow.camera, { left: -25, right: 25, top: 25, bottom: -25, near: 1, far: 50 });
     s.add(moon);
     for (let z = Z0 - 5; z > Z1; z -= 8) {
@@ -141,7 +141,7 @@ export class FinalWorld extends World {
       this.addCircle(x, cz + 1.2, 0.5);
       this.buttons[key] = btn;
       this.addInteract({
-        pos: new THREE.Vector3(x, 0, cz + 2.0), radius: 1.5,
+        pos: new THREE.Vector3(x, 0, cz + 2.0), radius: 1.5, verb: key === 'take' ? 'TAKE' : 'DOUBLE',
         label: key === 'take' ? 'TAKE THE WINNINGS drücken' : 'DOUBLE OR LOSS drücken',
         action: () => { this.pressButton(key); this.app.requestFinal(key); },
         enabled: () => !this.flipping,

@@ -11,6 +11,10 @@ export class Input {
     this.enabled = true;
     this.clickHandlers = [];
     this.wheel = 0;
+    // Touch (Mobile): analoger Joystick (x = rechts, y = vorwärts) und Kamera-Wischen in Pixeln
+    this.axis = { x: 0, y: 0 };
+    this.touchDX = 0;
+    this.touchDY = 0;
     window.addEventListener('keydown', e => {
       if (isTyping(e)) return;
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
@@ -33,6 +37,7 @@ export class Input {
     canvas.addEventListener('wheel', e => { this.wheel += Math.sign(e.deltaY); }, { passive: true });
   }
   requestLock() {
+    if (this.noLock) return; // Touch-Geräte: kein Pointer-Lock
     if (!this.locked && this.canvas.requestPointerLock) {
       try { const p = this.canvas.requestPointerLock(); if (p?.catch) p.catch(() => {}); } catch { /* */ }
     }
@@ -41,7 +46,8 @@ export class Input {
   down(code) { return this.enabled && this.keys.has(code); }
   hit(code) { return this.enabled && this.pressed.has(code); }
   onClick(h) { this.clickHandlers.push(h); }
-  endFrame() { this.pressed.clear(); this.mouseDX = 0; this.mouseDY = 0; this.wheel = 0; }
+  press(code) { if (this.enabled) this.pressed.add(code); }
+  endFrame() { this.pressed.clear(); this.mouseDX = 0; this.mouseDY = 0; this.wheel = 0; this.touchDX = 0; this.touchDY = 0; }
 }
 
 function isTyping(e) {

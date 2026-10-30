@@ -2,6 +2,7 @@
 import { START_CAPITAL, ACHIEVEMENTS } from '../shared/config.js';
 import { defaultCampaign } from '../shared/room.js';
 import { defaultAppearance } from './character.js';
+import { isTouchDevice } from './touch.js';
 
 const KEY = 'ayris-save-v1';
 
@@ -29,7 +30,7 @@ function defaults() {
     stats: defaultStats(),
     achievements: {},
     history: [], // abgeschlossene Runs (Take / Double)
-    settings: { master: 0.8, music: 0.55, sfx: 0.9, sensitivity: 1, bloom: true, shadows: true },
+    settings: { master: 0.8, music: 0.55, sfx: 0.9, sensitivity: 1, touchSensitivity: 1, bloom: true, shadows: true, quality: null, fpsLimit: null },
   };
 }
 
@@ -42,11 +43,25 @@ export function load() {
     if (raw) {
       const s = JSON.parse(raw);
       data = { ...d, ...s, appearance: { ...d.appearance, ...s.appearance }, stats: { ...d.stats, ...s.stats }, settings: { ...d.settings, ...s.settings }, campaign: { ...d.campaign, ...s.campaign } };
+      autoGraphics(data.settings);
       return data;
     }
   } catch { /* ohne Speicher weiterspielen */ }
   data = d;
+  autoGraphics(data.settings);
   return data;
+}
+
+// Grafik beim ersten Start automatisch wählen: PC = Hoch, Handy/Tablet = Mittel (schwache Geräte: Niedrig, 30 FPS)
+function autoGraphics(st) {
+  if (st.quality && st.fpsLimit !== null && st.fpsLimit !== undefined) return;
+  const touch = isTouchDevice();
+  const weak = (navigator.deviceMemory && navigator.deviceMemory <= 3) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
+  if (!st.quality) {
+    st.quality = touch ? (weak ? 'low' : 'medium') : 'high';
+    if (st.quality === 'low') { st.bloom = false; st.shadows = false; }
+  }
+  if (st.fpsLimit === null || st.fpsLimit === undefined) st.fpsLimit = touch ? (weak ? 30 : 60) : 0;
 }
 
 export function get() { return data || load(); }

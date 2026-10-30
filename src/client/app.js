@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Engine } from './engine.js';
 import { Input } from './input.js';
 import { LocalPlayer } from './player.js';
+import { TouchControls } from './touch.js';
 import { Character, FPHands, makkaBottle } from './character.js';
 import { LobbyWorld } from './world/lobby.js';
 import { CasinoWorld } from './world/casino.js';
@@ -38,6 +39,7 @@ export class App {
     this.highRiskTables = new Set();
     this.engine.onTick((dt, t) => this.tick(dt, t));
     this.input.onClick(e => this.onCanvasClick(e));
+    this.touch = new TouchControls(this);
     window.addEventListener('keydown', e => this.onKey(e));
     window.app = this;
   }
@@ -159,6 +161,47 @@ export class App {
     return hits[0]?.object.userData.slotButton || null;
   }
   aimNdc() { return this.input.locked ? new THREE.Vector2(0, 0) : new THREE.Vector2(...this.mouseNdc()); }
+
+  // ───────────────────────── Mobile ─────────────────────────
+  onTouchEnabled() {
+    this.input.noLock = true;
+    this.input.exitLock();
+    this.engine.applyQuality?.(this.save.settings);
+  }
+
+  // Tippen auf den Bildschirm: wie ein Mausklick an dieser Stelle (Tischfelder, Automatenknöpfe); langes Drücken = Rechtsklick
+  onTap(x, y, kind) {
+    if (!this.state || this.ui.modalOpen || this.mafiaLock || this.touch.portrait) return;
+    const r = this.engine.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+    if (this.player.seated) {
+      this.raycaster.setFromCamera(ndc, this.engine.camera);
+      this.player.seated.hover?.(this.raycaster);
+      this.player.seated.pick(this.raycaster, kind === 'long' ? 2 : 0);
+      return;
+    }
+    if (kind === 'tap' && this.world.kind === 'floor') {
+      const b = this.pickSlotButton(ndc);
+      if (b) b.action();
+    }
+  }
+
+  // Kontextabhängige Touch-Buttons (nur wenn wirklich eine Interaktion möglich ist)
+  contextActions() {
+    const out = [];
+    const it = this.world?.nearestInteract(this.player.pos);
+    if (it?.table?.walkUp) {
+      const v = it.table, busy = !!v.state?.busy, id = v.def.id;
+      out.push({ label: 'BET −', cls: 'bet', run: () => this.slotBet(id, -1), disabled: busy });
+      out.push({ label: 'BET +', cls: 'bet', run: () => this.slotBet(id, 1), disabled: busy });
+      out.push({ label: busy ? 'DREHT…' : `SPIN ${fmtMoney(v.state?.state.bet || 0)}`, cls: 'spin', run: () => this.slotSpin(id), disabled: busy });
+    } else if (it) {
+      const verb = typeof it.verb === 'function' ? it.verb() : it.verb;
+      out.push({ label: verb || 'BENUTZEN', cls: 'main', run: () => it.action() });
+    }
+    if (this.player.hasBottle && !(this.player.drinkT > 0)) out.push({ label: '🍾 TRINKEN', cls: 'drink', run: () => this.drinkMakka() });
+    return out;
+  }
 
   onMessage(m) {
     switch (m.t) {
@@ -691,14 +734,17 @@ export class App {
     if (e.code === 'KeyE') { const it = this.world.nearestInteract(this.player.pos); if (it) { if (!it.table?.walkUp) sfx.click(); it.action(); } }
     if (e.code === 'KeyR' || e.code === 'KeyF') { const v = this.slotNear(); if (v) this.slotBet(v.def.id, e.code === 'KeyR' ? 1 : -1); }
     const emotes = { Digit1: 'cheer', Digit2: 'dance', Digit3: 'sad', Digit4: 'facepalm', Digit5: 'point' };
-    if (emotes[e.code]) {
-      this.player.playEmote(emotes[e.code]);
-      this.send({ t: 'emote', e: emotes[e.code] });
-      if (this.world.mode === 'first' && emotes[e.code] === 'cheer') this.hands.play('cheer');
-    }
+    if (emotes[e.code]) this.emote(emotes[e.code]);
     if (e.code === 'Tab') { e.preventDefault(); this.ui.toggleScoreboard(true); }
     if (e.code === 'KeyI' && this.world.kind === 'floor') this.ui.focusItems();
     if (e.code === 'KeyT') this.drinkMakka();
+  }
+
+  emote(name) {
+    if (!this.state || this.player.seated) return;
+    this.player.playEmote(name);
+    this.send({ t: 'emote', e: name });
+    if (this.world.mode === 'first' && name === 'cheer') this.hands.play('cheer');
   }
 
   onCanvasClick(e) {
@@ -724,8 +770,8 @@ export class App {
   // ───────────────────────── Hauptschleife ─────────────────────────
   tick(dt, t) {
     if (!this.world) return;
-    this.input.wantLock = this.world.mode === 'first' && !this.player.seated;
-    this.input.enabled = !this.ui.modalOpen;
+    this.input.wantLock = this.world.mode === 'first' && !this.player.seated && !this.touch.active;
+    this.input.enabled = !this.ui.modalOpen && !this.touch.portrait;
     this.world.update(dt, t);
     this.mafiaCam?.();
     this.updateBallCam(dt);
@@ -746,18 +792,22 @@ export class App {
     // Interaktionshinweis
     this.hoverButton = null;
     const rouletteSpin = this.state && !this.cinematic && this.spinningRoulette();
-    if (this.ballCam) this.ui.setHint('C – Kamera verlassen');
+    const touch = this.touch.active;
+    const camKey = touch ? '🎥' : 'C';
+    if (this.ballCam) this.ui.setHint(`${camKey} – Kamera verlassen`);
     else if (this.state && !this.player.seated && !this.cinematic) {
       const it = this.world.nearestInteract(this.player.pos);
-      if (this.world.kind === 'floor') this.hoverButton = this.pickSlotButton(this.aimNdc());
+      if (this.world.kind === 'floor' && !touch) this.hoverButton = this.pickSlotButton(this.aimNdc());
+      const label = it && (typeof it.label === 'function' ? it.label() : it.label);
       if (this.hoverButton) this.ui.setHint(`Klick: ${this.hoverButton.label()}`);
-      else if (rouletteSpin && (!it || this.distanceTo(rouletteSpin.group.position) < 6)) this.ui.setHint('C – Kugelkamera');
-      else this.ui.setHint(it ? `[E] ${typeof it.label === 'function' ? it.label() : it.label}` : this.world.mode === 'first' && !this.input.locked ? 'Klicken, um die Maus zu fangen · WASD laufen · LEERTASTE springen' : '');
+      else if (rouletteSpin && (!it || this.distanceTo(rouletteSpin.group.position) < 6)) this.ui.setHint(`${camKey} – Kugelkamera`);
+      else if (touch) this.ui.setHint(it?.table?.walkUp ? '' : label || '');
+      else this.ui.setHint(it ? `[E] ${label}` : this.world.mode === 'first' && !this.input.locked ? 'Klicken, um die Maus zu fangen · WASD laufen · LEERTASTE springen' : '');
     } else if (this.player.seated) {
-      this.raycaster.setFromCamera(new THREE.Vector2(...this.mouseNdc()), this.engine.camera);
       const v = this.player.seated;
-      const lbl = v.hover(this.raycaster);
-      this.ui.setHint(lbl ? (v.hoverLabel ? v.hoverLabel(lbl) : `Klick: Chip auf ${lbl}`) : rouletteSpin === v ? 'C – Kugelkamera' : '');
+      let lbl = null;
+      if (!touch) { this.raycaster.setFromCamera(new THREE.Vector2(...this.mouseNdc()), this.engine.camera); lbl = v.hover(this.raycaster); }
+      this.ui.setHint(lbl ? (v.hoverLabel ? v.hoverLabel(lbl) : `Klick: Chip auf ${lbl}`) : rouletteSpin === v ? `${camKey} – Kugelkamera` : '');
     } else this.ui.setHint('');
     // Position senden (15 Hz)
     this.moveTimer -= dt;
@@ -771,6 +821,7 @@ export class App {
     const filter = dz > 0.01 ? `blur(${(dz * 0.9).toFixed(2)}px) saturate(${(1 + dz * 0.35).toFixed(2)}) hue-rotate(${(Math.sin(t * 0.6) * 14 * dz).toFixed(1)}deg)` : '';
     if (this.engine.renderer.domElement.style.filter !== filter) this.engine.renderer.domElement.style.filter = filter;
     updateListener(this.engine.camera);
+    this.touch.update();
     this.ui.tick(dt);
     this.input.endFrame();
   }
@@ -791,7 +842,7 @@ export class App {
   applySettings() {
     const s = this.save.settings;
     setVolumes(s);
-    this.engine.setQuality({ bloom: s.bloom, shadows: s.shadows });
+    this.engine.applyQuality(s);
     Save.save();
   }
 }

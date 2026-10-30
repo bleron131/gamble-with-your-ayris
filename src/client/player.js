@@ -140,12 +140,32 @@ export class LocalPlayer {
         this.camPitch = THREE.MathUtils.clamp(this.camPitch + input.mouseDY * sens, -0.1, 1.1);
       }
     }
+    // Touch-Kamera (rechte Bildschirmhälfte): gleiche Wirkung wie die Maus, Empfindlichkeit relativ zur Bildschirmbreite
+    if (input.enabled && (input.touchDX || input.touchDY)) {
+      this.lastMouse = this.time;
+      const ts = 3.4 / Math.max(480, window.innerWidth) * (settings.touchSensitivity || 1);
+      if (first) {
+        this.yaw -= input.touchDX * ts;
+        this.pitch = THREE.MathUtils.clamp(this.pitch - input.touchDY * ts * 0.8, -1.3, 1.2);
+      } else {
+        this.camYaw -= input.touchDX * ts;
+        this.camPitch = THREE.MathUtils.clamp(this.camPitch + input.touchDY * ts * 0.8, -0.1, 1.1);
+      }
+    }
     if (!first) this.camDist = THREE.MathUtils.clamp(this.camDist + input.wheel * 0.4, 1.8, 7);
     // Bewegung
-    const f = (input.down('KeyW') || input.down('ArrowUp') ? 1 : 0) - (input.down('KeyS') || input.down('ArrowDown') ? 1 : 0);
-    const r = (input.down('KeyD') || input.down('ArrowRight') ? 1 : 0) - (input.down('KeyA') || input.down('ArrowLeft') ? 1 : 0);
+    let f = (input.down('KeyW') || input.down('ArrowUp') ? 1 : 0) - (input.down('KeyS') || input.down('ArrowDown') ? 1 : 0);
+    let r = (input.down('KeyD') || input.down('ArrowRight') ? 1 : 0) - (input.down('KeyA') || input.down('ArrowLeft') ? 1 : 0);
+    let analog = 1;
+    let keys = f + ',' + r;
+    // Virtueller Joystick: analog, kleine Auslenkung = langsam; Richtung für die Kamera-Basis in 8 Sektoren gerastert
+    const ax = input.enabled ? input.axis : null;
+    if (ax && (ax.x || ax.y) && !f && !r) {
+      f = ax.y; r = ax.x;
+      analog = Math.min(1, Math.hypot(ax.x, ax.y));
+      keys = 'j' + Math.round(Math.atan2(ax.x, ax.y) / (Math.PI / 4));
+    }
     const manual = this.time - this.lastMouse < 0.8;
-    const keys = f + ',' + r;
     // Bewegungsbasis bleibt fest, solange dieselben Tasten gedrückt sind – so kann die Kamera
     // der Laufrichtung folgen, ohne dass sich die Richtung dabei mitdreht.
     if (keys !== this.lastKeys || manual) this.basisYaw = first ? this.yaw : this.camYaw;
@@ -155,7 +175,7 @@ export class LocalPlayer {
       const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
       const dir = fwd.multiplyScalar(f).addScaledVector(right, r).normalize();
       if (dz > 0) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), dz * (0.35 * Math.sin(this.time * 1.3) + 0.15 * Math.sin(this.time * 3.7)));
-      const speed = (input.down('ShiftLeft') || input.down('ShiftRight') ? 5.2 : 3.2) * (1 - dz * 0.15);
+      const speed = (input.down('ShiftLeft') || input.down('ShiftRight') ? 5.2 : 3.2) * (1 - dz * 0.15) * Math.max(0.2, analog);
       this.pos.addScaledVector(dir, speed * dt);
       this.moving = true;
       const target = Math.atan2(dir.x, dir.z);

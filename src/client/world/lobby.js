@@ -85,7 +85,7 @@ export class LobbyWorld extends World {
     const key = new THREE.DirectionalLight('#ffd9b0', 0.9);
     key.position.set(4, 12, 6);
     key.castShadow = true;
-    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.mapSize.set(this.app.engine.q.shadowMap, this.app.engine.q.shadowMap);
     Object.assign(key.shadow.camera, { left: -15, right: 15, top: 12, bottom: -12, near: 1, far: 30 });
     key.shadow.bias = -0.0005;
     s.add(key);
@@ -122,7 +122,7 @@ export class LobbyWorld extends World {
     ];
     let li = 0;
     this.addInteract({
-      pos: new THREE.Vector3(-W / 2 + 3.6, 0, -2), radius: 1.8, label: 'Bar: MAKKA kaufen (1 🍆) · mit Kemal reden',
+      pos: new THREE.Vector3(-W / 2 + 3.6, 0, -2), radius: 1.8, verb: 'BAR / MAKKA', label: 'Bar: MAKKA kaufen (1 🍆) · mit Kemal reden',
       action: () => {
         tender.setAnim('point');
         setTimeout(() => tender.setAnim('idle'), 1500);
@@ -214,13 +214,16 @@ export class LobbyWorld extends World {
     keeper.setName('Ayri (Shop)', '#ffd97a');
     s.add(keeper.root);
     this.updaters.push(dt => keeper.update(dt));
-    this.addInteract({ pos: new THREE.Vector3(x - 1, 0, z), radius: 2, label: 'AYRI SHOP öffnen', action: () => this.app.ui.openShop() });
+    this.addInteract({ pos: new THREE.Vector3(x - 1, 0, z), radius: 2, verb: 'KAUFEN', label: 'AYRI SHOP öffnen', action: () => this.app.ui.openShop() });
   }
 
   buildWardrobe() {
     const s = this.scene;
     const x = -8.5, z = D / 2 - 0.15;
-    const mirror = new Reflector(new THREE.PlaneGeometry(2.2, 2.6), { textureWidth: 512, textureHeight: 640, color: '#b8c0cc' });
+    // Echter Spiegel kostet einen zweiten Render-Durchgang – auf "Niedrig" eine glänzende Spiegelfläche
+    const mirror = this.app.engine.quality === 'low'
+      ? new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.6), new THREE.MeshStandardMaterial({ color: '#9aa4b4', metalness: 1, roughness: 0.08 }))
+      : new Reflector(new THREE.PlaneGeometry(2.2, 2.6), { textureWidth: this.app.engine.quality === 'medium' ? 256 : 512, textureHeight: this.app.engine.quality === 'medium' ? 320 : 640, color: '#b8c0cc' });
     mirror.position.set(x, 1.6, z);
     mirror.rotation.y = Math.PI;
     s.add(mirror);
@@ -237,7 +240,7 @@ export class LobbyWorld extends World {
     cols.forEach((c, i) => { const shirt = mesh(new THREE.BoxGeometry(0.05, 0.6, 0.45), M.std(c, 0.9), -0.5 + i * 0.25, 1.35, 0); rack.add(shirt); });
     s.add(rack);
     this.addBox(x + 2.3, z - 0.6, 1.5, 0.5);
-    this.addInteract({ pos: new THREE.Vector3(x, 0, z - 1.4), radius: 2, label: 'Charakter anpassen (Spiegel)', action: () => this.app.ui.openEditor() });
+    this.addInteract({ pos: new THREE.Vector3(x, 0, z - 1.4), radius: 2, verb: 'ANPASSEN', label: 'Charakter anpassen (Spiegel)', action: () => this.app.ui.openEditor() });
   }
 
   buildHall() {
@@ -253,7 +256,7 @@ export class LobbyWorld extends World {
     board.rotation.y = Math.PI;
     s.add(board);
     s.add(mesh(new THREE.BoxGeometry(3.4, 2.2, 0.06), M.gold(), x, 2.2, z));
-    this.addInteract({ pos: new THREE.Vector3(x, 0, z - 1.4), radius: 2, label: 'Hall of Fame & Statistiken', action: () => this.app.ui.openStats() });
+    this.addInteract({ pos: new THREE.Vector3(x, 0, z - 1.4), radius: 2, verb: 'ANSEHEN', label: 'Hall of Fame & Statistiken', action: () => this.app.ui.openStats() });
     this.refreshHall();
   }
 
@@ -291,7 +294,7 @@ export class LobbyWorld extends World {
     el.userData.snap(true);
     this.updaters.push(dt => el.userData.update(dt));
     addElevatorColliders(this, 0, -D / 2 + 2);
-    this.addInteract({ pos: new THREE.Vector3(0, 0, -D / 2 + 2.2), radius: 2.2, label: 'Aufzug – Stockwerk wählen', action: () => this.app.ui.openElevator() });
+    this.addInteract({ pos: new THREE.Vector3(0, 0, -D / 2 + 2.2), radius: 2.2, verb: 'AUFZUG', label: 'Aufzug – Stockwerk wählen', action: () => this.app.ui.openElevator() });
     const floorSign = labelPlane(['STOCKWERKE', '1 – 15'], 1.1, 0.55, { size: 60 });
     floorSign.position.set(2.6, 1.9, -D / 2 + 0.06);
     s.add(floorSign);

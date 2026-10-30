@@ -27,6 +27,9 @@ export class UI {
     this.groupEl = h('div.group');
     this.hud.append(h('div.topright', this.dildoEl, this.groupEl,
       h('div.btnrow',
+        // Nur auf Touch-Geräten sichtbar: Ersatz für TAB (Gruppe) und die Emote-Tasten 1–5
+        h('button.icon.touchonly', { title: 'Gruppe', onclick: () => this.toggleScoreboard(this.scoreEl.classList.contains('hidden')) }, '👥'),
+        h('button.icon.touchonly', { title: 'Emotes', onclick: () => this.toggleEmotes() }, '😀'),
         h('button.icon', { title: 'Statistiken', onclick: () => this.openStats() }, '📊'),
         h('button.icon', { title: 'Einstellungen', onclick: () => this.openSettings() }, '⚙️'),
       )));
@@ -46,6 +49,9 @@ export class UI {
     this.hud.append(this.tableWrap);
     this.emoteHelp = h('div.emotehelp', '1 Jubeln · 2 Tanzen · 3 Traurig · 4 Facepalm · 5 Zeigen · TAB Gruppe');
     this.hud.append(this.emoteHelp);
+    this.emoteBar = h('div.emotebar.hidden', ...[['cheer', '🙌'], ['dance', '💃'], ['sad', '😢'], ['facepalm', '🤦'], ['point', '👉']].map(([e, ico]) =>
+      h('button.icon', { onclick: () => { this.app.emote(e); this.emoteBar.classList.add('hidden'); } }, ico)));
+    this.hud.append(this.emoteBar);
     this.scoreEl = h('div.scoreboard.hidden');
     this.hud.append(this.scoreEl);
     r.append(this.hud);
@@ -78,6 +84,11 @@ export class UI {
       sfx.click();
       this.menuErr.textContent = '';
       this.menu.classList.add('busy');
+      // Handy/Tablet: Vollbild und Querformat sperren, wo der Browser es erlaubt (Android); iOS ignoriert das still
+      if (this.app.touch?.active) {
+        try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); } catch { /* nicht unterstützt */ }
+        try { await screen.orientation?.lock?.('landscape'); } catch { /* nicht unterstützt */ }
+      }
       try {
         if (mode !== 'solo') this.menuErr.textContent = 'Verbinde mit dem Multiplayer-Server…';
         await this.app.connect(mode, code.value.trim().toUpperCase(), msg => { this.menuErr.textContent = msg; });
@@ -107,7 +118,7 @@ export class UI {
           h('button.link', { onclick: () => { this.app.input.exitLock(); this.openEditor(true); } }, '🎨 Charakter'),
         ),
         h('div.disclaimer', 'Nur virtuelle Spielwährung. Kein echtes Geld, keine Echtgeld-Käufe.'),
-        h('div.controls', 'WASD laufen · Maus schauen · E interagieren · ESC Tisch verlassen · Shift rennen'),
+        h('div.controls', this.app.touch?.active ? 'Joystick links laufen · rechts wischen = Kamera · JUMP springen · Aktions-Buttons rechts' : 'WASD laufen · Maus schauen · E interagieren · ESC Tisch verlassen · Shift rennen'),
       ),
     );
   }
@@ -369,6 +380,8 @@ export class UI {
     setTimeout(() => el.classList.add('out'), 8500);
     setTimeout(() => el.remove(), 9300);
   }
+
+  toggleEmotes() { this.emoteBar.classList.toggle('hidden'); sfx.click(); }
 
   toggleScoreboard(show) {
     if (!this.app.state) return;
