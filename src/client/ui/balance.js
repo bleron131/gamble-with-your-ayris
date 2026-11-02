@@ -71,7 +71,9 @@ export function openBalance(ui, b) {
   const actions = h('div.actions.bactions',
     canNext
       ? h('button.primary.big', { onclick: () => { sfx.click(); ui.closeModal(); app.send({ t: 'vote.start', type: 'next' }); } }, 'WEITER ZUM NÄCHSTEN STOCKWERK')
-      : h('button.primary.big', { onclick: () => { sfx.click(); ui.closeModal(); app.send({ t: 'vote.start', type: 'return' }); } }, 'WEITER ZUR SHISHABAR'),
+      : app.finale?.runId === app.state?.run?.id
+        ? h('button.primary.big', { onclick: () => { sfx.click(); ui.closeModal(); openRunBalance(ui, app.finale); } }, 'WEITER ZUR RUN-BILANZ')
+        : h('button.primary.big', { onclick: () => { sfx.click(); ui.closeModal(); app.send({ t: 'vote.start', type: 'return' }); } }, 'WEITER ZUR SHISHABAR'),
     canNext ? h('button.big', { onclick: () => { sfx.click(); ui.closeModal(); app.send({ t: 'vote.start', type: 'return' }); } }, 'Zur Shishabar') : null,
     h('button.big', { onclick: () => { sfx.click(); ui.closeModal(); ui.toast('Weitergamblen – das Stockwerk bleibt abgeschlossen!', 'info'); } }, 'Hier weiterspielen'),
   );
@@ -184,4 +186,40 @@ function drawChart(wrap, tip, players, L) {
   const legend = players.length > 1 ? h('div.blegend', ...players.map(p => h('span.bleg', h('span.bsw', { style: { background: p.color } }), p.name))) : h('div.blegend', h('span.bleg', 'Dein Geldverlauf auf diesem Stockwerk'));
   wrap.prepend(legend);
   wrap.append(root);
+}
+
+// ───────────────────────── RUN-BILANZ (nach Stock 15) ─────────────────────────
+const fmtAward = a => (a.fmt === 'money' ? (a.value < 0 ? '−' + fmtMoney(-a.value) : fmtMoney(a.value)) : a.fmt === 'dildos' ? `${a.value} 🍆` : `${a.value} in Folge`);
+export function openRunBalance(ui, f) {
+  const app = ui.app, st = f.stats;
+  const save = app.save;
+  const mins = Math.round(f.durationMs / 60000);
+  const time = `${Math.floor(mins / 60)} h ${mins % 60} min`;
+  const row = (k, v, cls = '') => h('div.brow', h('span', k), h('b', { class: cls }, v));
+  const myDildos = st.players?.[app.mePlayer?.name]?.dildos ?? 0;
+  const stats = h('div.bcards',
+    h('div.bcard', h('div.bname', '💰 Geld'), row('Startkapital', fmtMoney(st.startPot)), row('Finaler Team-Pot', fmtMoney(f.pot)), row('Gewonnen', `+${fmtMoney(st.won)}`, 'pos'), row('Verloren', `−${fmtMoney(st.lost)}`, 'neg'), row('Gesamteinsatz', fmtMoney(st.staked))),
+    h('div.bcard', h('div.bname', '🎰 Runden'), row('Casino-Runden', String(st.rounds)), row('Gewonnen', String(st.wins), 'pos'), row('Verloren', String(st.losses), 'neg'), row('Rush Events', String(st.rushes)), row('Benötigte Zeit', time)),
+    h('div.bcard', h('div.bname', '🏅 Fortschritt'), row('Verdiente 🍆 (du)', `${myDildos} 🍆`), row('Challenges (Team)', String(st.challenges)), row('Gefundene Secrets (du)', `${(save.secrets || []).length}`), row('Stockwerke geschafft', `${st.floors}/15`)),
+  );
+  const awards = h('div.bsums', ...(f.awards || []).map(a => h('div.bsum.award', h('div.bsi', a.icon), h('div', h('div.bsl', a.title), h('div.bsv', a.who), h('div.bss', `${a.desc}: ${fmtAward(a)}`)))));
+  ui.openModal(h('div.balance',
+    h('div.bhead', h('h2.btitle', 'RUN BILANZ'), h('div.btarget', `ALLE 15 STOCKWERKE · ${fmtMoney(f.pot)}`), h('div.breward.new', '🏆 YOU BEAT THE CASINO')),
+    stats,
+    h('h3', 'TEAM-AWARDS'),
+    awards,
+    h('div.actions.bactions',
+      h('button.primary.big', { onclick: () => { sfx.click(); ui.closeModal(); app.send({ t: 'vote.start', type: 'final' }); } }, 'ZUM CASINO PENTHOUSE'),
+      h('button.big', { onclick: () => { sfx.click(); ui.closeModal(); } }, 'Hier weiterspielen'),
+    ),
+    h('div.subtle.small', 'Im Penthouse wartet die finale Entscheidung (TAKE oder DOUBLE). Danach kannst du freiwillig einen Prestige-Run starten.'),
+  ), 'wide balancemodal');
+}
+
+// Phase 1 des Finales: grosse Erfolgsanimation
+export function finaleSplash(ui) {
+  const el = h('div.finalesplash', h('div.f1', 'FLOOR 15 COMPLETE'), h('div.f2', 'YOU BEAT THE CASINO'));
+  ui.overlay.append(el);
+  setTimeout(() => el.classList.add('out'), 4200);
+  setTimeout(() => el.remove(), 5000);
 }

@@ -10,6 +10,7 @@ import { CasinoWorld } from './world/casino.js';
 import { FinalWorld } from './world/final.js';
 import { WSTransport, LocalTransport } from './net.js';
 import { NpcController } from './npcs.js';
+import { updateTrophies } from './world/trophies.js';
 import { unlockedEmotes, EXTRA_EMOTES, wornLucky, freeCosmetics, hasSecret, checkRecord, fmtRecord, RECORDS } from './progress.js';
 import { LOBBY_SEATS } from '../shared/npcs.js';
 import { scaledLimits } from '../shared/dynamics.js';
@@ -347,9 +348,10 @@ export class App {
       finishedAt: s.campaign.finishedAt || c.finishedAt,
       runs: Math.max(s.campaign.runs || 0, c.runs || 0),
       prestige: Math.max(s.campaign.prestige || 0, c.prestige || 0),
+      prestigeReady: st.hostId === this.me ? !!c.prestigeReady : !!s.campaign.prestigeReady,
     };
     // Run-Fortschritt kommt immer exakt vom Server (kein Zusammenführen mit alten Runs); gespeichert wird er vom Gruppenersteller
-    if (st.hostId === this.me) s.run = { id: st.run.id, pot: st.pot, finalUnlocked: st.run.finalUnlocked, startedAt: st.run.startedAt, unlocked: c.unlocked, completed: [...c.completed] };
+    if (st.hostId === this.me) s.run = { id: st.run.id, pot: st.pot, finalUnlocked: st.run.finalUnlocked, startedAt: st.run.startedAt, unlocked: c.unlocked, completed: [...c.completed], stats: st.runStats };
     if (st.pot > s.stats.highestPot) s.stats.highestPot = st.pot;
     if (st.scene === 'floor') this.record('bestPot', st.pot);
     const meP = st.players.find(p => p.id === this.me);
@@ -510,6 +512,12 @@ export class App {
     this.send({ t: 'vote.start', type: 'return' });
   }
 
+  async requestPrestige() {
+    const lvl = (this.state?.campaign?.prestige || 0) + 1;
+    const ok = await this.ui.confirmDialog({ title: `PRESTIGE ${lvl} starten?`, text: 'Der Run beginnt neu mit höheren Zielen. 🍆, Kosmetik, Achievements, Rekorde und Trophäen bleiben erhalten.', ok: 'Prestige starten' });
+    if (ok) this.send({ t: 'vote.start', type: 'prestige' });
+  }
+
   requestTravel(floor) { this.send({ t: 'vote.start', type: floor === 'final' ? 'final' : 'travel', data: { floor } }); }
   async requestFinal(kind) {
     const pot = this.pot;
@@ -525,7 +533,7 @@ export class App {
     const mine = ev.pid === this.me;
     switch (ev.kind) {
       case 'scene': {
-        const label = ev.scene === 'floor' ? `STOCK ${ev.floor}` : ev.scene === 'final' ? '???' : 'SHISHABAR';
+        const label = ev.scene === 'floor' ? `STOCK ${ev.floor}` : ev.scene === 'final' ? 'PENTHOUSE' : 'SHISHABAR';
         if (ev.scene === 'lobby' && ev.reason === 'return') this.ui.feed(`Zurück in der Shishabar mit ${fmtMoney(ev.pot)}`);
         this.ui.elevatorTransition(label, () => this.loadWorld(ev.scene, ev.floor), ev.scene === 'floor' ? floorDef(ev.floor, this.prestige) : null);
         if (ev.scene === 'floor') this.visitFloor(ev.floor);
@@ -564,6 +572,14 @@ export class App {
         else { this.ui.toast('RUSH VORBEI', 'info', 2200); }
         break;
       case 'streak': this.onStreak(ev, mine); break;
+      case 'finale':
+        // Phase 1: Erfolgsanimation · Phase 2: Stockwerk-Bilanz (öffnet danach) · Phase 3: RUN-BILANZ über den Weiter-Knopf
+        this.finale = ev;
+        this.finaleUntil = performance.now() + 4600;
+        this.ui.finaleSplash();
+        sfx.jackpot?.(); playJackpotMusic(8);
+        for (let i = 0; i < 6; i++) setTimeout(() => this.world.particles?.confetti(this.player.pos.clone().setY(3), 120, 6), i * 500);
+        break;
       case 'balance': {
         const me = ev.ledger?.players?.[this.me];
         if (me) {
@@ -575,7 +591,8 @@ export class App {
         this.lastBalance = ev;
         this.input.exitLock();
         if (this.player.seated) this.ui.closeTablePanel();
-        setTimeout(() => { if (this.lastBalance === ev && this.state?.scene === 'floor') this.ui.openBalance(ev); }, 900);
+        // Beim Finale erst nach der Erfolgsanimation öffnen
+        setTimeout(() => { if (this.lastBalance === ev && this.state?.scene === 'floor') this.ui.openBalance(ev); }, ev.last ? 5200 : 900);
         break;
       }
       case 'prestige':
@@ -769,6 +786,8 @@ export class App {
 
   // Neu freigeschaltete Kosmetik/Emotes melden („NEUES ITEM“)
   checkUnlocks() {
+    // Neue Trophäen (für die Vitrine in der Shishabar)
+    for (const t of updateTrophies()) setTimeout(() => this.ui.popup('achievement', `NEUE TROPHÄE: ${t.name}`, `${t.desc} – steht jetzt in der Vitrine der Shishabar`, 4500), 1600);
     const s = this.save;
     const free = freeCosmetics();
     if (!s.seenUnlocks) { s.seenUnlocks = free; Save.save(); return; }

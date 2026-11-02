@@ -100,7 +100,7 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
 
 ## Spielablauf
 
-- **Shishabar-Lobby** (Third-Person): begehbar, mit Bar, Lounge, Shishas (mit räumlichem Blubbern – je näher, desto lauter), Spiegel/Charaktereditor,
+- **Shishabar-Lobby** (Third-Person): begehbar, mit Song „Alles auf Schwarz“ (Einstellungen: Shishabar / Überall / Aus), Bar, Lounge, Shishas (mit räumlichem Blubbern – je näher, desto lauter), Spiegel/Charaktereditor,
   AYRI SHOP, Hall of Fame und dem grossen Aufzug. Nach jedem Stockwerk – auch nach einem verlorenen –
   kehrt die Gruppe hierher zurück.
 - **Aufzug = Levelauswahl**: genau 15 Stockwerke; gesperrte sind sichtbar, freigeschaltete können jederzeit
@@ -212,8 +212,15 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   Kugel laufen synchron mit. E oder ESC beendet das Zuschauen.
 - **Jackpots**: Ein Slot-Jackpot ist für alle auf dem Stockwerk ein Ereignis – Lichter wechseln in den Farben des
   Stockwerks, Goldfontäne, Feuerwerk unter der Decke, kurze Jackpot-Musik, grosse Anzeige und jubelnde NPCs.
-- **Prestige**: Nach dem Finale (Take oder Double) beginnt der nächste Run auf einer höheren Prestige-Stufe
-  (`★ PRESTIGE 1` …, bis 10): alle Ziele und damit Min/Max-Einsätze steigen um 50 % pro Stufe, das Startkapital bleibt.
+- **Grosses Finale (Stock 15)**: Ist das finale Ziel erreicht, erscheint „FLOOR 15 COMPLETE – YOU BEAT THE CASINO“, danach
+  die Stockwerk-Bilanz und anschliessend die **RUN BILANZ** über alle 15 Stockwerke (Startkapital, finaler Pot, Gewinne,
+  Verluste, Einsatz, Runden, verdiente 🍆, Challenges, Secrets, Rush Events, Zeit) mit **Team-Awards** aus echten Run-Daten:
+  KING OF THE CASINO, CASINO DONATOR, HOT HAND, COLD HAND, BIGGEST HIT, DEGENERATE, DILDO KING.
+- **CASINO PENTHOUSE**: Skyline, Lounge, Shishas, Trophäen-Galerie und die finale Entscheidung (TAKE / DOUBLE). Nach dem
+  ersten Sieg bleibt es über den Aufzug als Feier-Bereich erreichbar.
+- **Prestige (freiwillig)**: Nach dem Finale wird ein Prestige-Run freigeschaltet – gestartet wird er nur auf Wunsch
+  (Aufzug, Penthouse-Sockel oder Trophäen-Menü, in der Gruppe per Abstimmung). Neue Stufe (`★ PRESTIGE 1` …, bis 10):
+  alle Ziele und damit Min/Max-Einsätze steigen um 50 % pro Stufe, das Startkapital bleibt.
   Permanenter Fortschritt (🍆, Kosmetik, Achievements, Statistiken, Rekorde) bleibt erhalten; Prestige 1/2/3 schalten
   Prestige-Krone, Prestige-Stern und Prestige-Mantel frei.
 - **Stockwerk-Belohnung**: Jedes erfolgreich abgeschlossene Stockwerk gibt ALLEN Spielern feste 🍆 (Stock 1: 5 … Stock 15: 30),
@@ -243,6 +250,13 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   längste Gewinn-/Verlustserie, höchster Crash-Cashout, grösste Gewinne bei Blackjack, Roulette, Slots, Plinko, Mines und
   Dragon Tower, meiste 🍆 in einem Run, schnellster Abschluss aller 15 Stockwerke, grösster Nettogewinn/-verlust auf einem
   Stockwerk. Neue Rekorde melden sich mit „🏆 NEUER PERSÖNLICHER REKORD – alt → neu“.
+- **Trophäen-Vitrine** in der Shishabar: Bronze (Stock 5), Silber (Stock 10), GOLDEN AYRI (alle 15), Prestige-Stern,
+  Casino-Veteran (10 Finale), Jackpot-, Feuer- und Geheimnis-Trophäe stehen als 3D-Pokale im Regal – noch fehlende als dunkle
+  Silhouetten. `[E] Trophäen & Fortschritt ansehen` zeigt Name, Beschreibung, Datum, Run und Rekord sowie alle Challenges
+  und den Prestige-Fortschritt.
+- **Schutz vor Doppel-Belohnungen**: Stockwerk-, Challenge-, Streak-, Rush-, Trophäen- und Prestige-Belohnungen werden
+  pro Spieler (bzw. Spielername) festgehalten und sind auch durch Reload, Reconnect, erneutes Betreten oder erneutes
+  Öffnen der Bilanz nicht doppelt zu bekommen.
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Challenges und Achievements – jeweils nur
   einmal pro Spieler, also kein Farming.
 - **MAKKA an der Bar**: Nur bei Kemal an der Bar der Shishabar gibt es die pinke Ayri-Limonade für genau 1 🍆.
@@ -299,6 +313,9 @@ src/shared/            Autoritative Spiellogik (läuft auf dem Server ODER im Br
   challenges.js        Optionale Challenges pro Stockwerk (Definition + Fortschritt)
   npcs.js              NPC-Regie (logische Plätze, Vorrang für Spieler) + Sitzplätze der Shishabar
   events.js            Co-op-Events und High-Roller-Duelle
+  dynamics.js          Floor Modifier und 30-Sekunden-Rush-Events
+  runstats.js          Run-Statistik über alle Stockwerke und Team-Awards
+  games/arcade.js      Crash, HiLo, Mines, Dragon Tower, Penguin Cross, Plinko, Keno, Money Wheel, Duck Race, Street Craps
   games/*.js           Slots, Roulette, Blackjack, Baccarat, Craps, Hold'em, Glücksrad
   config.js            Stockwerke, Limits, Items, Achievements
 src/client/            Three.js-Client

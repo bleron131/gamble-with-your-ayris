@@ -41,14 +41,18 @@ export function openElevator(ui) {
       + '\n\nOptionale Challenges (blockieren nichts):\n' + chs.map(c => `${mine.has(c.id) ? '✓' : '□'} ${c.text} (+${c.reward} 🍆)`).join('\n');
     grid.append(card);
   }
-  if (st.run.finalUnlocked) {
+  if (st.run.finalUnlocked || st.campaign.gameComplete) {
     grid.append(h('button.floor.secret', { onclick: () => { sfx.click(); ui.closeModal(); app.requestTravel('final'); } },
-      h('div.fn', '???'), h('div.fname', 'Ganz nach oben'), h('div.fstatus', 'Kein Level 16.')));
+      h('div.fn', st.run.finalUnlocked ? '???' : '★'), h('div.fname', 'CASINO PENTHOUSE'), h('div.fstatus', st.run.finalUnlocked ? 'Die finale Entscheidung wartet' : 'Feiern & Prestige')));
   }
+  const prestigeBtn = st.campaign.prestigeReady
+    ? h('div.actions', h('button.primary.big', { onclick: () => { ui.closeModal(); app.requestPrestige(); } }, `★ PRESTIGE ${(st.campaign.prestige || 0) + 1} STARTEN (freiwillig)`))
+    : null;
   ui.openModal(h('div.elevator',
     h('h2', `🛗 AUFZUG${app.prestige ? ` · ★ PRESTIGE ${app.prestige}` : ''}`),
     h('div.subtle', `Team-Pot: ${fmtMoney(st.pot)} – wird auf jedes Stockwerk mitgenommen. Alle freigeschalteten Stockwerke können jederzeit erneut besucht werden.`),
     grid,
+    prestigeBtn,
     h('div.subtle.small', `🏅 Challenges sind optional und geben einmalig Bonus-🍆 – freigeschaltet wird nur über das Ziel. Erledigt: ${mine.size}/${FLOORS.reduce((a, f) => a + challengesFor(f.n).length, 0)} (Maus über ein Stockwerk für Details).`),
     loadoutEditor(ui),
     h('div.subtle.small', `Bankrott (Pot unter Mindesteinsatz) ruft die Mafia: Der Run ist verloren – neuer Run mit ${fmtMoney(START_CAPITAL)}, nur Stock 1 freigeschaltet. 🍆, Items und Kosmetik bleiben.`),
@@ -404,4 +408,46 @@ export function renderScoreboard(ui, el) {
   for (const p of st.players) el.append(h('div.srow', h('span', (p.id === st.hostId ? '★ ' : '') + p.name), h('b', p.seat ? `spielt ${GAME_NAMES[p.seat.split('-')[0]]}` : '—')));
   el.append(h('div.srow', h('span', 'Team-Pot'), h('b', fmtMoney(st.pot))));
   el.append(h('div.srow', h('span', 'Stockwerke'), h('b', `${st.campaign.completed.length}/15`)));
+}
+
+// ───────────────────────── Trophäen & Fortschritt (Hub in der Shishabar) ─────────────────────────
+export function openTrophies(ui, TROPHIES) {
+  const app = ui.app, s = Save.get();
+  const body = h('div.statbody');
+  const tabs = h('div.edittabs');
+  let cur = 'trophies';
+  const renders = {
+    trophies: () => [h('div.trophygrid', ...TROPHIES.map(t => {
+      const got = s.trophies?.[t.id];
+      return h('div.trophycard', { class: got ? 'on' : '' },
+        h('div.tci', got ? '🏆' : '❔'), h('div.tcn', got ? t.name : '???'), h('div.tcd', t.desc),
+        got ? h('div.tcm', `${new Date(got.at).toLocaleDateString('de-CH')} · Run #${got.run}${got.detail ? ' · ' + got.detail : ''}`) : h('div.tcm', 'Noch nicht freigeschaltet'));
+    }))],
+    challenges: () => {
+      const mine = new Set(s.challenges || []);
+      return [h('div.chover', ...FLOORS.map(f => h('div.chfloor', h('b', `Stock ${f.n} · ${f.name}`), ...challengesFor(f.n).map(c => h('div.ch', { class: mine.has(c.id) ? 'ok' : '' }, `${mine.has(c.id) ? '✓' : '□'} ${c.text} (+${c.reward} 🍆)`)))))];
+    },
+    prestige: () => {
+      const c = app.state?.campaign || s.campaign;
+      const lvl = c.prestige || 0;
+      return [
+        h('div.sgrid',
+          h('div.srow', h('span', 'Prestige-Stufe'), h('b', `★ ${lvl}`)),
+          h('div.srow', h('span', 'Ziele auf dieser Stufe'), h('b', `×${(1 + 0.5 * lvl).toFixed(1)}`)),
+          h('div.srow', h('span', 'Nächster Prestige-Run'), h('b', c.prestigeReady ? 'bereit (freiwillig)' : 'nach dem nächsten Finale')),
+          h('div.srow', h('span', 'Gespielte Finale'), h('b', String((s.history || []).length))),
+        ),
+        c.prestigeReady ? h('div.actions', h('button.primary.big', { onclick: () => { ui.closeModal(); app.requestPrestige(); } }, `★ PRESTIGE ${lvl + 1} STARTEN`)) : null,
+        h('div.subtle.small', 'Prestige startet einen neuen Run mit höheren Zielen. 🍆, Kosmetik, Achievements, Rekorde und Trophäen bleiben. Prestige 1/2/3 schalten besondere Kosmetik frei.'),
+      ];
+    },
+  };
+  const render = () => {
+    clear(tabs);
+    for (const [k, l] of [['trophies', '🏆 Trophäen'], ['challenges', '🏅 Challenges'], ['prestige', '★ Prestige']]) tabs.append(h('button', { class: k === cur ? 'sel' : '', onclick: () => { cur = k; render(); } }, l));
+    clear(body);
+    body.append(...renders[cur]().filter(Boolean));
+  };
+  render();
+  ui.openModal(h('div.stats', h('h2', '🏆 TROPHÄEN & FORTSCHRITT'), tabs, body), 'wide');
 }

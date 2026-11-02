@@ -98,6 +98,7 @@ export class FloorDynamics {
     const def = RUSHES[id];
     this.rush = { id, startedAt: Date.now(), endsAt: Date.now() + RUSH_MS, dildos: {} };
     this.rushCount++;
+    if (this.room.runStats) this.room.runStats.rushes++;
     this.room.event({ kind: 'rush', phase: 'start', id, name: def.name, icon: def.icon, desc: def.desc, ms: RUSH_MS });
     this.room.markDirty();
   }

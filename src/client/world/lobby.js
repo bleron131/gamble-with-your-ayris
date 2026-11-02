@@ -7,6 +7,8 @@ import { woodTexture, wallpaperTexture, tileTexture } from '../textures.js';
 import { Character, npcAppearance } from '../character.js';
 import { freeStandSpots, loungeSpot } from '../npcs.js';
 import { LOBBY_SEATS } from '../../shared/npcs.js';
+import { TROPHIES, trophyModel } from './trophies.js';
+import * as Save from '../save.js';
 import { fmtMoney, FLOORS } from '../../shared/config.js';
 
 const W = 26, D = 20, H = 4.6;
@@ -27,6 +29,7 @@ export class LobbyWorld extends World {
     this.buildShop();
     this.buildWardrobe();
     this.buildHall();
+    this.buildTrophies();
     this.buildElevator();
     this.addRoomWalls(-W / 2, W / 2, -D / 2, D / 2);
     this.bakeWorld();
@@ -202,6 +205,34 @@ export class LobbyWorld extends World {
         action: () => app.takeSeat(st.i),
       });
     }
+  }
+
+  // Trophäen-Vitrine an der rechten Wand: verdiente Trophäen glänzen, fehlende sind dunkle Silhouetten
+  buildTrophies() {
+    const s = this.scene, save = Save.get();
+    const x = W / 2 - 0.45, z = 5.6;
+    const cab = new THREE.Group();
+    cab.position.set(x, 0, z);
+    cab.rotation.y = -Math.PI / 2;
+    // offene Vitrine: Rückwand, Seiten, Boden, Deckel (Trophäen stehen davor auf den Regalbrettern)
+    const wood = M.std('#1a0f08', 0.5, 0.1);
+    cab.add(mesh(new THREE.BoxGeometry(3.4, 2.6, 0.06), wood, 0, 1.3, -0.22));
+    for (const sx of [-1, 1]) cab.add(mesh(new THREE.BoxGeometry(0.08, 2.6, 0.5), wood, sx * 1.66, 1.3, 0));
+    cab.add(mesh(new THREE.BoxGeometry(3.4, 0.4, 0.5), wood, 0, 0.2, 0));
+    cab.add(mesh(new THREE.BoxGeometry(3.4, 0.08, 0.5), wood, 0, 2.56, 0));
+    for (let r = 0; r < 2; r++) cab.add(mesh(new THREE.BoxGeometry(3.3, 0.05, 0.48), M.gold(), 0, 0.42 + r * 0.9, 0.0));
+    cab.add(mesh(new THREE.BoxGeometry(3.4, 2.4, 0.02), M.glass('#bfe6ff', 0.15), 0, 1.35, 0.26, { cast: false }));
+    const glow = new THREE.PointLight('#ffd97a', 2.2, 4, 1.6); glow.position.set(0, 2.2, 0.8); cab.add(glow);
+    TROPHIES.forEach((t, i) => {
+      const tm = trophyModel(t, !save.trophies?.[t.id], 1.15);
+      tm.position.set(-1.2 + (i % 4) * 0.8, 0.45 + Math.floor(i / 4) * 0.9, 0.02);
+      cab.add(tm);
+    });
+    const sign = neonSign('TROPHÄEN', '#ffd97a', 2.2, 0.45); sign.position.set(0, 2.95, 0.05); cab.add(sign);
+    cab.userData.noBake = true;
+    s.add(cab);
+    this.addBox(x, z, 0.6, 3.5);
+    this.addInteract({ pos: new THREE.Vector3(x - 1.3, 0, z), radius: 1.8, verb: 'ANSEHEN', label: 'Trophäen & Fortschritt ansehen', action: () => this.app.ui.openTrophies() });
   }
 
   // ───────────────────────── NPC-Plätze ─────────────────────────

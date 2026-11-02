@@ -10,6 +10,7 @@ import { rand } from './rng.js';
 import { NpcDirector, LOBBY_SEATS, SEAT_REACH } from './npcs.js';
 import { EventDirector, HIGH_ROLLERS } from './events.js';
 import { FloorDynamics, MODIFIERS } from './dynamics.js';
+import { newRunStats, runPlayer, sanitizeRunStats, computeAwards } from './runstats.js';
 import { challengesFor, isChallengeId, legacyChallengeIds, newTracker, trackResult, progress as challengeProgress } from './challenges.js';
 import { slotsGame, winTier } from './games/slots.js';
 import { rouletteGame } from './games/roulette.js';
@@ -66,6 +67,7 @@ export class Room {
     this.pot = START_CAPITAL;
     this.campaign = defaultCampaign();
     this.run = { id: makeRunId(), finalUnlocked: false, startedAt: Date.now() };
+    this.runStats = newRunStats(START_CAPITAL);
     this.scene = 'lobby';
     this.floor = null;
     this.session = null;
@@ -116,11 +118,16 @@ export class Room {
         // Run-Fortschritt (Stockwerke) gehört zum gespeicherten Run
         if (Array.isArray(r.completed)) this.campaign.completed = cleanFloors(r.completed);
         if (Number.isFinite(r.unlocked)) this.campaign.unlocked = Math.max(1, Math.min(FLOORS.length, Math.floor(r.unlocked)));
+        const rs = sanitizeRunStats(r.stats, this.pot);
+        this.runStats = rs || newRunStats(START_CAPITAL, this.run.startedAt);
       }
       this.campaign.completed = cleanFloors(this.campaign.completed);
       this.campaign.unlocked = Math.max(1, Math.min(FLOORS.length, Math.floor(this.campaign.unlocked) || 1));
       this.campaign.everCompleted = cleanFloors([...(this.campaign.everCompleted || []), ...this.campaign.completed]);
     }
+    // 🍆-Belohnungen pro Run mitzählen (für DILDO KING) – jede reward-Nachricht läuft hier durch
+    const raw = conn;
+    p.conn = { send: m => { if (m?.t === 'reward' && m.dildos > 0) runPlayer(this.runStats, p.name).dildos += m.dildos; raw.send(m); } };
     this.players.set(id, p);
     conn.send({ t: 'welcome', you: id, code: this.code, state: this.snapshot() });
     this.event({ kind: 'join', pid: id, name: p.name });
@@ -200,6 +207,7 @@ export class Room {
       makkaLuckMs: Math.max(0, (this.makkaLuckUntil || 0) - Date.now()),
       scene: this.scene, floor: this.floor, session, vote: this.vote && { ...this.vote },
       npcs: this.npcs.snapshot(),
+      runStats: this.runStats,
       events: this.events.snapshot(),
       dyn: this.dyn.snapshot(),
     };
@@ -278,6 +286,7 @@ export class Room {
       double: `DOUBLE OR LOSS – ${fmtMoney(this.pot)} → ${fmtMoney(this.pot * 2)} oder $0. ARE YOU SURE?`,
       newrun: `Neuen Run mit ${fmtMoney(START_CAPITAL)} starten? (Team-Pot ${fmtMoney(this.pot)} geht verloren)`,
       next: `Weiter zu Stock ${(this.floor || 0) + 1}?`,
+      prestige: `PRESTIGE ${this.prestige + 1} starten? Neuer Run mit höheren Zielen – 🍆, Kosmetik, Rekorde und Trophäen bleiben.`,
     };
     if (!labels[type]) return;
     if (this.players.size === 1) return this.executeVote(type, data);
@@ -323,21 +332,33 @@ export class Room {
         return null;
       }
       case 'return':
+        if (this.scene === 'final') return this.finalBusy ? 'Nicht möglich' : null; // zurück aus dem Penthouse
         if (this.scene !== 'floor' || !this.session) return 'Nicht im Casino';
         if (this.session.ending) return 'Zu spät…';
         if (Object.values(this.session.tables).some(t => t.busy)) return 'Erst alle laufenden Runden beenden';
         return null;
       case 'final':
-        if (this.scene !== 'lobby') return 'Nur aus der Shishabar möglich';
-        if (!this.run.finalUnlocked) return 'Erst $500\'000\'000 auf Stock 15 erreichen';
+        // Ins CASINO PENTHOUSE: aus der Shishabar oder direkt nach dem Ziel auf Stock 15; nach dem ersten Sieg auch später zum Feiern
+        if (this.scene === 'floor') {
+          if (this.floor !== FLOORS.length || !this.session?.targetReached) return 'Nur nach dem Ziel auf Stock 15';
+          if (Object.values(this.session.tables).some(t => t.busy)) return 'Erst alle laufenden Runden beenden';
+        } else if (this.scene !== 'lobby') return 'Nur aus der Shishabar möglich';
+        if (!this.run.finalUnlocked && !this.campaign.gameComplete) return 'Erst $500\'000\'000 auf Stock 15 erreichen';
         return null;
       case 'take':
       case 'double':
-        if (this.scene !== 'final' || this.finalBusy) return 'Nicht möglich';
+        if (this.scene !== 'final' || this.finalBusy || !this.run.finalUnlocked) return 'Nicht möglich';
         for (const p of this.players.values()) if (!(p.pose.p[2] < FINAL_COUNTER_Z)) return 'Alle Spieler müssen zum Mitarbeiter laufen';
         return null;
       case 'newrun':
         if (this.scene !== 'lobby') return 'Nur in der Shishabar möglich';
+        return null;
+      case 'prestige':
+        // Freiwillig: erst nach geschafftem Finale, aus der Shishabar oder dem Penthouse
+        if (this.scene !== 'lobby' && this.scene !== 'final') return 'Nur in der Shishabar oder im Penthouse';
+        if (this.finalBusy) return 'Nicht möglich';
+        if (!this.campaign.prestigeReady) return 'Erst Stock 15 schaffen und das Finale spielen';
+        if (this.prestige >= PRESTIGE_MAX) return 'Höchste Prestige-Stufe erreicht';
         return null;
       case 'next': {
         // Nach der Bilanz direkt mit dem Aufzug ins nächste Stockwerk (nur wenn das Ziel erreicht ist)
@@ -357,12 +378,16 @@ export class Room {
   executeVote(type, data) {
     switch (type) {
       case 'travel': return this.enterFloor(Math.floor(data.floor));
-      case 'return': return this.leaveFloor('return');
-      case 'final': return this.changeScene('final');
+      case 'return': return this.scene === 'final' ? this.changeScene('lobby', { from: 'final' }) : this.leaveFloor('return');
+      case 'final': {
+        if (this.scene === 'floor') { this.session = null; this.floor = null; }
+        return this.changeScene('final');
+      }
       case 'take': return this.finalTake();
       case 'double': return this.finalDouble();
       case 'newrun': return this.newRun('manual');
       case 'next': return this.nextFloor();
+      case 'prestige': return this.startPrestige();
     }
   }
 
@@ -382,6 +407,7 @@ export class Room {
     const oldId = this.run.id;
     this.pot = START_CAPITAL;
     this.run = { id: makeRunId(), finalUnlocked: false, startedAt: Date.now() };
+    this.runStats = newRunStats(START_CAPITAL);
     this.campaign.unlocked = 1;
     this.campaign.completed = [];
     this.campaign.runs = (this.campaign.runs || 0) + 1;
@@ -478,6 +504,16 @@ export class Room {
     this.markDirty();
   }
 
+  // Freiwilliger Prestige-Run: höhere Stufe, Run beginnt neu (permanenter Fortschritt bleibt)
+  startPrestige() {
+    this.campaign.prestige = Math.min(PRESTIGE_MAX, this.prestige + 1);
+    this.campaign.prestigeReady = false;
+    this.event({ kind: 'prestige', level: this.campaign.prestige, scale: prestigeScale(this.campaign.prestige) });
+    this.newRun('prestige');
+    if (this.scene !== 'lobby') this.changeScene('lobby', { from: 'final' });
+    this.markDirty();
+  }
+
   // Direkt ins nächste Stockwerk (Aufzug von Stock n zu n+1); zählt wie „zurückkehren“ für die Leave-Challenge
   nextFloor() {
     const n = this.floor;
@@ -570,6 +606,8 @@ export class Room {
     if (s.ledger) this.lastBalance = { floor: n, name: f.name, target: f.target, pot: this.pot, rewards: floorRewards, reward: FLOOR_REWARDS[n - 1], ledger: s.ledger, last: n === FLOORS.length };
     const tr = s.tracker;
     if (tr && tr.flags.targetMs == null) tr.flags.targetMs = Date.now() - tr.startedAt;
+    if (firstTime) this.runStats.floors++;
+    const finale = n === FLOORS.length && !this.run.finalUnlocked;
     if (n === FLOORS.length) {
       this.run.finalUnlocked = true;
       if (!this.campaign.gameComplete) this.campaign.finishedAt = Date.now();
@@ -577,6 +615,8 @@ export class Room {
     }
     this.event({ kind: 'target', floor: n, firstTime, newFloor: this.campaign.unlocked > unlockedBefore ? this.campaign.unlocked : null, final: n === FLOORS.length });
     if (this.lastBalance?.floor === n) this.event({ kind: 'balance', ...this.lastBalance });
+    // Grosses Finale: FLOOR 15 COMPLETE → Bilanz → RUN-BILANZ mit Team-Awards (einmal pro Run)
+    if (finale) this.event({ kind: 'finale', pot: this.pot, runId: this.run.id, durationMs: Date.now() - this.run.startedAt, stats: this.runStats, awards: computeAwards(this.runStats) });
   }
 
   checkBankrupt() {
@@ -855,12 +895,18 @@ export class Room {
       pokerCat: r.pokerCat, wheel: r.wheel, roulette: r.roulette, newStake: r.newStake, pot: this.pot, lucky: !!r.lucky && net > 0,
     });
     if (stake > 0 || payout > 0) this.ledgerAdd(pid, table.type, stake, payout - extra);
+    if (stake > 0) {
+      const rs = this.runStats, rp = runPlayer(rs, p?.name || this.session?.ledger?.players[pid]?.name || '?');
+      rs.staked += stake; rs.rounds++; rp.staked += stake; rp.rounds++;
+      if (net > 0) { rs.won += net; rs.wins++; rp.won += net; if (net > rp.maxWin) { rp.maxWin = net; rp.maxWinGame = table.type; } }
+      else if (net < 0) { rs.lost += -net; rs.losses++; rp.lost += -net; }
+    }
     const tr = this.session?.tracker;
     if (tr && p) trackResult(tr, { pid, game: table.type, stake, net, blackjacks: r.blackjacks, straight: r.straight, tieWin: r.tieWin, pointHit: r.pointHit, pokerCat: r.pokerCat, makka: !!mods.makka, tier: GAMES[table.type].walkUp ? tier : null, target: f.target });
     if (p && stake > 0) this.events.onResult({ game: table.type, stake, net });
     if (stake > 0) {
       this.dyn.reveal();
-      if (p && this.dyn.dildoRoll(pid, mods)) p.conn.send({ t: 'reward', dildos: 1, reason: 'DILDO RUSH', kind: 'rush' });
+      if (p && this.dyn.dildoRoll(p.name, mods)) p.conn.send({ t: 'reward', dildos: 1, reason: 'DILDO RUSH', kind: 'rush' });
     }
     this.markDirty();
     this.checkTarget();
@@ -873,6 +919,9 @@ export class Room {
   // Run, Stockwerk und Stufe (auch nach Reconnect nicht doppelt).
   trackStreak(p, net) {
     if (net > 0) { p.hot++; p.cold = 0; } else if (net < 0) { p.cold++; p.hot = 0; } else return;
+    const rp = runPlayer(this.runStats, p.name);
+    rp.bestStreak = Math.max(rp.bestStreak, p.hot);
+    rp.worstStreak = Math.max(rp.worstStreak, p.cold);
     const n = net > 0 ? p.hot : p.cold;
     if ([2, 3, 5, 10, 15, 20].includes(n)) this.event({ kind: 'streak', pid: p.id, name: p.name, hot: net > 0, n });
     if (net > 0 && (n === 5 || n === 10)) {
@@ -905,6 +954,7 @@ export class Room {
       const { prog, goal } = challengeProgress(c, tr, ctx);
       if (prog < goal) continue;
       tr.done.push(c.id);
+      this.runStats.challenges++;
       this.event({ kind: 'challenge', id: c.id, floor: this.floor, text: c.text, reward: c.reward });
       // Belohnung einmalig pro Spieler (wer sie schon früher geschafft hat, bekommt nichts doppelt)
       for (const p of this.players.values()) {
@@ -1004,10 +1054,8 @@ export class Room {
 
   endFinal() {
     this.finalBusy = false;
-    // Finale geschafft → neuer Run auf der nächsten Prestige-Stufe (permanenter Fortschritt bleibt)
-    const before = this.prestige;
-    this.campaign.prestige = Math.min(PRESTIGE_MAX, before + 1);
-    if (this.campaign.prestige > before) this.event({ kind: 'prestige', level: this.campaign.prestige, scale: prestigeScale(this.campaign.prestige) });
+    // Finale gespielt → der Run ist vorbei. Prestige wird NICHT automatisch gestartet: es wird nur freigeschaltet
+    this.campaign.prestigeReady = this.prestige < PRESTIGE_MAX;
     this.newRun('final');
     this.changeScene('lobby', { from: 'final' });
   }

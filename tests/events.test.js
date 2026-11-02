@@ -106,19 +106,48 @@ test('High Roller erscheint erst ab Stock 3 und geht nach Ablauf wieder', () => 
   teardown(room);
 });
 
-test('Prestige: Finale geschafft → neuer Run auf Prestige 1 mit höheren Zielen, permanenter Fortschritt bleibt', async () => {
+test('Prestige ist freiwillig: Finale schaltet es frei, erst die Abstimmung startet den Prestige-Run', async () => {
   const { prestigeScale } = await import('../src/shared/config.js');
-  const { room, conns } = setup(1, [{ campaign: { everCompleted: [1, 2, 3], gameComplete: true } }]);
+  const { room, conns, ids } = setup(1, [{ campaign: { everCompleted: [1, 2, 3], gameComplete: true } }]);
   room.pot = 600_000_000;
+  room.run.finalUnlocked = true;
   room.endFinal();
-  assert.equal(room.campaign.prestige, 1);
+  assert.equal(room.campaign.prestige || 0, 0); // nicht automatisch
+  assert.equal(room.campaign.prestigeReady, true);
   assert.equal(room.pot, 7500);
+  room.handle(ids[0], { t: 'vote.start', type: 'prestige' });
+  assert.equal(room.campaign.prestige, 1);
+  assert.equal(room.campaign.prestigeReady, false);
   assert.equal(room.campaign.unlocked, 1);
   assert.deepEqual(room.campaign.everCompleted, [1, 2, 3]);
   assert.ok(conns[0].events('prestige').some(e => e.level === 1));
+  // ohne erneutes Finale kein zweiter Prestige-Schritt
+  room.handle(ids[0], { t: 'vote.start', type: 'prestige' });
+  assert.equal(room.campaign.prestige, 1);
   assert.equal(floorDef(1, 1).target, floorDef(1).target * prestigeScale(1));
   room.enterFloor(1);
   assert.equal(room.challengeCtx().target, 15000);
-  assert.ok(room.session.tables['slots-0'].state.bet >= floorDef(1, 1).limits.slots.min);
+  teardown(room);
+});
+
+test('Finale: Stock 15 geschafft → Event „finale“ mit Run-Statistik und Team-Awards, Penthouse direkt erreichbar', () => {
+  const { room, conns, ids } = setup(2);
+  room.campaign.unlocked = 15;
+  room.enterFloor(15);
+  room.pot = floorDef(15).target - 1000;
+  const t = room.session.tables['slots-0'];
+  room.settle(ids[1], t, { stake: 1000, payout: 0 });
+  room.settle(ids[0], t, { stake: 1000, payout: 5000 });
+  const fin = conns[0].events('finale');
+  assert.equal(fin.length, 1);
+  assert.equal(fin[0].stats.rounds, 2);
+  assert.ok(fin[0].awards.find(a => a.id === 'king').who === 'P0');
+  assert.ok(fin[0].awards.find(a => a.id === 'donator').who === 'P1');
+  // kein zweites Finale im selben Run
+  room.settle(ids[0], t, { stake: 1000, payout: 5000 });
+  assert.equal(conns[0].events('finale').length, 1);
+  room.handle(ids[0], { t: 'vote.start', type: 'final' });
+  room.handle(ids[1], { t: 'vote.cast', yes: true });
+  assert.equal(room.scene, 'final');
   teardown(room);
 });

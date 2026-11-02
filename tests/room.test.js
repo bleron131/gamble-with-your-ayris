@@ -120,6 +120,7 @@ test('Mafia Briefcase rettet einmalig', () => {
 test('Double or Loss braucht alle Spieler', () => {
   const { room, ids } = setup(2);
   room.scene = 'final';
+  room.run.finalUnlocked = true;
   room.pot = 600_000_000;
   for (const p of room.players.values()) p.pose.p = [0, 0, -30];
   room.handle(ids[0], { t: 'vote.start', type: 'double' });

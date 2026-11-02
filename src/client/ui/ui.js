@@ -7,7 +7,9 @@ import { sfx, initAudio } from '../audio.js';
 import * as Save from '../save.js';
 import { CHALLENGE_BY_ID } from '../../shared/challenges.js';
 import { unlockedEmotes } from '../progress.js';
-import { openBalance } from './balance.js';
+import { openBalance, openRunBalance, finaleSplash } from './balance.js';
+import { openTrophies } from './modals.js';
+import { TROPHIES } from '../world/trophies.js';
 import { openElevator, openShop, openEditor, openStats, openSettings, renderScoreboard, openBar } from './modals.js';
 
 export class UI {
@@ -200,9 +202,9 @@ export class UI {
       this.rushEl.classList.add('hidden');
       this.renderDyn(st);
       clear(this.chEl);
-      this.targetEl.innerHTML = st.scene === 'final' ? '<span class="gold">DIE FINALE ENTSCHEIDUNG</span>' : `Stockwerke: <b>${st.campaign.completed.length}/15</b> · freigeschaltet bis <b>${st.campaign.unlocked}</b>`;
+      this.targetEl.innerHTML = st.scene === 'final' ? (st.run.finalUnlocked ? '<span class="gold">DIE FINALE ENTSCHEIDUNG</span>' : '<span class="gold">FEIERN IM PENTHOUSE</span>') : `Stockwerke: <b>${st.campaign.completed.length}/15</b> · freigeschaltet bis <b>${st.campaign.unlocked}</b>`;
       this.progress.style.display = 'none';
-      this.levelEl.innerHTML = st.scene === 'final' ? '???' : `SHISHABAR${this.app.prestige ? ` · <span class="gold">★ PRESTIGE ${this.app.prestige}</span>` : ''}`;
+      this.levelEl.innerHTML = st.scene === 'final' ? 'CASINO PENTHOUSE' : `SHISHABAR${this.app.prestige ? ` · <span class="gold">★ PRESTIGE ${this.app.prestige}</span>` : ''}`;
     }
     clear(this.groupEl);
     const code = st.code === 'SOLO' ? 'SOLO' : st.code;
@@ -588,7 +590,10 @@ export class UI {
     cb?.();
   }
   openBalance(b) { openBalance(this, b); }
+  openRunBalance(f) { openRunBalance(this, f); }
+  finaleSplash() { finaleSplash(this); }
   openElevator() { openElevator(this); }
+  openTrophies() { openTrophies(this, TROPHIES); }
   openShop() { openShop(this); }
   openBar(nextLine) { openBar(this, nextLine); }
   openEditor(fromMenu) { openEditor(this, fromMenu); }

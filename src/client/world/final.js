@@ -1,4 +1,5 @@
-// Finale Shishabar: Nacht, Skyline, ruhige Lounge – am Ende der Mitarbeiter mit zwei Knöpfen.
+// CASINO PENTHOUSE (Finale): Nacht, Skyline, Lounge, Trophäen – am Ende der Mitarbeiter mit TAKE / DOUBLE.
+// Nach dem ersten Sieg bleibt das Penthouse als Feier-Bereich erreichbar; hier lässt sich auch der Prestige-Run starten.
 import * as THREE from 'three';
 import { World } from './base.js';
 import { addElevatorColliders } from './lobby.js';
@@ -7,6 +8,8 @@ import { marbleTexture, coinFaceTexture } from '../textures.js';
 import { Character, npcAppearance } from '../character.js';
 import { ease } from '../tables/common.js';
 import { FINAL_COUNTER_Z } from '../../shared/room.js';
+import { TROPHIES, trophyModel } from './trophies.js';
+import * as Save from '../save.js';
 
 const W = 14, Z0 = 8, Z1 = -36, H = 6;
 
@@ -90,7 +93,7 @@ export class FinalWorld extends World {
       this.updaters.push(dt => g.update(dt));
     }
     // Aufzug
-    const el = elevator({ label: '???' });
+    const el = elevator({ label: 'PENTHOUSE' });
     el.position.set(0, 0, Z0 - 2);
     el.rotation.y = Math.PI;
     el.userData.setDisplay('★');
@@ -99,6 +102,32 @@ export class FinalWorld extends World {
     this.elevator = el;
     this.updaters.push(dt => el.userData.update(dt));
     addElevatorColliders(this, 0, Z0 - 2, -1);
+    this.addInteract({ pos: new THREE.Vector3(0, 0, Z0 - 3.4), radius: 1.6, verb: 'AUFZUG', label: 'Aufzug benutzen (zurück zur Shishabar)', action: () => this.app.send({ t: 'vote.start', type: 'return' }), enabled: () => !this.flipping });
+    // Schild & Trophäen-Galerie am Eingang
+    const title = neonSign('CASINO PENTHOUSE', '#ffd700', 6, 1.0);
+    title.position.set(0, H - 0.9, Z0 - 0.08); title.rotation.y = Math.PI; s.add(title);
+    const save = Save.get();
+    TROPHIES.forEach((t, i) => {
+      const side = i % 2 ? 1 : -1, row = Math.floor(i / 2);
+      const x = side * 5.8, z = Z0 - 3 - row * 1.4;
+      s.add(mesh(new THREE.CylinderGeometry(0.22, 0.26, 1.0, 16), M.std('#120a14', 0.4, 0.3), x, 0.5, z));
+      const tm = trophyModel(t, !save.trophies?.[t.id], 1.6);
+      tm.position.set(x, 1.0, z);
+      s.add(tm);
+      this.updaters.push((dt, tt) => { tm.rotation.y = tt * 0.6 + i; });
+      this.addCircle(x, z, 0.3);
+    });
+    // Prestige-Sockel: freiwilliger Prestige-Run (erst nach gespieltem Finale)
+    const ped = new THREE.Group();
+    ped.position.set(-4.6, 0, FINAL_COUNTER_Z + 5);
+    ped.add(mesh(new THREE.CylinderGeometry(0.35, 0.45, 1.0, 24), M.std('#1a0a2a', 0.3, 0.5), 0, 0.5, 0));
+    const star = mesh(new THREE.OctahedronGeometry(0.22), M.glow('#9b5de5', 1.6), 0, 1.4, 0, { cast: false });
+    ped.add(star);
+    s.add(ped);
+    this.addCircle(-4.6, FINAL_COUNTER_Z + 5, 0.5);
+    this.updaters.push((dt, t) => { star.rotation.y = t; star.position.y = 1.4 + Math.sin(t * 2) * 0.06; });
+    this.addInteract({ pos: new THREE.Vector3(-4.6, 0, FINAL_COUNTER_Z + 6), radius: 1.3, verb: 'PRESTIGE', label: 'PRESTIGE-RUN starten (freiwillig)',
+      enabled: () => !!this.app.state?.campaign?.prestigeReady, action: () => this.app.requestPrestige() });
     this.buildCounter();
     let smoke = 0;
     this.updaters.push(dt => {
@@ -145,7 +174,7 @@ export class FinalWorld extends World {
         pos: new THREE.Vector3(x, 0, cz + 2.0), radius: 1.5, verb: key === 'take' ? 'TAKE' : 'DOUBLE',
         label: key === 'take' ? 'TAKE THE WINNINGS drücken' : 'DOUBLE OR LOSS drücken',
         action: () => { this.pressButton(key); this.app.requestFinal(key); },
-        enabled: () => !this.flipping,
+        enabled: () => !this.flipping && !!this.app.state?.run?.finalUnlocked,
       });
     }
     this.updaters.push((dt, t) => { for (const b of Object.values(this.buttons)) b.material.emissiveIntensity = 1 + Math.sin(t * 3) * 0.4; });
