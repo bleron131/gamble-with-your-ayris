@@ -379,6 +379,7 @@ export function openSettings(ui) {
     app.touch?.active ? slider('touchSensitivity', 'Kamera-Empfindlichkeit (Touch)', 0.4, 2.2, 0.1) : slider('sensitivity', 'Mausempfindlichkeit', 0.3, 2.5, 0.1),
     graphics,
     app.touch?.active ? h('div.actions', h('button', { onclick: async () => { sfx.click(); const ok = await enterFullscreen(); if (!ok) ui.toast('Vollbild wird von diesem Browser nicht unterstützt – über „Zum Home-Bildschirm“ startet das Spiel wie eine App.', 'info', 4000); } }, '⛶ VOLLBILD')) : null,
+    seg('Song „Alles auf Schwarz“', [['lobby', 'Shishabar'], ['all', 'Überall'], ['off', 'Aus']], 'song', v => { st.song = v; app.applySettings(); }),
     toggle('bloom', 'Neon-Glow (Bloom)'), toggle('shadows', 'Schatten'),
     h('label.toggle', h('input', { type: 'checkbox', checked: app.perfOn ? true : null, onchange: e => app.togglePerf(e.target.checked) }), 'Performance-Anzeige (Entwickler)'),
     h('div.actions', h('button', { onclick: () => { sfx.click(); st.helpSeen = false; Save.save(); if (app.state) { ui.closeModal(); ui.showControlsHelp(); } else ui.toast('Die Steuerungshilfe erscheint beim nächsten Spielstart', 'info'); } }, '🎮 Steuerungshilfe erneut anzeigen')),

@@ -1,8 +1,10 @@
-// Prozedurale Musik & Soundeffekte (WebAudio, keine externen Dateien).
+// Musik & Soundeffekte (WebAudio): Song „Alles auf Schwarz“ plus prozedurale Musik und Effekte.
 let ctx = null;
 let master, musicBus, sfxBus, ambBus, lowpass;
 let noiseBuf = null;
-const settings = { master: 0.8, music: 0.55, sfx: 0.9 };
+const settings = { master: 0.8, music: 0.55, sfx: 0.9, song: 'lobby' };
+const SONG_URL = 'music/alles-auf-schwarz.mp3';
+let song = null;
 
 export function initAudio(s) {
   Object.assign(settings, s || {});
@@ -24,12 +26,13 @@ export function initAudio(s) {
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   applyVolumes();
   setInterval(schedule, 50);
+  updateSong();
 }
 
 // Mobile: Audio nach Unterbrechungen (Anruf, Tab-Wechsel, iOS) beim nächsten Antippen fortsetzen
 export function resumeAudio() { if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {}); }
 
-export function setVolumes(s) { Object.assign(settings, s); applyVolumes(); }
+export function setVolumes(s) { Object.assign(settings, s); applyVolumes(); updateSong(); }
 function applyVolumes() {
   if (!ctx) return;
   master.gain.value = settings.master;
@@ -245,7 +248,39 @@ export function setMusic(m, level = 0, style = null) {
   if (m !== mode) { beatIdx = 0; nextBeat = now() + 0.1; }
   mode = m;
   intensity = level;
+  updateSong();
 }
+
+// Der Song ersetzt die prozedurale Musik: in der Shishabar ('lobby'), überall ('all') oder nie ('off').
+// Mafia-Spannung, Jackpot-Musik und die Stille beim Münzwurf behalten ihre eigenen Klänge.
+function songWanted() {
+  if (settings.song === 'off') return false;
+  if (mode === 'lounge') return true;
+  return settings.song === 'all' && (mode === 'casino' || mode === 'final');
+}
+
+function updateSong() {
+  if (!ctx) return;
+  const want = songWanted();
+  if (want && !song) {
+    const el = new Audio(SONG_URL);
+    el.loop = true;
+    el.preload = 'auto';
+    try { ctx.createMediaElementSource(el).connect(musicBus); } catch { /* ohne WebAudio-Routing direkt abspielen */ }
+    song = { el, playing: false };
+    el.addEventListener('error', () => { song.failed = true; updateSong(); });
+  }
+  if (!song) return;
+  if (want && !song.failed && !song.playing) {
+    song.playing = true;
+    song.el.play().catch(() => { song.playing = false; });
+  } else if ((!want || song.failed) && song.playing) {
+    song.playing = false;
+    song.el.pause();
+  }
+}
+
+const songActive = () => !!(song && song.playing && !song.failed);
 
 // Jackpot: eigene Musik für einige Sekunden, danach zurück zur vorherigen Musik
 let jackpotTimer = null, beforeJackpot = null;
@@ -279,6 +314,7 @@ const MELODY_SCALE = { lounge: [62, 63, 66, 67, 69, 70, 72, 74], casino: [72, 74
 
 function schedule() {
   if (!ctx || mode === 'none') return;
+  if (songActive()) { nextBeat = now() + 0.1; return; }
   const bpm = mode === 'casino' ? (musicStyle?.bpm ?? 108) + intensity * 4 : mode === 'jackpot' ? 150 : mode === 'lounge' ? 84 : 66;
   const step = 60 / bpm / 2; // Achtel
   while (nextBeat < now() + 0.25) {

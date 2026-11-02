@@ -40,7 +40,7 @@ function defaults() {
     stats: defaultStats(),
     achievements: {},
     history: [], // abgeschlossene Runs (Take / Double)
-    settings: { master: 0.8, music: 0.55, sfx: 0.9, sensitivity: 1, touchSensitivity: 1, bloom: true, shadows: true, quality: null, fpsLimit: null },
+    settings: { master: 0.8, music: 0.55, sfx: 0.9, song: 'lobby', sensitivity: 1, touchSensitivity: 1, bloom: true, shadows: true, quality: null, fpsLimit: null },
   };
 }
 
