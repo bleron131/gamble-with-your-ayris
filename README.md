@@ -276,6 +276,15 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   Nacht-Shishabar lauft ihr gemeinsam zum Mitarbeiter: **TAKE THE WINNINGS** speichert den Run,
   **DOUBLE OR LOSS** braucht die Zustimmung aller – dann wirft der Mitarbeiter die grün/rote Münze physisch in der 3D-Szene.
 
+## Developer-Testmodus
+
+Wer exakt den Namen `Ayri000` verwendet (Gross-/Kleinschreibung, keine Leerzeichen), gewinnt jede **eigene** Casino-Runde
+in allen Spielen – zum Testen von Gewinnanimationen, Jackpot-Effekten, Sounds, Hot Streaks, Rekorden, Bilanz, Challenges
+usw. Die Auszahlung folgt den normalen Multiplikatoren (es wird nur ein gewinnendes Ergebnis gewählt, kein erzwungener
+Jackpot), Animationen laufen normal. Andere Spieler und ihre Runden bleiben unberührt. Nur dieser Spieler sieht oben
+rechts klein `DEV MODE · 100% WIN RATE`. Die Prüfung steckt zentral in `isDeveloperTestPlayer()` (`src/shared/dev.js`);
+die Spiele lesen nur `ctx.dev`.
+
 ## Speicherstand
 
 Alles wird im Browser (`localStorage`) gespeichert, getrennt in zwei Teile:
@@ -315,6 +324,7 @@ src/shared/            Autoritative Spiellogik (läuft auf dem Server ODER im Br
   events.js            Co-op-Events und High-Roller-Duelle
   dynamics.js          Floor Modifier und 30-Sekunden-Rush-Events
   runstats.js          Run-Statistik über alle Stockwerke und Team-Awards
+  dev.js               Developer-Testmodus (isDeveloperTestPlayer)
   games/arcade.js      Crash, HiLo, Mines, Dragon Tower, Penguin Cross, Plinko, Keno, Money Wheel, Duck Race, Street Craps
   games/*.js           Slots, Roulette, Blackjack, Baccarat, Craps, Hold'em, Glücksrad
   config.js            Stockwerke, Limits, Items, Achievements

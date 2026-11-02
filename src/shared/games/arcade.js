@@ -3,6 +3,7 @@
 // Animationen auf den Clients spielen nur ab, was hier feststeht. Auszahlungen liegen leicht über 100 %
 // (Arcade-Casino, wie die übrigen Spiele), grosse Multiplikatoren bleiben selten, nichts ist garantiert.
 import { rand, randInt } from '../rng.js';
+import { devReroll } from '../dev.js';
 
 const round2 = v => Math.floor(v * 100) / 100;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -40,20 +41,22 @@ export const crashGame = {
     let crash = rollCrash();
     let lucky = false;
     if (crash < 1.3 && ctx.lucky?.()) { const c2 = rollCrash(); if (c2 > crash) { crash = c2; lucky = true; } }
+    if (ctx.dev) crash = CRASH_MAX; // Developer-Testmodus: kein Crash vor dem Cashout (danach crasht es kurz darauf)
     const sec = table.secret || (table.secret = {});
-    Object.assign(sec, { crash, t0: Date.now(), lucky, bet });
+    Object.assign(sec, { crash, t0: Date.now(), lucky, bet, dev: !!ctx.dev });
     Object.assign(s, { phase: 'running', roundId: s.roundId + 1, bet, auto, cashed: null, crash: null, startedAt: sec.t0 });
     ctx.busy(true);
     const rid = s.roundId;
     if (auto && auto < crash) ctx.later(crashMsFor(auto), () => { if (s.roundId === rid) this.cashout(ctx, table, auto); });
-    ctx.later(crashMsFor(crash), () => {
-      if (s.roundId !== rid) return;
+    sec.crashAt = (c) => ctx.later(crashMsFor(c), () => {
+      if (s.roundId !== rid || sec.crash !== c) return;
       s.phase = 'crashed';
-      s.crash = crash;
-      s.history = [crash, ...s.history].slice(0, 12);
-      if (s.cashed === null) ctx.settle({ stake: bet, payout: 0, detail: `CRASHED @ ${crash.toFixed(2)}×`, crash, multiplier: crash });
+      s.crash = c;
+      s.history = [c, ...s.history].slice(0, 12);
+      if (s.cashed === null) ctx.settle({ stake: bet, payout: 0, detail: `CRASHED @ ${c.toFixed(2)}×`, crash: c, multiplier: c });
       else { ctx.busy(false); ctx.changed(); }
     });
+    sec.crashAt(crash);
   },
   cashout(ctx, table, at) {
     const s = table.state, sec = table.secret;
@@ -61,6 +64,8 @@ export const crashGame = {
     const m = at || crashMultAt(Date.now() - sec.t0);
     if (m >= sec.crash) return; // zu spät – der Crash kommt gleich
     s.cashed = m;
+    // Developer-Testmodus: nach dem Cashout crasht es bald (für alle Zuschauer ganz normal sichtbar)
+    if (sec.dev) { const c = Math.min(CRASH_MAX, round2(Math.max(m * 1.12, m + 0.15))); sec.crash = c; sec.crashAt(c); }
     ctx.settle({ stake: s.bet, payout: Math.floor(s.bet * m), keepBusy: true, multiplier: m, crashCash: m, lucky: sec.lucky, detail: `Cashout bei ${m.toFixed(2)}×` });
   },
   action(ctx, table, action) { if (action === 'cashout') this.cashout(ctx, table); },
@@ -102,6 +107,7 @@ export const hiloGame = {
     const ok = c => (action === 'hi' ? c.r > cur.r : c.r < cur.r);
     // Ayri-Glück höchstens einmal pro Runde: eine falsche Karte wird neu gezogen (bleibt Zufall)
     if (next.r !== s.card.r && !ok(next) && !table.secret.lucky && ctx.lucky?.()) { table.secret.lucky = true; next = drawCard(); }
+    if (ctx.dev) next = devReroll(next, drawCard, c => (ok(c) ? 1 : 0), 0);
     s.prev = s.card;
     s.card = next;
     s.trail = [...s.trail, next].slice(-12);
@@ -163,6 +169,11 @@ export const minesGame = {
     if (!m) return;
     const i = +m[1];
     if (i < 0 || i >= MINES_TILES || s.open.includes(i)) return;
+    if (table.secret.mines.includes(i) && ctx.dev) {
+      // Developer-Testmodus: die Mine liegt dann eben woanders (gleiche Anzahl Minen)
+      const free = [...Array(MINES_TILES).keys()].filter(k => k !== i && !table.secret.mines.includes(k) && !s.open.includes(k));
+      if (free.length) table.secret.mines = table.secret.mines.map(k => (k === i ? free[randInt(free.length)] : k));
+    }
     if (table.secret.mines.includes(i)) {
       s.hit = i;
       s.phase = 'done';
@@ -227,6 +238,8 @@ export const towerGame = {
     const i = +m[1], d = TOWER_MODES[s.mode];
     if (i < 0 || i >= d.tiles) return;
     s.picks = [...s.picks, i];
+    // Developer-Testmodus: das gewählte Feld ist sicher
+    if (ctx.dev && !table.secret.board[s.level].includes(i)) table.secret.board[s.level] = [i, ...table.secret.board[s.level].slice(1)];
     if (!table.secret.board[s.level].includes(i)) {
       s.fail = { level: s.level, tile: i };
       s.phase = 'done';
@@ -274,6 +287,7 @@ export const penguinGame = {
     const roll = () => { let k = 1; while (k <= PENGUIN_LANES && rand() < PENGUIN_MODES[mode].p) k++; return k; };
     let fail = roll();
     if (fail <= 1 && ctx.lucky?.()) fail = Math.max(fail, roll());
+    if (ctx.dev) fail = PENGUIN_LANES + 1; // Developer-Testmodus: jeder Abschnitt gelingt
     table.secret = { fail };
     Object.assign(s, { phase: 'play', roundId: s.roundId + 1, bet, mode, lane: 0, mult: 1, fail: null });
     ctx.busy(true);
@@ -332,6 +346,7 @@ export const plinkoGame = {
     const pay = p => PLINKO_PAYS[risk][p.reduce((a, b) => a + b, 0)];
     let lucky = false;
     if (pay(path) < 1 && ctx.lucky?.()) { const p2 = drop(); if (pay(p2) > pay(path)) { path = p2; lucky = pay(p2) > 1; } }
+    if (ctx.dev) path = devReroll(path, drop, pay, 1);
     const slot = path.reduce((a, b) => a + b, 0);
     const mult = PLINKO_PAYS[risk][slot];
     Object.assign(s, { phase: 'drop', roundId: s.roundId + 1, bet, risk, path, slot, mult });
@@ -372,6 +387,7 @@ export const kenoGame = {
     let drawn = drawOnce();
     let lucky = false;
     if (payFor(drawn) < 1 && ctx.lucky?.()) { const d2 = drawOnce(); if (payFor(d2) > payFor(drawn)) { drawn = d2; lucky = payFor(d2) > 1; } }
+    if (ctx.dev) drawn = devReroll(drawn, drawOnce, payFor, 1);
     const hits = drawn.filter(n => picks.includes(n)).length;
     const mult = KENO_PAYS[picks.length][hits];
     Object.assign(s, { phase: 'draw', roundId: s.roundId + 1, bet, picks, drawn, hits, mult });
@@ -411,6 +427,7 @@ export const moneywheelGame = {
     let result = randInt(MONEY_WHEEL.length);
     let lucky = false;
     if (MONEY_WHEEL[result] < 1 && ctx.lucky?.()) { const r2 = randInt(MONEY_WHEEL.length); if (MONEY_WHEEL[r2] > MONEY_WHEEL[result]) { result = r2; lucky = MONEY_WHEEL[r2] > 1; } }
+    if (ctx.dev) result = devReroll(result, () => randInt(MONEY_WHEEL.length), r => MONEY_WHEEL[r], 1);
     const mult = MONEY_WHEEL[result];
     Object.assign(s, { phase: 'spin', roundId: s.roundId + 1, bet, result });
     ctx.busy(true);
@@ -456,6 +473,7 @@ export const duckGame = {
     let winner = pickDuck();
     let lucky = false;
     if (winner !== pick && ctx.lucky?.()) { const w2 = pickDuck(); if (w2 === pick) { winner = w2; lucky = true; } }
+    if (ctx.dev) winner = pick;
     Object.assign(s, { phase: 'race', roundId: s.roundId + 1, bet, pick, winner, track: raceTrack(winner) });
     ctx.busy(true);
     ctx.later(7600, () => {
@@ -490,6 +508,7 @@ export const streetcrapsGame = {
     let dice = roll();
     let lucky = false;
     if (!def.wins(...dice) && ctx.lucky?.()) { const d2 = roll(); if (def.wins(...d2)) { dice = d2; lucky = true; } }
+    if (ctx.dev) dice = devReroll(dice, roll, d => (def.wins(...d) ? 1 : 0), 0);
     Object.assign(s, { phase: 'roll', roundId: s.roundId + 1, bet, pick, dice });
     ctx.busy(true);
     ctx.later(2600, () => {

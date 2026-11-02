@@ -11,6 +11,7 @@ import { NpcDirector, LOBBY_SEATS, SEAT_REACH } from './npcs.js';
 import { EventDirector, HIGH_ROLLERS } from './events.js';
 import { FloorDynamics, MODIFIERS } from './dynamics.js';
 import { newRunStats, runPlayer, sanitizeRunStats, computeAwards } from './runstats.js';
+import { isDeveloperTestPlayer } from './dev.js';
 import { challengesFor, isChallengeId, legacyChallengeIds, newTracker, trackResult, progress as challengeProgress } from './challenges.js';
 import { slotsGame, winTier } from './games/slots.js';
 import { rouletteGame } from './games/roulette.js';
@@ -829,6 +830,8 @@ export class Room {
         return rand() < base + (1 - base) * bonus;
       },
       get makka() { return !!table.roundMods?.makka; },
+      // Developer-Testmodus (nur exakt „Ayri000“): Spiele wählen für diesen Spieler ein gewinnendes Ergebnis
+      get dev() { return isDeveloperTestPlayer(room.players.get(pid)); },
       settle(r) { room.settle(pid, table, r); },
     };
   }

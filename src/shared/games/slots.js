@@ -3,6 +3,7 @@
 // Gewinnlinie zur Hälfte). Die Krone ist WILD, leere Felder zahlen nichts. Dazu der AYRI-Multiplikator.
 import { randInt, rand } from '../rng.js';
 import { slotTopMultiplier, jackpotBoost } from '../config.js';
+import { devReroll } from '../dev.js';
 
 export const SYMBOLS = ['cherry', 'lemon', 'bell', 'bar', 'seven', 'diamond', 'crown', 'blank'];
 const C = 0, L = 1, B = 2, R = 3, S = 4, D = 5, K = 6, BL = 7;
@@ -115,6 +116,7 @@ export const slotsGame = (variant) => ({
     const boost = !!ctx.makka; // MAKKA-LUCK beim Start des Spins
     let r = spin(variant, bet, lines, floor, boost);
     if (!r.jackpot && ctx.jackpotChance && rand() < ctx.jackpotChance) r = spin(variant, bet, lines, floor, boost, true);
+    if (ctx.dev) r = devReroll(r, () => spin(variant, bet, lines, floor, boost), x => x.payout, bet);
     let lucky = false;
     // Ayri-Glück: ein verlorener Spin wird manchmal (häufiger nach Pechsträhnen) neu gedreht
     if (r.payout < bet && ctx.lucky?.()) {

@@ -1,5 +1,6 @@
 // Punto Banco Baccarat mit klassischen Drittkarten-Regeln. Party-Regeln: Banker 1:1 (ohne Kommission), Player 1.05:1, Tie 9:1.
 import { Shoe } from '../rng.js';
+import { devReroll } from '../dev.js';
 
 export const bacValue = c => (c.r >= 10 ? 0 : c.r);
 export const bacTotal = cards => cards.reduce((a, c) => a + bacValue(c), 0) % 10;
@@ -57,6 +58,7 @@ export const baccaratGame = {
       const c2 = playCoup(() => table.shoe.draw());
       if (coupPay(c2) > coupPay(coup)) { coup = c2; lucky = coupPay(c2) > total; }
     }
+    if (ctx.dev) coup = devReroll(coup, () => playCoup(() => table.shoe.draw()), coupPay, total);
     const s = table.state;
     s.phase = 'dealing';
     s.bets = bets;

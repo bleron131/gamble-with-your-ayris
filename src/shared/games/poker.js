@@ -1,6 +1,7 @@
 // Casino Hold'em gegen den NPC-Dealer. Ante → Flop → Call (2× Ante) oder Fold.
 // Party-Regel: Dealer qualifiziert sich erst mit einem Paar Sechsen oder besser.
 import { Shoe } from '../rng.js';
+import { devReroll } from '../dev.js';
 
 export const HAND_NAMES = ['High Card', 'Paar', 'Zwei Paare', 'Drilling', 'Straße', 'Flush', 'Full House', 'Vierling', 'Straight Flush', 'Royal Flush'];
 
@@ -122,6 +123,10 @@ function showdown(ctx, table, folded) {
       const alt = [table.shoe.draw(), table.shoe.draw()];
       const as = bestHand(alt.concat(s.board));
       if (compareScore(ps, as) > 0) { sec.dealer = alt; ds = as; lucky = true; }
+    }
+    if (ctx.dev && !folded && compareScore(ps, ds) <= 0) {
+      const alt = devReroll(sec.dealer, () => [table.shoe.draw(), table.shoe.draw()], d => -compareScore(bestHand(d.concat(s.board)), ps), 0);
+      sec.dealer = alt; ds = bestHand(alt.concat(s.board));
     }
     s.dealer = sec.dealer;
     s.playerHand = HAND_NAMES[ps[0]];

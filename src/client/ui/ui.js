@@ -7,6 +7,7 @@ import { sfx, initAudio } from '../audio.js';
 import * as Save from '../save.js';
 import { CHALLENGE_BY_ID } from '../../shared/challenges.js';
 import { unlockedEmotes } from '../progress.js';
+import { isDeveloperTestPlayer } from '../../shared/dev.js';
 import { openBalance, openRunBalance, finaleSplash } from './balance.js';
 import { openTrophies } from './modals.js';
 import { TROPHIES } from '../world/trophies.js';
@@ -34,8 +35,9 @@ export class UI {
     // Pot-Anzeige und Feed untereinander: der Feed rutscht automatisch nach unten, wenn die Challenge-Liste sichtbar ist
     this.hud.append(h('div.topleft', h('div.panel.potpanel', h('div.lbl', 'TEAM POT'), this.potEl, this.targetEl, this.progress, this.levelEl, this.dynEl, this.chEl), this.feedEl));
     this.dildoEl = h('div.dildos');
+    this.devEl = h('div.devmode.hidden', h('b', 'DEV MODE'), h('span', '100% WIN RATE'));
     this.groupEl = h('div.group');
-    this.hud.append(h('div.topright', this.dildoEl, this.groupEl,
+    this.hud.append(h('div.topright', this.devEl, this.dildoEl, this.groupEl,
       h('div.btnrow',
         h('button.homebtn', { title: 'Zurück zur Startseite', 'aria-label': 'Zurück zur Startseite', onclick: () => this.app.goHome() }, h('span.hi', '🏠'), h('span.ht', 'STARTSEITE')),
         // Nur auf Touch-Geräten sichtbar: Ersatz für TAB (Gruppe) und die Emote-Tasten 1–5
@@ -121,7 +123,8 @@ export class UI {
     const code = h('input', { placeholder: 'AYRI-1234', maxlength: 9, style: { textTransform: 'uppercase' } });
     this.menuErr = h('div.err');
     const go = async (mode) => {
-      s.name = name.value.trim() || s.name;
+      // Name wird nicht getrimmt (sonst würde z. B. „Ayri000 “ zum Testnamen) – nur leere Eingaben werden ignoriert
+      if (name.value.trim()) s.name = name.value.slice(0, 16);
       Save.save();
       initAudio(s.settings);
       sfx.click();
@@ -206,6 +209,8 @@ export class UI {
       this.progress.style.display = 'none';
       this.levelEl.innerHTML = st.scene === 'final' ? 'CASINO PENTHOUSE' : `SHISHABAR${this.app.prestige ? ` · <span class="gold">★ PRESTIGE ${this.app.prestige}</span>` : ''}`;
     }
+    // Developer-Testmodus: nur für den Spieler selbst sichtbar (Name exakt „Ayri000“, so wie der Server ihn kennt)
+    this.devEl.classList.toggle('hidden', !isDeveloperTestPlayer(st.players.find(p => p.id === app.me)));
     clear(this.groupEl);
     const code = st.code === 'SOLO' ? 'SOLO' : st.code;
     this.groupEl.append(h('div.code', { title: 'Join-Code', onclick: () => navigator.clipboard?.writeText(code) }, code === 'SOLO' ? 'Solo-Modus' : `Code: ${code}`));

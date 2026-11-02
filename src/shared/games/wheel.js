@@ -1,5 +1,6 @@
 // Grosses Glücksrad (Big-Six-Stil) mit Multiplikator-Feldern.
 import { randInt } from '../rng.js';
+import { devReroll } from '../dev.js';
 
 export const WHEEL_PAYS = { x1: 1, x3: 3, x6: 6, x12: 12, x25: 25, x50: 50 };
 const COUNTS = { x1: 26, x3: 13, x6: 8, x12: 4, x25: 2, x50: 1 };
@@ -49,6 +50,7 @@ export const wheelGame = {
       const r2 = randInt(WHEEL_SEGMENTS.length);
       if (pay(r2) > pay(result)) { result = r2; lucky = pay(r2) > total; }
     }
+    if (ctx.dev) result = devReroll(result, () => randInt(WHEEL_SEGMENTS.length), pay, total);
     const seg = WHEEL_SEGMENTS[result];
     const payout = pay(result);
     const s = table.state;

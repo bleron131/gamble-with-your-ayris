@@ -1,6 +1,7 @@
 // Craps: Pass/Don't Pass mit Point, Odds (echte Quoten), Field und One-Roll-Wetten.
 // Party-Quoten: Field zahlt auf 2 und 12 je 3:1, One-Roll-Wetten zahlen faire Quoten.
 import { randInt } from '../rng.js';
+import { devReroll } from '../dev.js';
 
 export const CRAPS_BETS = {
   pass: { label: 'PASS LINE', line: true },
@@ -102,6 +103,7 @@ export const crapsGame = {
       const a2 = randInt(6) + 1, b2 = randInt(6) + 1;
       if (net(a2, b2) > net(a, b)) { a = a2; b = b2; lucky = net(a2, b2) > 0; }
     }
+    if (ctx.dev) [a, b] = devReroll([a, b], () => [randInt(6) + 1, randInt(6) + 1], d => net(d[0], d[1]), 0);
     s.phase = 'rolling';
     s.dice = [a, b];
     s.rollId++;

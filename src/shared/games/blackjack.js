@@ -40,6 +40,8 @@ export const blackjackGame = {
     // Ayri-Glück: eine schwache Starthand (12–16) wird manchmal neu gegeben
     const t0 = handTotal([p1, p2]).total;
     if (t0 >= 12 && t0 <= 16 && ctx.lucky?.()) { p1 = d(); p2 = d(); table.secret.lucky = true; } else table.secret.lucky = false;
+    // Developer-Testmodus: Dealer bekommt eine niedrige verdeckte Karte (kein Dealer-Blackjack, muss ziehen)
+    if (ctx.dev) { const lowHole = devCard(table, c => handTotal([d1, c]).total <= 16); if (lowHole) hole = lowHole; }
     table.secret.hole = hole;
     table.secret.firstBet = bet;
     s.hands = [{ cards: [p1, p2], bet, doubled: false, done: false, result: null }];
@@ -72,7 +74,8 @@ export const blackjackGame = {
       return ctx.fail('Joker benutzen oder akzeptieren');
     }
     if (s.phase !== 'player' || !hand) return ctx.fail('Gerade nicht möglich');
-    const draw = () => table.shoe.draw();
+    // Developer-Testmodus: gezogene Karten lassen die Hand nie über 21 gehen
+    const draw = () => (ctx.dev ? devCard(table, c => handTotal([...hand.cards, c]).total <= 21) || table.shoe.draw() : table.shoe.draw());
     switch (action) {
       case 'hit': {
         hand.cards.push(draw());
@@ -181,7 +184,9 @@ function dealerPlay(ctx, table) {
   const t = handTotal(s.dealer).total;
   if (!allBust && !onlyBJ && t < 17) {
     ctx.later(800, () => {
-      s.dealer.push(table.shoe.draw());
+      // Developer-Testmodus: der Dealer überkauft sich (bis 16 ziehen, dann eine zu hohe Karte)
+      const dev = ctx.dev ? devCard(table, c => { const n = handTotal([...s.dealer, c]).total; return n > 21 || (n < 17 && t <= 11); }) : null;
+      s.dealer.push(dev || table.shoe.draw());
       ctx.changed();
       dealerPlay(ctx, table);
     });
@@ -217,4 +222,14 @@ function finish(ctx, table) {
     detail: `Dealer ${dt > 21 ? 'BUST' : dt} – ${s.message}`,
     replay: { bet: table.secret.firstBet },
   });
+}
+
+// Developer-Testmodus: passende Karte aus dem Schuh suchen (unpassende kommen wieder nach unten)
+function devCard(table, ok) {
+  for (let i = 0; i < 80; i++) {
+    const c = table.shoe.draw();
+    if (ok(c)) return c;
+    table.shoe.cards.unshift(c);
+  }
+  return null;
 }
