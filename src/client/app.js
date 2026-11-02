@@ -13,7 +13,7 @@ import { NpcController } from './npcs.js';
 import { unlockedEmotes, EXTRA_EMOTES, wornLucky, freeCosmetics, hasSecret } from './progress.js';
 import { LOBBY_SEATS } from '../shared/npcs.js';
 import * as Save from './save.js';
-import { initAudio, sfx, sfxAt, setMusic, setAmbience, setDuck, setVolumes, setDizzyAudio, setShishaSounds, clearShishaSounds, updateListener, shishaDraw, shishaExhale } from './audio.js';
+import { initAudio, sfx, sfxAt, playJackpotMusic, setMusic, setAmbience, setDuck, setVolumes, setDizzyAudio, setShishaSounds, clearShishaSounds, updateListener, shishaDraw, shishaExhale } from './audio.js';
 import { bindSfx } from './tables/common.js';
 import { UI } from './ui/ui.js';
 import { esc } from './ui/dom.js';
@@ -249,6 +249,7 @@ export class App {
   // Kontextabhängige Touch-Buttons (nur wenn wirklich eine Interaktion möglich ist)
   contextActions() {
     const out = [];
+    if (this.spectating) return [{ label: 'ZUSCHAUEN BEENDEN', cls: 'main', run: () => this.stopSpectate() }];
     if (this.player.lounge) {
       const sh = this.player.lounge.seat.shisha;
       if (sh >= 0) out.push({ label: 'SHISHA RAUCHEN', cls: 'main', run: () => this.smokeShisha(sh), disabled: this.player.smokeT > 0 });
@@ -256,6 +257,7 @@ export class App {
       return out;
     }
     if (this.world?.npcCtl?.rareNear(this.player.pos)) out.push({ label: '???', cls: 'main', run: () => this.meetGoldfinger() });
+    if (this.hrNear() && !this.state.events.hr.duel) out.push({ label: '🎲 DUELL', cls: 'main', run: () => this.challengeHr() });
     const it = this.world?.nearestInteract(this.player.pos);
     if (it?.table?.walkUp) {
       const v = it.table, busy = !!v.state?.busy, id = v.def.id;
@@ -355,10 +357,13 @@ export class App {
     if (this.world.kind === 'floor' && st.session) {
       for (const [id, ts] of Object.entries(st.session.tables)) this.world.views[id]?.setState(ts);
       const me = this.mePlayer;
-      if (me?.seat && !this.player.seated) this.enterSeat(me.seat);
+      if (me?.seat && !this.player.seated) { this.stopSpectate(); this.enterSeat(me.seat); }
+      if (this.spectating && this.spectating.view.state?.occupant !== this.spectating.pid) { this.stopSpectate(); this.ui.toast('Die Runde ist vorbei – Zuschauen beendet', 'info'); }
       if (!me?.seat && this.player.seated) this.exitSeat();
     }
     this.world.npcCtl?.sync(st.npcs);
+    this.world.npcCtl?.syncHr(st.events?.hr || null);
+    this.coopEnd = st.events?.coop ? performance.now() + st.events.coop.leftMs : 0;
     // Sitzplatz in der Shishabar: erst wenn der Server ihn bestätigt, setzt sich der Spieler (kein Doppelbelegen)
     if (this.world.kind === 'lobby') {
       const ls = this.mePlayer?.lseat;
@@ -374,6 +379,7 @@ export class App {
   // ───────────────────────── Welten ─────────────────────────
   loadWorld(scene, floor) {
     if (this.player.seated) this.exitSeat(true);
+    this.spectating = null;
     const old = this.world;
     for (const a of this.avatars.values()) a.root.removeFromParent();
     this.selfChar?.root.removeFromParent(); // eigener Charakter wird weiterverwendet, nicht mit dem alten Raum freigeben
@@ -444,12 +450,26 @@ export class App {
   sitAt(id) {
     if (this.world.views?.[id]?.walkUp) return this.slotSpin(id);
     const ts = this.state?.session?.tables[id];
-    if (ts?.occupant && ts.occupant !== this.me) {
-      // Zuschauen: zur Tischseite stellen
-      this.ui.toast(`${this.playerName(ts.occupant)} spielt hier – du kannst zuschauen.`, 'info');
-      return;
-    }
+    if (ts?.occupant && ts.occupant !== this.me) { this.spectate(this.world.views[id]); return; }
     this.send({ t: 'table.sit', id });
+  }
+
+  // Zuschauen: Kamera schräg hinter den spielenden Freund, Karten/Würfel/Kugel laufen für alle synchron
+  spectate(view) {
+    if (!view?.state?.occupant) return;
+    this.spectating = { view, pid: view.state.occupant };
+    const sl = view.seatLocal;
+    const pos = view.toWorld(new THREE.Vector3(sl.x + 0.9, 2.0, sl.z + 1.0));
+    const look = view.toWorld(view.lookLocal.clone());
+    this.cinematic = { pos, look };
+    this.input.exitLock();
+    this.ui.toast(`👀 Du schaust ${this.playerName(view.state.occupant)} zu – E oder ESC beendet`, 'info');
+  }
+  stopSpectate() {
+    if (!this.spectating) return;
+    this.spectating = null;
+    this.cinematic = null;
+    this.player.snapCamera = true;
   }
 
   enterSeat(id) {
@@ -521,6 +541,8 @@ export class App {
         if (ev.newFloor) this.ui.popup('floor', `STOCKWERK ${ev.newFloor} FREIGESCHALTET`, floorDef(ev.newFloor).name);
         break;
       }
+      case 'coop': this.onCoop(ev); break;
+      case 'hr': this.onHighRoller(ev, mine); break;
       case 'challenge': {
         this.ui.feed(`🏅 Challenge geschafft: <b>${esc(ev.text)}</b>`, 'good');
         // Wer sie schon früher geschafft hat, bekommt keine 🍆 mehr – kurzer Hinweis statt Popup
@@ -599,6 +621,19 @@ export class App {
         }
       }, delay);
     }
+    // Seltener Jackpot: alle auf dem Stockwerk sehen und hören es (Lichter, Musik, Feuerwerk, jubelnde NPCs)
+    if (ev.jackpot && view) {
+      const delay = view.spinning ? 1800 : 300;
+      setTimeout(() => {
+        if (this.world.views?.[ev.tableId] !== view) return;
+        this.world.jackpotShow?.(view.group.position.clone());
+        this.world.npcCtl?.cheerAll(view.group.position);
+        const near = this.distanceTo(view.group.position) < 10;
+        if (!mine && !near) { playJackpotMusic(6); this.ui.popup('jackpot', `JACKPOT! ${ev.name}`, `+${fmtMoney(ev.net)} am ${GAME_NAMES[ev.game]}`, 5000); }
+        else if (mine) this.ui.popup('jackpot', 'JACKPOT!', `+${fmtMoney(ev.net)}`, 5000);
+        for (const a of this.avatars.values()) if (!a.emoteUntil || a.emoteUntil < performance.now()) { a.setAnim('cheer'); a.emoteUntil = performance.now() + 2600; }
+      }, delay);
+    }
     if (view?.ownFeedback) {
       // Automaten zeigen Gewinnstufen selbst (Sound, Licht, Münzen, grosse Anzeige)
     } else if (ev.jackpot) {
@@ -659,9 +694,15 @@ export class App {
     }
     if (m.floor && !this.save.rewardedFloors.includes(m.floor)) this.save.rewardedFloors.push(m.floor);
     if (m.challenge && !this.save.challenges.includes(m.challenge)) this.save.challenges.push(m.challenge);
+    if (m.hr) {
+      this.save.hrWon = [...new Set([...(this.save.hrWon || []), m.hr])];
+      this.save.events = [...new Set([...(this.save.events || []), 'highroller'])];
+      if (m.title) this.save.titles = [...new Set([...(this.save.titles || []), m.title])];
+    }
     Save.save();
     if (m.kind === 'challenge') this.save.stats.challengesDone = (this.save.stats.challengesDone || 0) + 1;
     if (m.kind === 'challenge') this.ui.popup('challenge', `CHALLENGE ABGESCHLOSSEN +${m.dildos} 🍆`, m.reason.replace(/^CHALLENGE ABGESCHLOSSEN: /, ''));
+    else if (m.kind === 'event') this.ui.popup('event', `EVENT GESCHAFFT +${m.dildos} 🍆`, m.reason.replace(/^(CO-OP-EVENT |HIGH-ROLLER-EVENT: )/, ''));
     else if (m.floor) this.ui.popup('floor', `STOCK ${m.floor} GESCHAFFT +${m.dildos} 🍆`, m.reason);
     else this.ui.reward(m.dildos, m.reason);
     this.ui.refreshHud();
@@ -691,6 +732,36 @@ export class App {
     }
     this.ui.renderEmotes();
     Save.save();
+  }
+
+  // ───────────────────────── Events (Co-op & High Roller) ─────────────────────────
+  onCoop(ev) {
+    if (ev.phase === 'start') { this.ui.popup('event', `${ev.name} GESTARTET`, ev.desc, 4200); sfx.ding(); this.ui.feed(`⚡ Co-op-Event <b>${esc(ev.name)}</b>: ${esc(ev.desc)}`, 'item'); }
+    else if (ev.phase === 'done') { sfx.bigWin(); this.world.particles?.confetti(this.player.pos.clone().setY(2.5), 120, 4); this.ui.feed(`✅ <b>${esc(ev.name)}</b> geschafft – alle bekommen +${ev.reward} 🍆`, 'good'); }
+    else if (ev.phase === 'fail') { this.ui.toast(`⌛ ${ev.name} abgelaufen – kein Problem, kostet nichts`, 'info'); }
+  }
+
+  hrNear() {
+    const hr = this.state?.events?.hr;
+    const c = hr && this.world.npcCtl?.hrChar;
+    return !!c && !this.player.seated && Math.hypot(c.root.position.x - this.player.pos.x, c.root.position.z - this.player.pos.z) < 1.8;
+  }
+  challengeHr() { if (!this.state?.events?.hr?.duel) this.send({ t: 'hr.challenge' }); }
+
+  onHighRoller(ev, mine) {
+    const ctl = this.world.npcCtl;
+    if (ev.phase === 'arrive') { this.ui.popup('event', `${ev.name.toUpperCase()} IST DA`, 'Fordere ihn zum Würfel-Duell heraus – kostenlos, nur Ruhm & 🍆', 4200); sfx.ding(); this.ui.feed(`🎩 <b>${esc(ev.name)}</b> betritt das Casino und sucht einen Gegner…`, 'item'); }
+    else if (ev.phase === 'duel') this.ui.feed(`🎲 <b>${esc(ev.player)}</b> fordert <b>${esc(ev.name)}</b> heraus!`, 'risk');
+    else if (ev.phase === 'round') {
+      const ps = ev.p[0] + ev.p[1], ns = ev.n[0] + ev.n[1];
+      ctl?.hrSay(`🎲 ${ev.player} ${ps} : ${ns} ${ev.name}`, ps > ns ? '#7cff6b' : ps < ns ? '#ff6b6b' : '#ffd97a');
+      if (mine || (ctl?.hrChar && this.distanceTo(ctl.hrChar.root.position) < 12)) sfx.card?.();
+      if (mine) this.ui.bigText(`${ps} : ${ns}`, `${ev.p.join('+')} gegen ${ev.n.join('+')} · Stand ${ev.score[0]}:${ev.score[1]}`, ps > ns ? 'win' : ps < ns ? 'lose' : 'nice', 1400);
+    } else if (ev.phase === 'end') {
+      ctl?.hrReact(ev.win);
+      this.ui.feed(ev.win ? `🏆 <b>${esc(ev.player)}</b> besiegt <b>${esc(ev.name)}</b>!` : `😈 <b>${esc(ev.name)}</b> gewinnt das Duell gegen <b>${esc(ev.player)}</b>`, ev.win ? 'good' : 'risk');
+      if (mine) { if (ev.win) { sfx.bigWin(); this.player.playEmote('cheer'); } else { sfx.lose(); this.ui.toast(`${ev.name}: „Vielleicht nächstes Mal.“ – kostet dich nichts`, 'info'); } }
+    } else if (ev.phase === 'leave') this.ui.feed(`🎩 ${esc(ev.name)} verlässt das Casino`);
   }
 
   // ───────────────────────── Geheimnisse ─────────────────────────
@@ -1012,6 +1083,7 @@ export class App {
       return;
     }
     if (!this.state) return;
+    if (this.spectating) { if (['Escape', 'KeyE', 'KeyQ', 'Space'].includes(e.code)) { this.stopSpectate(); e.preventDefault(); } return; }
     // Geheimcode: A-Y-R-I hintereinander tippen
     if (/^Key[A-Z]$/.test(e.code)) { this.typed = ((this.typed || '') + e.code.slice(3)).slice(-4); if (this.typed === 'AYRI') this.findSecret('code_ayri'); }
     if (this.mafiaLock) return;
@@ -1025,6 +1097,7 @@ export class App {
       return;
     }
     if (e.code === 'KeyE' && this.world.npcCtl?.rareNear(this.player.pos)) { this.meetGoldfinger(); return; }
+    if (e.code === 'KeyE' && this.hrNear()) { this.challengeHr(); return; }
     if (e.code === 'KeyE') { const it = this.world.nearestInteract(this.player.pos); if (it) { if (!it.table?.walkUp) sfx.click(); it.action(); } }
     if (e.code === 'KeyR' || e.code === 'KeyF') { const v = this.slotNear(); if (v) this.slotBet(v.def.id, e.code === 'KeyR' ? 1 : -1); }
     const emotes = { Digit1: 'cheer', Digit2: 'dance', Digit3: 'sad', Digit4: 'facepalm', Digit5: 'point', Digit6: EXTRA_EMOTES[0][0], Digit7: EXTRA_EMOTES[1][0], Digit8: EXTRA_EMOTES[2][0] };
@@ -1096,7 +1169,9 @@ export class App {
     const touch = this.touch.active;
     const camKey = touch ? '🎥' : 'C';
     if (this.ballCam) this.ui.setHint(`${camKey} – Kamera verlassen`);
+    else if (this.spectating) this.ui.setHint(touch ? '' : `👀 Zuschauen bei ${this.playerName(this.spectating.pid)} · [E] / [ESC] beenden`);
     else if (!this.player.seated && !this.player.lounge && this.world.npcCtl?.rareNear(this.player.pos)) this.ui.setHint(touch ? '' : '[E] ???');
+    else if (!this.player.seated && this.hrNear()) this.ui.setHint(touch ? '' : this.state.events.hr.duel ? `🎲 Duell läuft…` : `[E] ${this.state.events.hr.name} herausfordern (Würfel-Duell, kostenlos)`);
     else if (this.player.lounge) this.ui.setHint(touch ? '' : this.player.lounge.seat.shisha >= 0 ? '[E] Shisha rauchen · [LEERTASTE] Aufstehen' : '[E] / [LEERTASTE] Aufstehen');
     else if (this.state && !this.player.seated && !this.cinematic) {
       const it = this.world.nearestInteract(this.player.pos);

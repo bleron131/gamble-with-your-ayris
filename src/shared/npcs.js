@@ -80,6 +80,7 @@ export class NpcDirector {
 
   taken(spot, except) {
     if (spot.startsWith('watch:')) return false;
+    if (this.room.events?.hr?.spot === spot) return true; // dort steht der High Roller
     return this.list.some(n => n !== except && n.spot === spot) || this.playerUses(spot);
   }
 

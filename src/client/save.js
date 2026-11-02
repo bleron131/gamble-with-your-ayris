@@ -104,6 +104,7 @@ export function profile() {
   return {
     name: s.name, appearance: s.appearance, rewardedFloors: s.rewardedFloors, challenges: s.challenges,
     makka: s.makka || 0,
+    hrWon: s.hrWon || [],
     campaign: s.campaign, run: s.run,
   };
 }

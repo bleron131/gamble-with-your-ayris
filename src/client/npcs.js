@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { Character, npcLook } from './character.js';
 import { LOBBY_SEATS } from '../shared/npcs.js';
+import { TextSprite } from './tables/common.js';
 
 const CELL = 0.4;
 const WALK = 1.35;
@@ -232,6 +233,14 @@ export class NpcController {
 
   update(dt, camera) {
     this.frame++;
+    if (this.hrChar) {
+      const c = this.hrChar;
+      // zum nächsten Spieler drehen, Ring pulsiert
+      const p = this.app.player.pos;
+      c.root.rotation.y += angleDiff(Math.atan2(p.x - c.root.position.x, p.z - c.root.position.z), c.root.rotation.y) * Math.min(1, dt * 2);
+      c.ring.material.opacity = 0.45 + 0.3 * Math.sin(performance.now() / 300);
+      c.update(dt);
+    }
     const cam = camera.position;
     const far = this.app.engine?.mobile ? 24 : 38;
     for (const n of this.npcs.values()) {
@@ -282,6 +291,63 @@ export class NpcController {
     } else {
       c.root.position.set(sp.x, 0, sp.z);
       c.setAnim(sp.anim || 'idle');
+    }
+  }
+
+  // High-Roller-Event: besonderer NPC mit Namensschild und goldenem Lichtkegel am Boden
+  syncHr(hr) {
+    if (!hr) { if (this.hrChar) { this.hrChar.root.removeFromParent(); this.hrChar.dispose?.(); this.hrChar = null; this.hrId = null; } return; }
+    if (this.hrChar && this.hrId === hr.id + hr.spot) return;
+    this.syncHr(null);
+    const sp = this.world.npcSpot(hr.spot);
+    if (!sp) return;
+    const looks = {
+      highroller: { jacket: 'blazer', jacketColor: '#1a1a1a', top: 'shirt', pants: 'suit', shoes: 'loafers', hat: 'fedora', glasses: 'shades', jewelry: 'goldchain', accessory: 'moneybag' },
+      champion: { jacket: 'gold', top: 'shirt', pants: 'suit', shoes: 'goldsneakers', hat: 'crown', jewelry: 'diamond', accessory: 'trophy' },
+      vipdealer: { jacket: 'tux', top: 'shirt', pants: 'suit', shoes: 'loafers', hat: 'tophat', glasses: 'monocle', jewelry: 'watch' },
+      millionaire: { jacket: 'velvet', top: 'casino', pants: 'gold', shoes: 'loafers', hat: 'diamondhat', glasses: 'golden', jewelry: 'goldchain' },
+      mystery: { jacket: 'leather', jacketColor: '#111', top: 'hoodie', topColor: '#111111', pants: 'suit', pantsColor: '#111111', hat: 'fedora', mask: 'venetian', glasses: 'none' },
+    };
+    const c = new Character({ ...npcLook('vip', hr.id.length * 7919), ...looks[hr.id] });
+    c.setName(`🎩 ${hr.name}`, '#ffd700');
+    c.root.position.set(sp.x, 0, sp.z);
+    c.root.rotation.y = sp.ry;
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.62, 32), new THREE.MeshBasicMaterial({ color: '#ffd700', transparent: true, opacity: 0.7, toneMapped: false }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02;
+    c.root.add(ring);
+    c.ring = ring;
+    this.world.scene.add(c.root);
+    this.hrChar = c;
+    this.hrId = hr.id + hr.spot;
+  }
+  hrSay(text, color) {
+    const c = this.hrChar;
+    if (!c) return;
+    c.setAnim('deal');
+    clearTimeout(this.hrT);
+    this.hrT = setTimeout(() => c.setAnim('idle'), 900);
+    // Würfelergebnis als Schild über dem Kopf (für alle sichtbar)
+    if (!c.say) { c.say = new TextSprite(1.2, 0.3); c.say.sprite.position.y = 2.15; c.root.add(c.say.sprite); }
+    c.say.set(text, color);
+    clearTimeout(this.sayT);
+    this.sayT = setTimeout(() => c.say?.set(''), 1500);
+  }
+  hrReact(win) {
+    const c = this.hrChar;
+    if (!c) return;
+    c.setAnim(win ? 'facepalm' : 'cheer');
+    clearTimeout(this.hrT);
+    this.hrT = setTimeout(() => c.setAnim('idle'), 2400);
+  }
+
+  // Alle NPCs reagieren (z. B. Jackpot): stehende jubeln und drehen sich zur Quelle
+  cheerAll(pos) {
+    for (const n of this.npcs.values()) {
+      if (n.path.length) continue;
+      const c = n.char;
+      if (n.pose !== 'sit') { c.setAnim(Math.random() < 0.7 ? 'cheer' : 'dance'); if (pos && n.target) n.target = { ...n.target, ry: Math.atan2(pos.x - c.root.position.x, pos.z - c.root.position.z) }; }
+      n.react = 'cheer';
+      n.reactT = 3 + Math.random() * 1.5;
     }
   }
 

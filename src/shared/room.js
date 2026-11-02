@@ -8,6 +8,7 @@ import {
 } from './config.js';
 import { rand } from './rng.js';
 import { NpcDirector, LOBBY_SEATS, SEAT_REACH } from './npcs.js';
+import { EventDirector, HIGH_ROLLERS } from './events.js';
 import { challengesFor, isChallengeId, legacyChallengeIds, newTracker, trackResult, progress as challengeProgress } from './challenges.js';
 import { slotsGame, winTier } from './games/slots.js';
 import { rouletteGame } from './games/roulette.js';
@@ -75,7 +76,8 @@ export class Room {
     // NPCs: Regie läuft serverseitig, damit alle Spieler dieselben NPCs sehen
     this.npcs = new NpcDirector(this);
     this.npcs.reset('lobby');
-    this.npcTimer = setInterval(() => this.npcs.tick(), 1000);
+    this.events = new EventDirector(this);
+    this.npcTimer = setInterval(() => { this.npcs.tick(); this.events.tick(); }, 1000);
   }
 
   // ───────────────────────── Verbindungen ─────────────────────────
@@ -90,6 +92,7 @@ export class Room {
       chDone: new Set([...(Array.isArray(profile.challenges) ? profile.challenges.filter(isChallengeId) : []), ...legacyChallengeIds(profile.challengeFloors)]),
       inventory: {}, loadout: [], used: {}, armed: {}, shishaRounds: 0, lossStreak: 0,
       makka: Math.max(0, Math.min(MAKKA_MAX, Math.floor(+profile.makka) || 0)), cocktails: 0, smokeAt: 0,
+      hrWon: new Set((Array.isArray(profile.hrWon) ? profile.hrWon : []).filter(k => HIGH_ROLLERS[k])),
       seat: null, lseat: null, pose: { p: [0, 0, 0], r: 0, a: 'idle' }, poseDirty: true,
       joinedAt: Date.now(),
     };
@@ -181,6 +184,7 @@ export class Room {
       makkaLuckMs: Math.max(0, (this.makkaLuckUntil || 0) - Date.now()),
       scene: this.scene, floor: this.floor, session, vote: this.vote && { ...this.vote },
       npcs: this.npcs.snapshot(),
+      events: this.events.snapshot(),
     };
   }
 
@@ -213,6 +217,7 @@ export class Room {
           break;
         case 'smoke': this.smoke(p, msg.i); break;
         case 'seat.take': this.takeSeat(p, msg.i); break;
+        case 'hr.challenge': this.events.challenge(p); break;
         case 'seat.leave': if (p.lseat != null) { p.lseat = null; this.markDirty(); } break;
         case 'vote.start': this.startVote(p, msg.type, msg.data || {}); break;
         case 'vote.cast': this.castVote(p, !!msg.yes); break;
@@ -334,6 +339,7 @@ export class Room {
   changeScene(scene, extra = {}) {
     this.scene = scene;
     for (const p of this.players.values()) { p.seat = null; p.lseat = null; }
+    this.events.reset(scene);
     this.npcs.reset(scene, this.floor);
     this.event({ kind: 'scene', scene, floor: this.floor, ...extra });
     this.markDirty();
@@ -755,6 +761,7 @@ export class Room {
     });
     const tr = this.session?.tracker;
     if (tr && p) trackResult(tr, { pid, game: table.type, stake, net, blackjacks: r.blackjacks, straight: r.straight, tieWin: r.tieWin, pointHit: r.pointHit, pokerCat: r.pokerCat, makka: !!mods.makka, tier: GAMES[table.type].walkUp ? tier : null, target: f.target });
+    if (p && stake > 0) this.events.onResult({ game: table.type, stake, net });
     this.markDirty();
     this.checkTarget();
     this.checkChallenges();

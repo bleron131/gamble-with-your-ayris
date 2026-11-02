@@ -187,6 +187,17 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   Kein Einfluss auf Team-Pot oder Gewinnchancen.
 - **Geheimnisse & Easter Eggs**: Fünf versteckte Dinge – nicht alle sind markiert (Tipp: Shishabar, ein seltener Gast
   in Gold, eine Bibliothek, ein Teleskop und ein Wort, das man tippen kann).
+- **High-Roller-Events (optional)**: Ab Stock 3 taucht ab und zu ein besonderer Gast auf – High Roller, Casino Champion,
+  VIP Dealer, Millionär oder ein mysteriöser Spieler (mit goldenem Ring am Boden). `[E]` startet ein Würfel-Duell
+  (Best of 3, kostenlos, kein Team-Pot); alle sehen die Würfe über seinem Kopf. Sieg: +5 🍆 und ein Titel beim ersten Mal
+  (danach +1 🍆), schaltet den Diamond Hat frei. Wer verliert, verliert nichts.
+- **Co-op-Events (optional)**: TEAM RUSH (Betrag in 5 Minuten gewinnen), LUCKY STREAK (5 Team-Gewinne in Folge),
+  CASINO TOUR (in 3 verschiedenen Spielen gewinnen). Leiste oben mit Fortschritt und Restzeit; geschafft = 🍆 für alle,
+  abgelaufen = kein Nachteil.
+- **Zuschauen**: `[E]` an einem Tisch, an dem ein Freund spielt, setzt die Kamera schräg hinter ihn – Karten, Würfel und
+  Kugel laufen synchron mit. E oder ESC beendet das Zuschauen.
+- **Jackpots**: Ein Slot-Jackpot ist für alle auf dem Stockwerk ein Ereignis – Lichter wechseln in den Farben des
+  Stockwerks, Goldfontäne, Feuerwerk unter der Decke, kurze Jackpot-Musik, grosse Anzeige und jubelnde NPCs.
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Challenges und Achievements – jeweils nur
   einmal pro Spieler, also kein Farming.
 - **MAKKA an der Bar**: Nur bei Kemal an der Bar der Shishabar gibt es die pinke Ayri-Limonade für genau 1 🍆.
@@ -233,6 +244,7 @@ src/shared/            Autoritative Spiellogik (läuft auf dem Server ODER im Br
   room.js              Raum: Team-Pot, Abstimmungen, Stockwerke, Mafia, Items, Finale
   challenges.js        Optionale Challenges pro Stockwerk (Definition + Fortschritt)
   npcs.js              NPC-Regie (logische Plätze, Vorrang für Spieler) + Sitzplätze der Shishabar
+  events.js            Co-op-Events und High-Roller-Duelle
   games/*.js           Slots, Roulette, Blackjack, Baccarat, Craps, Hold'em, Glücksrad
   config.js            Stockwerke, Limits, Items, Achievements
 src/client/            Three.js-Client

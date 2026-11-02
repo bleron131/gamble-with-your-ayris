@@ -490,6 +490,37 @@ export class CasinoWorld extends World {
     }
   }
 
+  // ───────────────────────── Jackpot-Show (für alle Spieler auf dem Stockwerk) ─────────────────────────
+  // Lichter wechseln in den Farben des Stockwerks, Goldfontäne am Automaten, Feuerwerk unter der Decke.
+  jackpotShow(pos) {
+    if (this.jackpotT > 0) return;
+    const palettes = { lofi: ['#7cff6b', '#ffffff'], synth: ['#ff3cac', '#2bd9fe', '#b388ff'], jazz: ['#ffd97a', '#ff9f43'], tropical: ['#7cff6b', '#ffd60a', '#ff6b35'], pentatonic: ['#ff2e2e', '#ffd700'], ambient: ['#7cf9ff', '#ffffff', '#9be7ff'], royal: ['#ffd700', '#fff3b0', '#ff5cf0'] };
+    const cols = palettes[this.style.music] || palettes.jazz;
+    const saved = this.lightsList.map(l => ({ l, c: l.color.clone(), i: l.intensity }));
+    this.jackpotT = 5.5;
+    const ps = this.particles;
+    const fountain = () => { for (let i = 0; i < 14; i++) ps.emit({ pos: pos.clone().add(new THREE.Vector3(0, 1.6, 0)), vel: [(Math.random() - 0.5) * 1.6, 3 + Math.random() * 2.5, (Math.random() - 0.5) * 1.6], life: 1.8, size: 0.07, grow: 0, opacity: 1, color: i % 3 ? '#ffd23c' : cols[i % cols.length], gravity: 5, additive: true }); };
+    const firework = () => {
+      const c = new THREE.Vector3((Math.random() - 0.5) * this.W * 0.7, this.H - 1, (Math.random() - 0.5) * this.D * 0.7);
+      const col = cols[Math.floor(Math.random() * cols.length)];
+      for (let i = 0; i < 30; i++) { const a = Math.random() * Math.PI * 2, b = Math.random() * Math.PI; ps.emit({ pos: c.clone(), vel: [Math.cos(a) * Math.sin(b) * 3, Math.cos(b) * 3, Math.sin(a) * Math.sin(b) * 3], life: 1.4, size: 0.08, grow: 0, opacity: 1, color: col, gravity: 1.5, additive: true }); }
+    };
+    let acc = 0;
+    const upd = (dt, t) => {
+      this.jackpotT -= dt;
+      acc += dt;
+      saved.forEach(({ l }, i) => { l.color.set(cols[(Math.floor(t * 6) + i) % cols.length]); l.intensity = saved[i].i * (1.2 + 0.6 * Math.abs(Math.sin(t * 10 + i))); });
+      if (acc > 0.25) { acc = 0; fountain(); if (Math.random() < 0.6) firework(); }
+      if (this.jackpotT <= 0) {
+        saved.forEach(({ l, c, i }) => { l.color.copy(c); l.intensity = i; });
+        this.updaters.splice(this.updaters.indexOf(upd), 1);
+      }
+    };
+    this.updaters.push(upd);
+    this.flashAt(pos, 5);
+    ps.confetti(pos.clone().setY(2.4), 220, 4);
+  }
+
   // ───────────────────────── Mafia ─────────────────────────
   // Bühne für die Mafia-Szene: freier Bereich vor dem Aufzug, unabhängig davon, wo die Spieler gerade stehen
   mafiaStage(n) {

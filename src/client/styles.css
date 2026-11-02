@@ -476,3 +476,12 @@ button.homebtn .hi { font-size: 16px; }
 @media (max-width: 900px), (max-height: 500px) { button.homebtn .ht { display: none; } button.homebtn { padding: 6px 10px; } }
 .confirm h2 { text-align: center; margin: 0 0 4px; }
 .confirm .ct.small2 { font-size: 15px; font-weight: 700; color: #d8cfe8; }
+
+/* ── Co-op-Event-Leiste ── */
+.eventbar { position: absolute; left: 50%; top: calc(54px + var(--st)); transform: translateX(-50%); min-width: 280px; max-width: min(460px, 60vw); padding: 7px 14px 8px; border-radius: 14px; background: rgba(14, 7, 26, .85); border: 1px solid #2bd9fe; box-shadow: 0 0 16px rgba(43, 217, 254, .35); text-align: center; pointer-events: none; }
+.eventbar .et { font-family: var(--title); font-size: 15px; color: #2bd9fe; letter-spacing: 1px; }
+.eventbar .ed { font-size: 12px; font-weight: 700; color: #d8cfe8; }
+.eventbar .ebar { height: 6px; border-radius: 4px; background: rgba(255, 255, 255, .12); margin: 5px 0 3px; overflow: hidden; }
+.eventbar .ebar > div { height: 100%; background: linear-gradient(90deg, #2bd9fe, #7cff6b); transition: width .4s; }
+.eventbar .ep { font-size: 12px; font-weight: 800; color: var(--gold); }
+@media (max-height: 500px) { .eventbar { top: calc(8px + var(--st)); padding: 4px 10px; min-width: 220px; } .eventbar .ed { display: none; } }

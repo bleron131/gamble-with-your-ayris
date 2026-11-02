@@ -46,6 +46,8 @@ export class UI {
     this.hud.append(this.makkaEl);
     this.luckEl = h('div.makkaluck.hidden');
     this.hud.append(this.luckEl);
+    this.eventEl = h('div.eventbar.hidden');
+    this.hud.append(this.eventEl);
     this.perfEl = h('pre.perfmon.hidden');
     r.append(this.perfEl);
     this.hintEl = h('div.hint');
@@ -187,7 +189,9 @@ export class UI {
       this.progress.classList.toggle('done', !!st.session?.targetReached);
       this.levelEl.innerHTML = `LEVEL <b>${st.floor}</b> · ${esc(f.name)}`;
       this.renderChallenges(st);
+      this.renderEvent(st);
     } else {
+      this.eventEl.classList.add('hidden');
       clear(this.chEl);
       this.targetEl.innerHTML = st.scene === 'final' ? '<span class="gold">DIE FINALE ENTSCHEIDUNG</span>' : `Stockwerke: <b>${st.campaign.completed.length}/15</b> · freigeschaltet bis <b>${st.campaign.unlocked}</b>`;
       this.progress.style.display = 'none';
@@ -230,6 +234,16 @@ export class UI {
     clearTimeout(this.helpTimer);
     this.helpEl.classList.add('out');
     setTimeout(() => this.helpEl.classList.add('hidden'), 500);
+  }
+
+  // Laufendes Co-op-Event (optional): Name, Aufgabe, Fortschritt, Restzeit
+  renderEvent(st) {
+    const c = st.events?.coop;
+    this.eventEl.classList.toggle('hidden', !c);
+    if (!c) return;
+    const prog = c.id === 'rush' ? `${fmtMoney(c.prog)} / ${fmtMoney(c.goal)}` : `${c.prog} / ${c.goal}`;
+    clear(this.eventEl);
+    this.eventEl.append(h('div.et', `${c.icon} ${c.name}`), h('div.ed', c.desc), h('div.ebar', h('div', { style: { width: `${Math.min(100, c.prog / c.goal * 100)}%` } })), h('div.ep', prog, this.eventTimer = h('span.etime', '')));
   }
 
   // Optionale Challenges des Stockwerks (blockieren nichts – nur Bonus-🍆)
@@ -283,6 +297,11 @@ export class UI {
     const left = Math.max(0, Math.ceil(((this.app.makkaLuckEnd || 0) - performance.now()) / 1000));
     const ltxt = left > 0 && this.app.world?.kind === 'floor' ? `🍹 MAKKA LUCK – ${left}s` : '';
     if (this.luckEl.textContent !== ltxt) { this.luckEl.textContent = ltxt; this.luckEl.classList.toggle('hidden', !ltxt); }
+    if (this.eventTimer && !this.eventEl.classList.contains('hidden')) {
+      const left = Math.max(0, Math.ceil(((this.app.coopEnd || 0) - performance.now()) / 1000));
+      const t = ` · ⏱ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+      if (this.eventTimer.textContent !== t) this.eventTimer.textContent = t;
+    }
     if (this.voteDeadline) {
       const left = Math.max(0, Math.ceil((this.voteDeadline - Date.now()) / 1000));
       if (this.voteTimer) this.voteTimer.textContent = `${left}s`;
