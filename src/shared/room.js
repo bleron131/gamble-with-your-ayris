@@ -17,6 +17,7 @@ import { baccaratGame } from './games/baccarat.js';
 import { crapsGame } from './games/craps.js';
 import { pokerGame } from './games/poker.js';
 import { wheelGame } from './games/wheel.js';
+import { ARCADE_GAMES } from './games/arcade.js';
 
 const SLOT_HOLD_MS = 4000;
 
@@ -29,6 +30,7 @@ export const GAMES = {
   craps: crapsGame,
   poker: pokerGame,
   wheel: wheelGame,
+  ...ARCADE_GAMES,
 };
 
 // Finale Shishabar: Alle Spieler müssen bis zum Mitarbeiter laufen (z kleiner als dieser Wert)

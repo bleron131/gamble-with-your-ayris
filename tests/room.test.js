@@ -500,10 +500,10 @@ test('Spielstand: gespeicherter Run bringt seine Stockwerke mit, ein neuer Run (
 });
 
 // ───────────────────────── Spiele bauen sich über die Stockwerke auf (Prompt 6) ─────────────────────────
-test('Stockwerke: Stock 1 = Slots + Blackjack, jedes eingeführte Spiel bleibt auf allen höheren Stockwerken', async () => {
+test('Stockwerke: Stock 1 = Slots + Blackjack + HiLo, jedes eingeführte Spiel bleibt auf allen höheren Stockwerken', async () => {
   const { floorTables, FLOORS } = await import('../src/shared/config.js');
   const types = n => new Set(floorTables(n).map(t => t.type));
-  assert.deepEqual([...types(1)].sort(), ['blackjack', 'slots']);
+  assert.deepEqual([...types(1)].sort(), ['blackjack', 'hilo', 'slots']);
   assert.ok(['slots', 'blackjack', 'roulette'].every(g => types(2).has(g)));
   const seen = new Set();
   for (let n = 1; n <= 15; n++) {
@@ -517,7 +517,7 @@ test('Stockwerke: Stock 1 = Slots + Blackjack, jedes eingeführte Spiel bleibt a
     // Mehr Auswahl statt anderer Auswahl: nie weniger Tische als im Stockwerk darunter
     if (n > 1) assert.ok(floorTables(n).length >= floorTables(n - 1).length);
   }
-  assert.equal(types(15).size, 8);
+  assert.equal(types(15).size, 18); // 8 klassische + 10 Arcade-Spiele
   assert.ok(floorTables(15).filter(t => t.type === 'blackjack').length >= 3);
   // Eindeutige Tisch-IDs (Server und Client teilen sie)
   for (let n = 1; n <= 15; n++) { const ids = floorTables(n).map(t => t.id); assert.equal(new Set(ids).size, ids.length); }

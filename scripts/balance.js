@@ -61,8 +61,45 @@ export function simulate(type, rounds = N, withLuck = true, makka = false) {
         game.action(ctx, table, 'call');
         break;
       }
+      // Arcade-Spiele (Prompt 10): einfache, gemischte Spielweisen
+      case 'crash': game.start(ctx, table, { bet, auto: [1.5, 2, 3, 1.2, 5][i % 5] }); break;
+      case 'hilo': {
+        game.start(ctx, table, { bet });
+        const want = i % 3 + 1;
+        for (let k = 0; k < 40 && table.state.phase === 'play' && table.state.steps < want; k++) game.action(ctx, table, table.state.card.r <= 7 ? 'hi' : 'lo');
+        if (table.state.phase === 'play') game.action(ctx, table, 'cash');
+        break;
+      }
+      case 'mines': {
+        game.start(ctx, table, { bet, mines: [1, 3, 5][i % 3] });
+        const want = i % 4 + 1, order = Array.from({ length: 25 }, (_, k) => k).sort(() => Math.random() - 0.5);
+        for (const k of order) { if (table.state.phase !== 'play' || table.state.open.length >= want) break; game.action(ctx, table, 'pick:' + k); }
+        if (table.state.phase === 'play') game.action(ctx, table, 'cash');
+        break;
+      }
+      case 'tower': {
+        const mode = ['easy', 'medium', 'hard'][i % 3];
+        game.start(ctx, table, { bet, mode });
+        const want = i % 3 + 1, tiles = { easy: 4, medium: 3, hard: 2 }[mode];
+        while (table.state.phase === 'play' && table.state.level < want) game.action(ctx, table, 'pick:' + Math.floor(Math.random() * tiles));
+        if (table.state.phase === 'play') game.action(ctx, table, 'cash');
+        break;
+      }
+      case 'penguin': {
+        game.start(ctx, table, { bet, mode: ['easy', 'medium', 'hard'][i % 3] });
+        const want = i % 4 + 1;
+        while (table.state.phase === 'play' && table.state.lane < want) game.action(ctx, table, 'go');
+        if (table.state.phase === 'play') game.action(ctx, table, 'cash');
+        break;
+      }
+      case 'plinko': game.start(ctx, table, { bet, risk: ['low', 'medium', 'high'][i % 3] }); break;
+      case 'keno': { const n = i % 8 + 1, pool = Array.from({ length: 40 }, (_, k) => k + 1).sort(() => Math.random() - 0.5); game.start(ctx, table, { bet, picks: pool.slice(0, n) }); break; }
+      case 'moneywheel': game.start(ctx, table, { bet }); break;
+      case 'duck': game.start(ctx, table, { bet, pick: i % 5 }); break;
+      case 'streetcraps': game.start(ctx, table, { bet, pick: ['high', 'low', 'seven', 'doubles'][i % 4] }); break;
     }
     flush();
+    table.busy = false;
   }
   return { type, rtp: paid / staked, winRate: wins / played, lossRate: losses / played, maxLossRun };
 }

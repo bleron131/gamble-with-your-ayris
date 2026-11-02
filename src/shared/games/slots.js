@@ -26,7 +26,7 @@ export const VARIANTS = {
   // High-Limit: etwas seltener, dafür grössere Treffer
   high: {
     strip: buildStrip([8, 6, 3, 2, 2, 1, 1, 3]),
-    pay3: { [C]: 1.4, [L]: 2, [B]: 3, [R]: 5, [S]: 8, [D]: 15, [K]: 240 },
+    pay3: { [C]: 1.4, [L]: 1.8, [B]: 2.8, [R]: 4.5, [S]: 8, [D]: 15, [K]: 240 },
   },
 };
 

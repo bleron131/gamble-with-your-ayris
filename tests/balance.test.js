@@ -10,10 +10,13 @@ for (const type of Object.keys(GAMES)) {
     // Slots mit vielen Runden, damit seltene Jackpots den Mittelwert nicht verzerren
     const r = simulate(type, type.includes('slots') ? 120000 : 15000);
     assert.ok(r.rtp > 0.97 && r.rtp < 1.2, `RTP ${r.rtp}`);
-    assert.ok(r.lossRate > 0.3, `Verlustquote ${r.lossRate}`);
-    assert.ok(r.winRate > 0.3, `Gewinnquote ${r.winRate}`);
+    // Mines mit nur 1 Mine und wenigen Feldern ist bewusst sicher, aber kaum lohnend
+    assert.ok(r.lossRate > (type === 'mines' ? 0.2 : 0.3), `Verlustquote ${r.lossRate}`);
+    // Langschuss-Spiele (eine von 5 Enten, Glücksrad mit vielen 0×-Feldern) gewinnen naturgemäss seltener, aber höher
+    const longShot = ['duck', 'moneywheel'].includes(type);
+    assert.ok(r.winRate > (longShot ? 0.15 : 0.3), `Gewinnquote ${r.winRate}`);
     // Prompt 10: sehr lange Verlustserien werden selten (Ayri-Glück steigt schneller)
-    assert.ok(r.maxLossRun < 30, `längste Pechsträhne ${r.maxLossRun}`);
+    assert.ok(r.maxLossRun < (longShot ? 40 : 30), `längste Pechsträhne ${r.maxLossRun}`);
   });
 }
 

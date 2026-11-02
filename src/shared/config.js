@@ -29,11 +29,17 @@ export const GAME_NAMES = {
   poker: "Casino Hold'em",
   wheel: 'Glücksrad',
   highslots: 'High-Limit Slots',
+  // Prompt 10: Arcade-Casino-Spiele
+  hilo: 'HiLo', mines: 'Mines', crash: 'Crash', plinko: 'Plinko', keno: 'Keno', moneywheel: 'Money Wheel',
+  tower: 'Dragon Tower', penguin: 'Penguin Cross', duck: 'Duck Race', streetcraps: 'Street Craps',
 };
 
 export const GAME_ICONS = {
   slots: '🎰', roulette: '🎡', blackjack: '🃏', baccarat: '🂡', craps: '🎲', poker: '♠️', wheel: '🎯', highslots: '💎',
+  hilo: '🔼', mines: '💣', crash: '📈', plinko: '🔵', keno: '🔢', moneywheel: '🎡', tower: '🐉', penguin: '🐧', duck: '🦆', streetcraps: '🎲',
 };
+// Arcade-Stationen stehen an den Wänden (Automaten/Terminals), nicht als Tische in der Raummitte
+export const ARCADE_TYPES = ['hilo', 'mines', 'crash', 'plinko', 'keno', 'moneywheel', 'tower', 'penguin', 'duck', 'streetcraps'];
 
 // Max-Einsatz pro Runde als Anteil am Stockwerk-Ziel. Spiele mit hohen Multiplikatoren sind
 // stärker begrenzt, damit ein Level nicht mit einer normalen kleinen Wette trivial wird,
@@ -47,10 +53,12 @@ const MAX_FACTOR = {
   craps: 0.25,
   poker: 0.15, // Ante (Call = 2× Ante)
   wheel: 0.12, // pro Feld
+  hilo: 0.1, mines: 0.1, crash: 0.12, plinko: 0.1, keno: 0.1, moneywheel: 0.12, tower: 0.08, penguin: 0.1, duck: 0.12, streetcraps: 0.2,
 };
 const MIN_FACTOR = {
   slots: 0.005, highslots: 0.02, roulette: 0.002, blackjack: 0.005, baccarat: 0.005,
   craps: 0.005, poker: 0.005, wheel: 0.002,
+  hilo: 0.004, mines: 0.004, crash: 0.004, plinko: 0.003, keno: 0.003, moneywheel: 0.004, tower: 0.004, penguin: 0.004, duck: 0.004, streetcraps: 0.005,
 };
 
 export function niceRound(v) {
@@ -64,7 +72,12 @@ export function niceRound(v) {
 }
 
 // Spiele bauen sich auf: Ein Spiel, das auf einem Stockwerk eingeführt wird, bleibt auf allen höheren erhalten.
-export const GAME_INTRO = { slots: 1, blackjack: 1, roulette: 2, wheel: 3, baccarat: 4, craps: 5, poker: 6, highslots: 7 };
+// Prompt 10: früh einfache Spiele (HiLo, Mines), in der Mitte Crash/Plinko/Keno/Money Wheel, spät Dragon Tower,
+// dazu Penguin Cross, Duck Race und Street Craps als Arcade-Stationen.
+export const GAME_INTRO = {
+  slots: 1, blackjack: 1, hilo: 1, mines: 2, roulette: 2, wheel: 3, crash: 3, baccarat: 4, plinko: 4,
+  craps: 5, keno: 5, poker: 6, moneywheel: 6, highslots: 7, tower: 8, penguin: 9, duck: 10, streetcraps: 11,
+};
 export const gamesForFloor = n => Object.keys(GAME_INTRO).filter(g => GAME_INTRO[g] <= n);
 
 const FLOOR_DEFS = [
@@ -150,6 +163,7 @@ export function floorTables(n) {
     craps: 1,
     poker: n <= 11 ? 1 : 2,
     highslots: n <= 11 ? 2 : 3,
+    crash: n >= 12 ? 2 : 1, // High-Roller-Crash auf den obersten Stockwerken
   };
   for (const g of f.games) {
     const c = counts[g] || 1;
