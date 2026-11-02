@@ -270,6 +270,7 @@ export class Room {
       take: `TAKE THE WINNINGS – ${fmtMoney(this.pot)} sichern?`,
       double: `DOUBLE OR LOSS – ${fmtMoney(this.pot)} → ${fmtMoney(this.pot * 2)} oder $0. ARE YOU SURE?`,
       newrun: `Neuen Run mit ${fmtMoney(START_CAPITAL)} starten? (Team-Pot ${fmtMoney(this.pot)} geht verloren)`,
+      next: `Weiter zu Stock ${(this.floor || 0) + 1}?`,
     };
     if (!labels[type]) return;
     if (this.players.size === 1) return this.executeVote(type, data);
@@ -331,6 +332,17 @@ export class Room {
       case 'newrun':
         if (this.scene !== 'lobby') return 'Nur in der Shishabar möglich';
         return null;
+      case 'next': {
+        // Nach der Bilanz direkt mit dem Aufzug ins nächste Stockwerk (nur wenn das Ziel erreicht ist)
+        if (this.scene !== 'floor' || !this.session || this.session.ending) return 'Nicht im Casino';
+        if (!this.session.targetReached) return 'Erst das Ziel erreichen';
+        const n = this.floor + 1;
+        if (n > FLOORS.length) return 'Das war das oberste Stockwerk';
+        if (n > this.campaign.unlocked) return 'Stockwerk noch gesperrt';
+        if (Object.values(this.session.tables).some(t => t.busy)) return 'Erst alle laufenden Runden beenden';
+        if (this.pot < floorDef(n, this.prestige).minBet) return `Zu wenig Geld für Stock ${n}`;
+        return null;
+      }
     }
     return 'Unbekannt';
   }
@@ -343,6 +355,7 @@ export class Room {
       case 'take': return this.finalTake();
       case 'double': return this.finalDouble();
       case 'newrun': return this.newRun('manual');
+      case 'next': return this.nextFloor();
     }
   }
 
@@ -388,6 +401,7 @@ export class Room {
     }
     this.floor = n;
     this.session = { entryPot: this.pot, targetReached: false, ending: false, tables, tracker: newTracker(n) };
+    this.session.ledger = this.newLedger(n);
     for (const p of this.players.values()) { p.used = {}; p.armed = {}; p.shishaRounds = 0; }
     this.changeScene('floor', { entryPot: this.pot });
   }
@@ -456,6 +470,50 @@ export class Room {
     this.markDirty();
   }
 
+  // Direkt ins nächste Stockwerk (Aufzug von Stock n zu n+1); zählt wie „zurückkehren“ für die Leave-Challenge
+  nextFloor() {
+    const n = this.floor;
+    const tr = this.session?.tracker;
+    if (tr) { tr.flags.leaveFrac = this.pot / floorDef(n, this.prestige).target; this.checkChallenges(); }
+    this.makkaLuckUntil = 0;
+    for (const p of this.players.values()) { p.armed = {}; p.shishaRounds = 0; }
+    this.enterFloor(n + 1);
+  }
+
+  // ───────────────────────── Stockwerk-Bilanz (Geldverlauf pro Spieler) ─────────────────────────
+  // Der Team-Pot beim Betreten wird gleichmässig auf die anwesenden Spieler verteilt (Summe = Pot).
+  // Jede Runde wird dem Spieler zugeordnet, der gesetzt hat: Einsatz, Gewinn/Verlust, Stand danach.
+  newLedger(n) {
+    const ids = [...this.players.keys()];
+    const share = Math.floor(this.pot / Math.max(1, ids.length));
+    const players = {};
+    ids.forEach((id, i) => {
+      const start = i === 0 ? this.pot - share * (ids.length - 1) : share;
+      players[id] = this.ledgerPlayer(id, start);
+    });
+    return { floor: n, target: floorDef(n, this.prestige).target, entryPot: this.pot, startedAt: Date.now(), seq: 0, players, points: [] };
+  }
+
+  ledgerPlayer(id, start) {
+    return { id, name: this.players.get(id)?.name || '?', start, balance: start, staked: 0, won: 0, lost: 0, rounds: 0, maxWin: 0, maxWinGame: null, maxStake: 0, maxStakeGame: null };
+  }
+
+  ledgerAdd(pid, game, stake, payout) {
+    const L = this.session?.ledger;
+    if (!L) return;
+    const pl = L.players[pid] || (L.players[pid] = this.ledgerPlayer(pid, 0));
+    const net = payout - stake;
+    pl.name = this.players.get(pid)?.name || pl.name;
+    pl.balance += net;
+    pl.staked += stake;
+    if (net > 0) pl.won += net; else pl.lost += -net;
+    if (stake > 0) pl.rounds++;
+    if (net > pl.maxWin) { pl.maxWin = net; pl.maxWinGame = game; }
+    if (stake > pl.maxStake) { pl.maxStake = stake; pl.maxStakeGame = game; }
+    L.seq++;
+    if (L.points.length < 1500) L.points.push({ i: L.seq, pid, game, stake, payout, net, bal: pl.balance, t: Date.now() - L.startedAt });
+  }
+
   leaveFloor(reason) {
     const n = this.floor;
     const f = floorDef(n, this.prestige);
@@ -487,11 +545,16 @@ export class Room {
     if (!this.campaign.everCompleted.includes(n)) this.campaign.everCompleted = cleanFloors([...this.campaign.everCompleted, n]);
     const unlockedBefore = this.campaign.unlocked;
     this.campaign.unlocked = Math.min(FLOORS.length, Math.max(this.campaign.unlocked, n + 1));
+    // Stockwerk-Belohnung: feste 🍆 für ALLE Spieler, aber pro Spieler und Stockwerk nur einmal (unabhängig von Challenges)
+    const floorRewards = {};
     for (const p of this.players.values()) {
-      if (p.rewarded.has(n)) continue;
+      if (p.rewarded.has(n)) { floorRewards[p.id] = 0; continue; }
       p.rewarded.add(n);
-      p.conn.send({ t: 'reward', dildos: FLOOR_REWARDS[n - 1], reason: `Stock ${n} zum ersten Mal abgeschlossen`, floor: n });
+      floorRewards[p.id] = FLOOR_REWARDS[n - 1];
+      p.conn.send({ t: 'reward', dildos: FLOOR_REWARDS[n - 1], reason: `Stockwerk ${n} geschafft!`, floor: n });
     }
+    // Automatische Bilanz für alle (Geldverlauf, Einsätze, Gewinne/Verluste pro Spieler)
+    if (s.ledger) this.lastBalance = { floor: n, name: f.name, target: f.target, pot: this.pot, rewards: floorRewards, reward: FLOOR_REWARDS[n - 1], ledger: s.ledger, last: n === FLOORS.length };
     const tr = s.tracker;
     if (tr && tr.flags.targetMs == null) tr.flags.targetMs = Date.now() - tr.startedAt;
     if (n === FLOORS.length) {
@@ -500,6 +563,7 @@ export class Room {
       this.campaign.gameComplete = true;
     }
     this.event({ kind: 'target', floor: n, firstTime, newFloor: this.campaign.unlocked > unlockedBefore ? this.campaign.unlocked : null, final: n === FLOORS.length });
+    if (this.lastBalance?.floor === n) this.event({ kind: 'balance', ...this.lastBalance });
   }
 
   checkBankrupt() {
@@ -514,6 +578,7 @@ export class Room {
         this.consume(p, 'briefcase');
         const bonus = Math.max(f.minBet * 5, Math.floor(s.entryPot * 0.3));
         this.pot += bonus;
+        this.ledgerAdd(p.id, 'briefcase', 0, bonus);
         this.event({ kind: 'briefcase', pid: p.id, name: p.name, amount: bonus });
         this.markDirty();
         return;
@@ -769,6 +834,7 @@ export class Room {
       straight: r.straight, blackjacks: r.blackjacks, tieWin: r.tieWin, pointHit: r.pointHit,
       pokerCat: r.pokerCat, wheel: r.wheel, roulette: r.roulette, newStake: r.newStake, pot: this.pot, lucky: !!r.lucky && net > 0,
     });
+    if (stake > 0 || payout > 0) this.ledgerAdd(pid, table.type, stake, payout - extra);
     const tr = this.session?.tracker;
     if (tr && p) trackResult(tr, { pid, game: table.type, stake, net, blackjacks: r.blackjacks, straight: r.straight, tieWin: r.tieWin, pointHit: r.pointHit, pokerCat: r.pokerCat, makka: !!mods.makka, tier: GAMES[table.type].walkUp ? tier : null, target: f.target });
     if (p && stake > 0) this.events.onResult({ game: table.type, stake, net });
@@ -863,6 +929,7 @@ export class Room {
     this.markUsed(p, item);
     t.lastRound[p.id] = null;
     this.pot += last.loss;
+    this.ledgerAdd(p.id, item, 0, last.loss);
     this.event({ kind: 'item', pid: p.id, name: p.name, item, msg: `${ITEMS[item].name}: Runde wird zurückgesetzt (${fmtMoney(last.loss)} zurück)!` });
     if (walkUp) this.slotSpin(p, tableId, last.replay.bet);
     else this.tableStart(p, tableId, last.replay);

@@ -485,3 +485,55 @@ button.homebtn .hi { font-size: 16px; }
 .eventbar .ebar > div { height: 100%; background: linear-gradient(90deg, #2bd9fe, #7cff6b); transition: width .4s; }
 .eventbar .ep { font-size: 12px; font-weight: 800; color: var(--gold); }
 @media (max-height: 500px) { .eventbar { top: calc(8px + var(--st)); padding: 4px 10px; min-width: 220px; } .eventbar .ed { display: none; } }
+
+/* ── Stockwerk-Bilanz ── */
+.modal.balancemodal .mbox { width: min(1080px, 97vw); max-height: 94vh; border-color: var(--pink); box-shadow: 0 0 40px rgba(255, 60, 172, .35), 0 0 80px rgba(43, 217, 254, .15); background: radial-gradient(ellipse at top, rgba(60, 20, 80, .96), rgba(14, 7, 26, .97) 70%); }
+.balance { display: flex; flex-direction: column; gap: 14px; }
+.balance .bhead { text-align: center; animation: popin .6s cubic-bezier(.2, 1.6, .4, 1); }
+.balance .btitle { font-family: var(--title); font-size: clamp(22px, 4vw, 38px); margin: 0; color: #fff; text-shadow: 0 0 14px var(--pink), 0 0 30px rgba(255, 60, 172, .5); letter-spacing: 1px; }
+.balance .btarget { font-family: var(--title); font-size: clamp(16px, 2.4vw, 22px); color: var(--green); text-shadow: 0 0 10px rgba(124, 255, 107, .5); }
+.balance .bfloor { font-family: var(--font); font-weight: 800; font-size: 14px; color: var(--muted); text-shadow: none; }
+.balance .breward { display: inline-block; margin-top: 8px; padding: 6px 18px; border-radius: 22px; font-family: var(--title); font-size: clamp(15px, 2.2vw, 21px); }
+.balance .breward.new { background: linear-gradient(90deg, rgba(255, 60, 172, .35), rgba(255, 140, 60, .35)); border: 2px solid var(--pink); color: #fff; box-shadow: 0 0 18px rgba(255, 60, 172, .5); animation: luckglow 1.4s ease-in-out infinite; }
+.balance .breward.old { background: rgba(255, 255, 255, .06); border: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+.balance .bfinal { margin-top: 6px; font-weight: 900; color: var(--gold); }
+.bchart { position: relative; background: rgba(8, 4, 16, .7); border: 1px solid rgba(43, 217, 254, .35); border-radius: 14px; padding: 10px 10px 4px; }
+.bchart svg { display: block; width: 100%; height: auto; touch-action: none; }
+.bchart .grid { stroke: rgba(255, 255, 255, .08); stroke-width: 1; }
+.bchart .ax { fill: #b9a8d0; font: 700 11px var(--font); }
+.bchart .line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; filter: drop-shadow(0 0 4px rgba(255, 255, 255, .15)); }
+.bchart .mark { stroke: rgba(8, 4, 16, .9); stroke-width: 2; opacity: 0; animation: bfade .3s forwards; }
+.bchart .elabel { opacity: 0; animation: bfade .4s forwards; }
+.bchart .lbl { fill: #f6eefe; font: 800 12px var(--font); }
+.bchart .tail { fill: none; stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0; animation: bfade .4s forwards; }
+.bchart .cross { stroke: rgba(255, 255, 255, .35); stroke-dasharray: 3 3; }
+.bchart .ring { fill: none; stroke-width: 2.5; }
+@keyframes bdraw { to { stroke-dashoffset: 0; } }
+@keyframes bfade { to { opacity: 1; } }
+.blegend { display: flex; flex-wrap: wrap; gap: 12px; font-weight: 800; font-size: 13px; color: #f6eefe; padding: 0 4px 6px; }
+.bleg { display: inline-flex; align-items: center; gap: 6px; }
+.bsw { display: inline-block; width: 14px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+.btip { position: absolute; pointer-events: none; background: rgba(14, 7, 26, .95); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; min-width: 130px; font-size: 13px; z-index: 2; box-shadow: 0 6px 16px rgba(0, 0, 0, .5); }
+.btip .tn { font-weight: 900; } .btip .tg { color: var(--muted); font-weight: 700; } .btip .tb { font-family: var(--title); font-size: 16px; }
+.balance .pos { color: var(--green) !important; } .balance .neg { color: var(--red) !important; }
+.bcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.bcard { background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); border-radius: 12px; padding: 10px 12px; animation: popin .5s both; }
+.bcard.me { border-color: var(--gold); }
+.bcard .bname { font-weight: 900; font-size: 15px; margin-bottom: 4px; }
+.bcard .mvp { color: var(--gold); }
+.bcard .brow { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); font-weight: 700; }
+.bcard .brow b { color: #fff; }
+.bcard .bnet { font-size: 16px; border-top: 1px solid rgba(255, 255, 255, .1); margin-top: 4px; padding-top: 4px; }
+.bcard .bnet b { font-family: var(--title); font-size: 18px; }
+.bcard .brew { margin-top: 6px; text-align: center; font-weight: 900; color: var(--pink); }
+.bsums { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+.bsum { display: flex; gap: 10px; align-items: center; background: rgba(255, 217, 122, .07); border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; }
+.bsum .bsi { font-size: 26px; } .bsum .bsl { font-size: 11px; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+.bsum .bsv { font-family: var(--title); font-size: 16px; color: #fff; } .bsum .bss { font-size: 12px; color: var(--muted); font-weight: 700; }
+.btable summary { cursor: pointer; color: var(--muted); font-weight: 800; font-size: 13px; }
+.btable .btscroll { max-height: 220px; overflow: auto; margin-top: 6px; }
+.btable table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.btable th, .btable td { text-align: left; padding: 3px 6px; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+.bactions { position: sticky; bottom: -20px; padding: 10px 0 4px; background: linear-gradient(transparent, rgba(14, 7, 26, .95) 30%); }
+button.mini { font-size: 11px; padding: 2px 8px; margin-left: 8px; border-radius: 10px; }
+.popups.low { top: auto; bottom: calc(80px + var(--sb, 0px)); }

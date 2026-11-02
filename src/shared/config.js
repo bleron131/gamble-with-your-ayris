@@ -160,42 +160,43 @@ export function floorTables(n) {
 export const FLOOR_REWARDS = [5, 5, 6, 6, 8, 8, 10, 10, 12, 12, 15, 15, 20, 20, 30];
 // Optionale Challenges pro Stockwerk: siehe challenges.js
 
+// Preise nach Seltenheit (max. 25 🍆): Common 2–5 · Uncommon 5–8 · Rare 8–12 · Epic 12–18 · Legendary 18–25
 // usage: 'single' = einmal verwendbar (verbraucht), 'perLevel' = permanent, einmal pro Level
 export const ITEMS = {
   pokal: {
-    name: 'Pokal', icon: '🏆', cost: 10, usage: 'single', mode: 'arm',
+    name: 'Pokal', icon: '🏆', cost: 3, usage: 'single', mode: 'arm',
     desc: 'Vor einem Gewinn aktivieren: 50% Gewinn ×2 – oder der Gewinn ist weg.',
   },
   shisha: {
-    name: 'Glücks-Shisha', icon: '💨', cost: 12, usage: 'single', mode: 'arm',
+    name: 'Glücks-Shisha', icon: '💨', cost: 4, usage: 'single', mode: 'arm',
     desc: 'Nächste 5 Runden: Gewinne +50%, aber jeder Verlust kostet 25% extra.',
   },
   luckyhat: {
-    name: 'Lucky Hat', icon: '🎩', cost: 15, usage: 'perLevel', mode: 'retry',
+    name: 'Lucky Hat', icon: '🎩', cost: 6, usage: 'perLevel', mode: 'retry',
     desc: 'Einmal pro Level: eine verlorene Slots-, Roulette-, Rad- oder Craps-Runde wiederholen.',
   },
   goldcoin: {
-    name: 'Golden Coin', icon: '🪙', cost: 20, usage: 'single', mode: 'arm',
+    name: 'Golden Coin', icon: '🪙', cost: 7, usage: 'single', mode: 'arm',
     desc: 'Vor einer Wette werfen: GOLD = Gewinn doppelt, SCHWARZ = Verlust doppelt.',
   },
   insurance: {
-    name: 'Ayri-Versicherung', icon: '📄', cost: 25, usage: 'single', mode: 'arm',
+    name: 'Ayri-Versicherung', icon: '📄', cost: 9, usage: 'single', mode: 'arm',
     desc: 'Die nächste verlorene Runde wird zu 50% erstattet.',
   },
   joker: {
-    name: 'Joker Card', icon: '🃏', cost: 30, usage: 'perLevel', mode: 'blackjack',
+    name: 'Joker Card', icon: '🃏', cost: 12, usage: 'perLevel', mode: 'blackjack',
     desc: 'Blackjack, einmal pro Level: zuletzt gezogene Karte zurückgeben und neu ziehen.',
   },
   briefcase: {
-    name: 'Mafia Briefcase', icon: '💼', cost: 40, usage: 'single', mode: 'passive',
+    name: 'Mafia Briefcase', icon: '💼', cost: 15, usage: 'single', mode: 'passive',
     desc: 'Bei Bankrott: Mafia bestechen – zweite Chance mit 30% des Stockwerk-Startkapitals.',
   },
   devildice: {
-    name: 'Devil Dice', icon: '😈', cost: 50, usage: 'perLevel', mode: 'arm',
+    name: 'Devil Dice', icon: '😈', cost: 18, usage: 'perLevel', mode: 'arm',
     desc: 'Einmal pro Level auf einen Gewinn: 50% ×3 – 50% Gewinn weg UND Einsatz nochmal verloren.',
   },
   crown: {
-    name: 'Ayris Crown', icon: '👑', cost: 100, usage: 'perLevel', mode: 'retry',
+    name: 'Ayris Crown', icon: '👑', cost: 25, usage: 'perLevel', mode: 'retry',
     desc: 'Endgame. Einmal pro Level: JEDE verlorene Wette zurücksetzen und erneut ausführen.',
   },
 };
@@ -250,12 +251,12 @@ export const COSMETIC_UNLOCKS = {
   'shoes:goldsneakers': { achievement: 'bj_master', label: 'Achievement BLACKJACK MASTER' },
   'hat:diamondhat': { achievement: 'high_roller', label: 'Achievement HIGH ROLLER (oder High-Roller-Event gewinnen)', event: 'highroller' },
   'hat:casinocrown': { achievement: 'top_floor', label: 'Achievement TOP FLOOR' },
-  'hat:luckyhat': { shop: 25, label: 'Im AYRI SHOP für 25 🍆' },
-  'glasses:golden': { shop: 40, label: 'Im AYRI SHOP für 40 🍆' },
-  'jewelry:luckychain': { shop: 30, label: 'Im AYRI SHOP für 30 🍆' },
+  'hat:luckyhat': { shop: 10, label: 'Im AYRI SHOP für 10 🍆' },
+  'glasses:golden': { shop: 16, label: 'Im AYRI SHOP für 16 🍆' },
+  'jewelry:luckychain': { shop: 12, label: 'Im AYRI SHOP für 12 🍆' },
   'emote:bow': { challenges: 5, label: '5 Challenges abschliessen' },
   'emote:dab': { achievement: 'tourist', label: 'Achievement CASINO TOURIST' },
-  'emote:money': { shop: 20, label: 'Im AYRI SHOP für 20 🍆' },
+  'emote:money': { shop: 5, label: 'Im AYRI SHOP für 5 🍆' },
   'hat:prestigecrown': { prestige: 1, label: 'Prestige 1 erreichen (Finale schaffen)' },
   'jewelry:prestigestar': { prestige: 2, label: 'Prestige 2 erreichen' },
   'jacket:prestige': { prestige: 3, label: 'Prestige 3 erreichen' },

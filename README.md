@@ -202,6 +202,16 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   (`★ PRESTIGE 1` …, bis 10): alle Ziele und damit Min/Max-Einsätze steigen um 50 % pro Stufe, das Startkapital bleibt.
   Permanenter Fortschritt (🍆, Kosmetik, Achievements, Statistiken, Rekorde) bleibt erhalten; Prestige 1/2/3 schalten
   Prestige-Krone, Prestige-Stern und Prestige-Mantel frei.
+- **Stockwerk-Belohnung**: Jedes erfolgreich abgeschlossene Stockwerk gibt ALLEN Spielern feste 🍆 (Stock 1: 5 … Stock 15: 30),
+  pro Spieler und Stockwerk genau einmal – unabhängig von den Challenges (die geben zusätzlich Bonus-🍆).
+- **Stockwerk-Bilanz**: Sobald das Ziel erreicht ist, öffnet sich automatisch „STOCKWERK X – BILANZ“ (für alle Spieler):
+  „Ziel erreicht: $X“, „Stockwerk geschafft! +X 🍆“ und ein grosses Liniendiagramm mit dem Geldverlauf jedes Spielers
+  (eine Farbe pro Spieler, Legende, animiertes Einzeichnen, Tooltip mit Spieler, Spiel, Stand und Veränderung). Darunter pro
+  Spieler Start, Einsatz, Gewonnen, Verloren, Netto und Ende (grün/rot) sowie Grösster Gewinner, Grösster Verlierer,
+  Höchster Einzelgewinn, Grösster Einsatz, Runden und MVP. Grundlage: Der Server ordnet jede Runde dem Spieler zu, der
+  gesetzt hat (der Team-Pot beim Betreten wird gleichmässig auf die Spieler aufgeteilt, die Summe ergibt immer den Pot).
+  „WEITER ZUM NÄCHSTEN STOCKWERK“ fährt direkt mit dem Aufzug ins nächste Stockwerk (in der Gruppe per Abstimmung);
+  alternativ „Zur Shishabar“ oder „Hier weiterspielen“. Die Bilanz lässt sich über „📈 Bilanz“ im HUD erneut öffnen.
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Challenges und Achievements – jeweils nur
   einmal pro Spieler, also kein Farming.
 - **MAKKA an der Bar**: Nur bei Kemal an der Bar der Shishabar gibt es die pinke Ayri-Limonade für genau 1 🍆.
@@ -214,8 +224,9 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
 - **Shishas & Cocktail**: Jede Shisha in der Lounge ist rauchbar (E bzw. „SHISHA RAUCHEN“): Schlauch zur Hand, Ziehen
   mit räumlichem Blubbern, danach eine sichtbare Rauchwolke – alle Mitspieler sehen es. Der Cocktail aus dem Outfit ist
   trinkbar (G bzw. „TRINKEN“); jeder dritte Drink macht 10 Sekunden schwindlig. Beides hat keinen Einfluss auf Pot oder Chancen.
-- **AYRI SHOP**: Pokal, Glücks-Shisha, Lucky Hat, Golden Coin, Ayri-Versicherung, Joker Card,
-  Mafia Briefcase, Devil Dice, Ayris Crown – jeweils als „einmal verwendbar“ oder „permanent, 1× pro Level“ gekennzeichnet.
+- **AYRI SHOP** (alle Preise 3–25 🍆, nach Seltenheit): Pokal 3, Glücks-Shisha 4, Lucky Hat 6, Golden Coin 7, Ayri-Versicherung 9,
+  Joker Card 12, Mafia Briefcase 15, Devil Dice 18, Ayris Crown 25; Kosmetik: Emote „Geld werfen“ 5, Lucky Hat 🍀 10,
+  Lucky Chain 12, Golden Glasses 16 – jeweils als „einmal verwendbar“ oder „permanent, 1× pro Level“ gekennzeichnet.
 - **Finale**: Nach $500'000'000 auf Stock 15 erscheint im Aufzug **???**. In der luxuriösen
   Nacht-Shishabar lauft ihr gemeinsam zum Mitarbeiter: **TAKE THE WINNINGS** speichert den Run,
   **DOUBLE OR LOSS** braucht die Zustimmung aller – dann wirft der Mitarbeiter die grün/rote Münze physisch in der 3D-Szene.

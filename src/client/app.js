@@ -540,11 +540,17 @@ export class App {
         if (ev.final) this.achieve('game_complete');
         sfx.bigWin();
         this.world.particles?.confetti(this.player.pos.clone().setY(2.5), 160, 6);
-        this.ui.targetReached(ev);
+        // Statt sofort weiterzuspielen öffnet sich die Stockwerk-Bilanz (Event „balance“ folgt direkt)
         if (ev.newFloor) this.ui.popup('floor', `STOCKWERK ${ev.newFloor} FREIGESCHALTET`, floorDef(ev.newFloor, this.prestige).name);
         break;
       }
       case 'coop': this.onCoop(ev); break;
+      case 'balance':
+        this.lastBalance = ev;
+        this.input.exitLock();
+        if (this.player.seated) this.ui.closeTablePanel();
+        setTimeout(() => { if (this.lastBalance === ev && this.state?.scene === 'floor') this.ui.openBalance(ev); }, 900);
+        break;
       case 'prestige':
         setTimeout(() => { this.ui.popup('event', `PRESTIGE ${ev.level} ERREICHT`, `Neuer Run: alle Ziele ×${ev.scale.toFixed(1)} – deine Kosmetik, 🍆 und Rekorde bleiben`, 6000); this.checkUnlocks(); }, 2500);
         break;
@@ -709,7 +715,7 @@ export class App {
     if (m.kind === 'challenge') this.save.stats.challengesDone = (this.save.stats.challengesDone || 0) + 1;
     if (m.kind === 'challenge') this.ui.popup('challenge', `CHALLENGE ABGESCHLOSSEN +${m.dildos} 🍆`, m.reason.replace(/^CHALLENGE ABGESCHLOSSEN: /, ''));
     else if (m.kind === 'event') this.ui.popup('event', `EVENT GESCHAFFT +${m.dildos} 🍆`, m.reason.replace(/^(CO-OP-EVENT |HIGH-ROLLER-EVENT: )/, ''));
-    else if (m.floor) this.ui.popup('floor', `STOCK ${m.floor} GESCHAFFT +${m.dildos} 🍆`, m.reason);
+    else if (m.floor) this.ui.popup('floor', `Stockwerk geschafft! +${m.dildos} 🍆`, `Stock ${m.floor} · ${floorDef(m.floor, this.prestige).name}`, 4500);
     else this.ui.reward(m.dildos, m.reason);
     this.ui.refreshHud();
     this.checkUnlocks();

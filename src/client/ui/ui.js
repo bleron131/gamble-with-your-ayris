@@ -7,6 +7,7 @@ import { sfx, initAudio } from '../audio.js';
 import * as Save from '../save.js';
 import { CHALLENGE_BY_ID } from '../../shared/challenges.js';
 import { unlockedEmotes } from '../progress.js';
+import { openBalance } from './balance.js';
 import { openElevator, openShop, openEditor, openStats, openSettings, renderScoreboard, openBar } from './modals.js';
 
 export class UI {
@@ -184,6 +185,7 @@ export class UI {
     if (st.scene === 'floor') {
       const f = floorDef(st.floor, this.app.prestige);
       this.targetEl.innerHTML = `TARGET <b>${fmtMoney(f.target)}</b>${st.session?.targetReached ? ' <span class="ok">✓</span>' : ''}`;
+      if (st.session?.targetReached && app.lastBalance?.floor === st.floor) this.targetEl.append(h('button.mini', { title: 'Stockwerk-Bilanz erneut ansehen', onclick: () => this.openBalance(app.lastBalance) }, '📈 Bilanz'));
       this.progress.style.display = '';
       this.progress.firstChild.style.width = Math.min(100, st.pot / f.target * 100) + '%';
       this.progress.classList.toggle('done', !!st.session?.targetReached);
@@ -539,6 +541,7 @@ export class UI {
     this.app.input.exitLock();
     clear(this.modal);
     this.modal.className = 'modal ' + size;
+    this.popups.classList.add('low'); // Popups nicht über Dialog-Titel legen
     const box = h('div.mbox', h('button.close', { onclick: () => this.closeModal() }, '✕'), content);
     this.modal.append(box);
     this.modal.onclick = e => { if (e.target === this.modal) this.closeModal(); };
@@ -547,12 +550,14 @@ export class UI {
   closeModal() {
     if (!this.modalOpen) return;
     this.modal.classList.add('hidden');
+    this.popups.classList.remove('low');
     clear(this.modal);
     this.modalOpen = false;
     const cb = this.onModalClose;
     this.onModalClose = null;
     cb?.();
   }
+  openBalance(b) { openBalance(this, b); }
   openElevator() { openElevator(this); }
   openShop() { openShop(this); }
   openBar(nextLine) { openBar(this, nextLine); }
