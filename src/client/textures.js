@@ -609,3 +609,127 @@ export function confettiTexture() {
     return toTex(c);
   });
 }
+
+// ───────────────────────── Stockwerk-Stile: Böden & Wände ─────────────────────────
+function noise(g, w, h, amt = 12) {
+  const img = g.getImageData(0, 0, w, h);
+  for (let i = 0; i < img.data.length; i += 4) { const n = (Math.random() - 0.5) * amt; img.data[i] += n; img.data[i + 1] += n; img.data[i + 2] += n; }
+  g.putImageData(img, 0, 0);
+}
+
+// kind: concrete | checker | wood | sand | deck | ice | tiles | carpet2 (Muster mit Farben a/b/c)
+export function floorTexture(kind, a = '#555', b = '#333', c = '#999') {
+  return cached(`floor|${kind}|${a}|${b}|${c}`, () => {
+    const S = 512;
+    const [cv, g] = canvas(S, S);
+    g.fillStyle = a; g.fillRect(0, 0, S, S);
+    switch (kind) {
+      case 'concrete': {
+        for (let i = 0; i < 60; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.08})`; const r = 10 + Math.random() * 60; g.beginPath(); g.arc(Math.random() * S, Math.random() * S, r, 0, 7); g.fill(); }
+        g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 3; g.strokeRect(0, 0, S, S);
+        g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(120, 0); g.lineTo(180, 140); g.lineTo(160, 300); g.stroke();
+        noise(g, S, S, 22); break;
+      }
+      case 'checker': {
+        for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { g.fillStyle = (x + y) % 2 ? a : b; g.fillRect(x * 64, y * 64, 64, 64); }
+        g.strokeStyle = c; g.globalAlpha = 0.25; g.lineWidth = 2; for (let i = 0; i <= 8; i++) { g.beginPath(); g.moveTo(i * 64, 0); g.lineTo(i * 64, S); g.moveTo(0, i * 64); g.lineTo(S, i * 64); g.stroke(); } g.globalAlpha = 1;
+        noise(g, S, S, 8); break;
+      }
+      case 'wood': case 'deck': {
+        const plank = kind === 'deck' ? 42 : 64;
+        for (let y = 0; y < S; y += plank) {
+          const off = (y / plank % 2) * 180;
+          g.fillStyle = (y / plank) % 2 ? a : b; g.fillRect(0, y, S, plank - 3);
+          g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(0, y + plank - 3, S, 3);
+          for (let x = off % 256; x < S; x += 256) g.fillRect(x, y, 3, plank - 3);
+          for (let k = 0; k < 6; k++) { g.strokeStyle = `rgba(0,0,0,${0.06 + Math.random() * 0.08})`; g.lineWidth = 1; const yy = y + 4 + Math.random() * (plank - 10); g.beginPath(); g.moveTo(0, yy); g.bezierCurveTo(170, yy + 4, 340, yy - 4, S, yy); g.stroke(); }
+        }
+        if (kind === 'deck') for (let y = 0; y < S; y += plank) for (let x = 40; x < S; x += 128) { g.fillStyle = c; g.beginPath(); g.arc(x, y + plank / 2, 2.5, 0, 7); g.fill(); }
+        noise(g, S, S, 10); break;
+      }
+      case 'sand': {
+        for (let i = 0; i < 3000; i++) { g.fillStyle = Math.random() < 0.5 ? b : c; g.globalAlpha = 0.25; g.fillRect(Math.random() * S, Math.random() * S, 2, 2); }
+        g.globalAlpha = 1; noise(g, S, S, 14); break;
+      }
+      case 'ice': {
+        const grd = g.createLinearGradient(0, 0, S, S); grd.addColorStop(0, a); grd.addColorStop(1, b); g.fillStyle = grd; g.fillRect(0, 0, S, S);
+        g.strokeStyle = c; g.globalAlpha = 0.35; g.lineWidth = 1.5;
+        for (let i = 0; i < 18; i++) { g.beginPath(); let x = Math.random() * S, y = Math.random() * S; g.moveTo(x, y); for (let k = 0; k < 4; k++) { x += (Math.random() - 0.5) * 120; y += (Math.random() - 0.5) * 120; g.lineTo(x, y); } g.stroke(); }
+        g.globalAlpha = 1; break;
+      }
+      case 'tiles': {
+        for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { g.fillStyle = (x + y) % 2 ? a : b; g.fillRect(x * 128 + 2, y * 128 + 2, 124, 124); }
+        g.fillStyle = c; for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) { g.save(); g.translate(x * 128 + 64, y * 128 + 64); g.rotate(Math.PI / 4); g.fillRect(-10, -10, 20, 20); g.restore(); }
+        break;
+      }
+      case 'carpet2': default: {
+        // Teppich mit Streifen und Rauten
+        for (let x = 0; x < S; x += 64) { g.fillStyle = (x / 64) % 2 ? a : b; g.fillRect(x, 0, 64, S); }
+        g.strokeStyle = c; g.lineWidth = 3; g.globalAlpha = 0.7;
+        for (let y = 0; y < S; y += 128) for (let x = 0; x < S; x += 128) { g.beginPath(); g.moveTo(x + 64, y + 20); g.lineTo(x + 108, y + 64); g.lineTo(x + 64, y + 108); g.lineTo(x + 20, y + 64); g.closePath(); g.stroke(); }
+        g.globalAlpha = 1; noise(g, S, S, 10);
+      }
+    }
+    return toTex(cv, { repeat: [6, 6] });
+  });
+}
+
+// kind: brick | concrete | wood | velvet | bamboo | stripes | damask | stars | tiles
+export function wallTexture(kind, a = '#555', b = '#333', c = '#999') {
+  return cached(`wallk|${kind}|${a}|${b}|${c}`, () => {
+    const S = 256;
+    const [cv, g] = canvas(S, S);
+    g.fillStyle = a; g.fillRect(0, 0, S, S);
+    switch (kind) {
+      case 'brick': {
+        g.fillStyle = c; g.fillRect(0, 0, S, S);
+        for (let y = 0; y < S; y += 32) for (let x = -64; x < S; x += 64) {
+          const ox = (y / 32) % 2 ? 32 : 0;
+          g.fillStyle = Math.random() < 0.5 ? a : b; g.fillRect(x + ox + 2, y + 2, 60, 28);
+        }
+        noise(g, S, S, 18); break;
+      }
+      case 'concrete': {
+        for (let i = 0; i < 40; i++) { g.fillStyle = `rgba(0,0,0,${Math.random() * 0.1})`; g.beginPath(); g.arc(Math.random() * S, Math.random() * S, 6 + Math.random() * 30, 0, 7); g.fill(); }
+        g.fillStyle = 'rgba(0,0,0,0.25)'; for (const y of [64, 192]) for (const x of [64, 192]) { g.beginPath(); g.arc(x, y, 3, 0, 7); g.fill(); }
+        noise(g, S, S, 20); break;
+      }
+      case 'wood': {
+        for (let x = 0; x < S; x += 64) { g.fillStyle = (x / 64) % 2 ? a : b; g.fillRect(x, 0, 62, S); g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(x + 62, 0, 2, S); }
+        g.strokeStyle = c; g.lineWidth = 3; g.strokeRect(10, 150, S - 20, 90);
+        for (let i = 0; i < 40; i++) { g.strokeStyle = `rgba(0,0,0,${Math.random() * 0.12})`; const x = Math.random() * S; g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + 6, 80, x - 6, 170, x, S); g.stroke(); }
+        break;
+      }
+      case 'velvet': {
+        for (let x = 0; x < S; x++) { const k = 0.5 + 0.5 * Math.sin(x / S * Math.PI * 8); g.fillStyle = k > 0.5 ? a : b; g.globalAlpha = 0.5 + k * 0.5; g.fillRect(x, 0, 1, S); }
+        g.globalAlpha = 1; noise(g, S, S, 6); break;
+      }
+      case 'bamboo': {
+        for (let x = 0; x < S; x += 32) { const grd = g.createLinearGradient(x, 0, x + 30, 0); grd.addColorStop(0, b); grd.addColorStop(0.5, a); grd.addColorStop(1, b); g.fillStyle = grd; g.fillRect(x, 0, 30, S); for (let y = (x * 7) % 80; y < S; y += 80) { g.fillStyle = c; g.fillRect(x, y, 30, 4); } }
+        break;
+      }
+      case 'stripes': {
+        for (let x = 0; x < S; x += 32) { g.fillStyle = (x / 32) % 2 ? a : b; g.fillRect(x, 0, 32, S); }
+        g.fillStyle = c; g.globalAlpha = 0.5; for (let x = 0; x < S; x += 32) g.fillRect(x, 0, 2, S); g.globalAlpha = 1; break;
+      }
+      case 'damask': {
+        g.fillStyle = b; g.globalAlpha = 0.6;
+        for (let y = 0; y < 2; y++) for (let x = 0; x < 2; x++) {
+          const cx = x * 128 + 64, cy = y * 128 + 64;
+          g.beginPath(); g.moveTo(cx, cy - 50); g.bezierCurveTo(cx + 40, cy - 30, cx + 40, cy + 30, cx, cy + 50); g.bezierCurveTo(cx - 40, cy + 30, cx - 40, cy - 30, cx, cy - 50); g.fill();
+          g.fillStyle = c; g.beginPath(); g.arc(cx, cy, 8, 0, 7); g.fill(); g.fillStyle = b;
+        }
+        g.globalAlpha = 1; break;
+      }
+      case 'stars': {
+        const grd = g.createLinearGradient(0, 0, 0, S); grd.addColorStop(0, a); grd.addColorStop(1, b); g.fillStyle = grd; g.fillRect(0, 0, S, S);
+        for (let i = 0; i < 90; i++) { g.fillStyle = c; g.globalAlpha = 0.4 + Math.random() * 0.6; const r = Math.random() * 1.4 + 0.3; g.beginPath(); g.arc(Math.random() * S, Math.random() * S, r, 0, 7); g.fill(); }
+        g.globalAlpha = 1; break;
+      }
+      case 'tiles': default: {
+        for (let y = 0; y < S; y += 32) for (let x = 0; x < S; x += 32) { g.fillStyle = (x + y) / 32 % 2 ? a : b; g.fillRect(x + 1, y + 1, 30, 30); }
+      }
+    }
+    return toTex(cv, { repeat: [4, 1.5] });
+  });
+}

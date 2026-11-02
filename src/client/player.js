@@ -63,8 +63,34 @@ export class LocalPlayer {
     this.camYaw = s.yaw;
     this.pitch = 0;
     this.seated = null;
+    this.lounge = null;
     this.jump.reset();
     this.snapCamera = true;
+  }
+
+  // Sitzen in der Shishabar (Sofa / Barhocker): weich hinsetzen und aufstehen, Kamera bleibt frei drehbar
+  sitLounge(seat) {
+    this.lounge = { seat, phase: 'down', t: 0, from: this.pos.clone(), fromYaw: this.yaw };
+    this.emoteT = 0;
+    this.jump.reset();
+  }
+  standLounge() {
+    if (this.lounge && this.lounge.phase !== 'up') { this.lounge.phase = 'up'; this.lounge.t = 0; }
+  }
+  updateLounge(dt) {
+    const L = this.lounge;
+    if (!L) return false;
+    const s = L.seat;
+    L.t = Math.min(1, L.t + dt / 0.45);
+    const k = L.t * L.t * (3 - 2 * L.t);
+    if (L.phase === 'down') {
+      this.pos.set(L.from.x + (s.x - L.from.x) * k, s.y * k, L.from.z + (s.z - L.from.z) * k);
+      this.yaw = L.fromYaw + angleDiff(s.ry, L.fromYaw) * k;
+    } else {
+      this.pos.set(s.x + (s.sx - s.x) * k, s.y * (1 - k), s.z + (s.sz - s.z) * k);
+      if (L.t >= 1) { this.pos.y = 0; this.lounge = null; return false; }
+    }
+    return true;
   }
 
   sit(view) {
@@ -161,13 +187,17 @@ export class LocalPlayer {
       }
     }
     if (!first) this.camDist = THREE.MathUtils.clamp(this.camDist + input.wheel * 0.4, 1.8, 7);
+    // Sitzen: keine Laufbewegung, Aufstehen mit LEERTASTE (bzw. Sprung-Knopf auf dem Handy)
+    const sitting = this.updateLounge(dt);
+    if (sitting && this.lounge.phase === 'down' && input.hit('Space')) this.app.standUp();
     // Bewegung
     let f = (input.down('KeyW') || input.down('ArrowUp') ? 1 : 0) - (input.down('KeyS') || input.down('ArrowDown') ? 1 : 0);
     let r = (input.down('KeyD') || input.down('ArrowRight') ? 1 : 0) - (input.down('KeyA') || input.down('ArrowLeft') ? 1 : 0);
     let analog = 1;
     let keys = f + ',' + r;
     // Virtueller Joystick: analog, kleine Auslenkung = langsam; Richtung für die Kamera-Basis in 8 Sektoren gerastert
-    const ax = input.enabled ? input.axis : null;
+    if (sitting) { f = 0; r = 0; }
+    const ax = input.enabled && !sitting ? input.axis : null;
     if (ax && (ax.x || ax.y) && !f && !r) {
       f = ax.y; r = ax.x;
       analog = Math.min(1, Math.hypot(ax.x, ax.y));
@@ -198,13 +228,16 @@ export class LocalPlayer {
       this.stepT -= dt * (speed / 3.2);
       if (this.stepT < 0 && !this.jump.airborne) { this.stepT = 0.36; this.app.sfx.step(0.03); }
     }
-    world.collide(this.pos, 0.3);
-    // Springen (Leertaste): nur am Boden, Kollision bleibt aktiv – kein Sprung durch Wände
-    if (input.hit('Space') && this.jump.tryJump()) { this.app.sfx.jump(); this.emoteT = 0; }
-    if (this.jump.step(dt) === 'land') this.app.sfx.land();
-    this.pos.y = this.jump.y;
+    if (!sitting && !this.lounge) {
+      world.collide(this.pos, 0.3);
+      // Springen (Leertaste): nur am Boden, Kollision bleibt aktiv – kein Sprung durch Wände
+      if (input.hit('Space') && this.jump.tryJump()) { this.app.sfx.jump(); this.emoteT = 0; }
+      if (this.jump.step(dt) === 'land') this.app.sfx.land();
+      this.pos.y = this.jump.y;
+    }
     if (this.moving || this.jump.airborne) { this.emoteT = 0; this.smokeEnd = 0; }
-    if (!(this.emoteT > 0)) this.anim = this.jump.airborne ? 'jump' : this.moving ? 'walk' : 'idle';
+    if (sitting) this.anim = this.lounge.phase === 'down' ? 'sit' : 'idle';
+    else if (!(this.emoteT > 0)) this.anim = this.jump.airborne ? 'jump' : this.moving ? 'walk' : 'idle';
     // Schwindel: Kamera schwankt, rollt leicht und reagiert verzögert
     const sway = dz ? { roll: dz * (0.13 * Math.sin(this.time * 0.9) + 0.04 * Math.sin(this.time * 2.3)), side: dz * 0.28 * Math.sin(this.time * 0.7), up: dz * 0.09 * Math.sin(this.time * 1.1) } : null;
     // Kamera
@@ -219,7 +252,7 @@ export class LocalPlayer {
       const dir = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
       this.camLook.copy(camera.position).add(dir);
     } else {
-      const head = new THREE.Vector3(this.pos.x, 1.35 + this.jump.y * 0.6 - this.jump.landDip, this.pos.z);
+      const head = new THREE.Vector3(this.pos.x, sitting ? 1.0 + this.pos.y * 0.6 : 1.35 + this.jump.y * 0.6 - this.jump.landDip, this.pos.z);
       const back = new THREE.Vector3(-Math.sin(this.camYaw) * Math.cos(this.camPitch), Math.sin(this.camPitch), -Math.cos(this.camYaw) * Math.cos(this.camPitch));
       const want = head.clone().addScaledVector(back, this.camDist);
       want.y = Math.max(0.4, Math.min(4.2, want.y));
@@ -248,7 +281,7 @@ export class LocalPlayer {
       p.lerpVectors(head, want, t);
       let blocked = false;
       for (const c of world.colliders) {
-        if (c.type !== 'box') continue;
+        if (c.type !== 'box' || p.y > (c.h ?? 9) + 0.15) continue;
         if (p.x > c.minX - m && p.x < c.maxX + m && p.z > c.minZ - m && p.z < c.maxZ + m) { blocked = true; break; }
       }
       if (blocked) break;
@@ -274,7 +307,8 @@ export class LocalPlayer {
   get smokeT() { return Math.max(0, ((this.smokeEnd || 0) - performance.now()) / 1000); }
 
   pose() {
-    return { p: [+this.pos.x.toFixed(3), +this.jump.y.toFixed(2), +this.pos.z.toFixed(3)], r: +this.yaw.toFixed(3), a: this.seated ? 'idle' : this.anim, pitch: +this.pitch.toFixed(2), fx: this.fx };
+    const y = this.lounge ? this.pos.y : this.jump.y;
+    return { p: [+this.pos.x.toFixed(3), +y.toFixed(2), +this.pos.z.toFixed(3)], r: +this.yaw.toFixed(3), a: this.seated ? 'idle' : this.anim, pitch: +this.pitch.toFixed(2), fx: this.fx };
   }
 }
 

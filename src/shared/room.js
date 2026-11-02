@@ -4,9 +4,11 @@
 // Wetten auf denselben Betrag können daher nie beide akzeptiert werden (kein Geld-Duplizieren).
 import {
   START_CAPITAL, FLOORS, floorDef, floorTables, ITEMS, RETRY_GAMES_HAT,
-  FLOOR_REWARDS, CHALLENGE_FACTOR, CHALLENGE_REWARDS, LOADOUT_SLOTS, MAX_PLAYERS, fmtMoney, GAME_NAMES, luckChance, slotSteps, MAKKA_BAR, MAKKA_MAX, MAKKA_LUCK_MS, MAKKA_LUCK_BONUS,
+  FLOOR_REWARDS, LOADOUT_SLOTS, MAX_PLAYERS, fmtMoney, GAME_NAMES, luckChance, slotSteps, MAKKA_BAR, MAKKA_MAX, MAKKA_LUCK_MS, MAKKA_LUCK_BONUS,
 } from './config.js';
 import { rand } from './rng.js';
+import { NpcDirector, LOBBY_SEATS, SEAT_REACH } from './npcs.js';
+import { challengesFor, isChallengeId, legacyChallengeIds, newTracker, trackResult, progress as challengeProgress } from './challenges.js';
 import { slotsGame, winTier } from './games/slots.js';
 import { rouletteGame } from './games/roulette.js';
 import { blackjackGame } from './games/blackjack.js';
@@ -70,6 +72,10 @@ export class Room {
     this.onEmpty = onEmpty;
     this.nextId = 1;
     this.moveTimer = setInterval(() => this.flushMoves(), 66);
+    // NPCs: Regie läuft serverseitig, damit alle Spieler dieselben NPCs sehen
+    this.npcs = new NpcDirector(this);
+    this.npcs.reset('lobby');
+    this.npcTimer = setInterval(() => this.npcs.tick(), 1000);
   }
 
   // ───────────────────────── Verbindungen ─────────────────────────
@@ -81,10 +87,10 @@ export class Room {
       name: String(profile.name || 'Spieler').slice(0, 16),
       appearance: profile.appearance || {},
       rewarded: new Set(profile.rewardedFloors || []),
-      challenged: new Set(profile.challengeFloors || []),
+      chDone: new Set([...(Array.isArray(profile.challenges) ? profile.challenges.filter(isChallengeId) : []), ...legacyChallengeIds(profile.challengeFloors)]),
       inventory: {}, loadout: [], used: {}, armed: {}, shishaRounds: 0, lossStreak: 0,
       makka: Math.max(0, Math.min(MAKKA_MAX, Math.floor(+profile.makka) || 0)), cocktails: 0, smokeAt: 0,
-      seat: null, pose: { p: [0, 0, 0], r: 0, a: 'idle' }, poseDirty: true,
+      seat: null, lseat: null, pose: { p: [0, 0, 0], r: 0, a: 'idle' }, poseDirty: true,
       joinedAt: Date.now(),
     };
     if (!this.hostId) {
@@ -130,6 +136,7 @@ export class Room {
 
   destroy() {
     clearInterval(this.moveTimer);
+    clearInterval(this.npcTimer);
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
   }
@@ -161,18 +168,19 @@ export class Room {
   snapshot() {
     const players = [...this.players.values()].map(p => ({
       id: p.id, name: p.name, appearance: p.appearance, seat: p.seat, loadout: p.loadout,
-      inventory: p.inventory, used: p.used, armed: p.armed, shishaRounds: p.shishaRounds, pose: p.pose, makka: p.makka,
+      inventory: p.inventory, used: p.used, armed: p.armed, shishaRounds: p.shishaRounds, pose: p.pose, makka: p.makka, lseat: p.lseat,
     }));
     let session = null;
     if (this.session) {
       const tables = {};
       for (const [id, t] of Object.entries(this.session.tables)) tables[id] = { id, type: t.type, occupant: t.occupant, busy: t.busy, state: t.state, canRetry: t.lastRound };
-      session = { entryPot: this.session.entryPot, targetReached: this.session.targetReached, ending: this.session.ending, tables };
+      session = { entryPot: this.session.entryPot, targetReached: this.session.targetReached, ending: this.session.ending, tables, challenges: this.challengeStatus() };
     }
     return {
       code: this.code, hostId: this.hostId, players, pot: this.pot, campaign: this.campaign, run: this.run,
       makkaLuckMs: Math.max(0, (this.makkaLuckUntil || 0) - Date.now()),
       scene: this.scene, floor: this.floor, session, vote: this.vote && { ...this.vote },
+      npcs: this.npcs.snapshot(),
     };
   }
 
@@ -186,6 +194,9 @@ export class Room {
           if (Array.isArray(msg.p) && msg.p.length === 3 && msg.p.every(Number.isFinite)) {
             p.pose = { p: [msg.p[0], Math.max(0, Math.min(1.5, msg.p[1])), msg.p[2]], r: +msg.r || 0, a: String(msg.a || 'idle').slice(0, 12), pitch: +msg.pitch || 0, fx: String(msg.fx || '').slice(0, 6) };
             p.poseDirty = true;
+            // Wer sich vom Sitz entfernt, gibt ihn frei (Sicherheitsnetz, falls seat.leave verloren geht)
+            const st = p.lseat != null && LOBBY_SEATS[p.lseat];
+            if (st && Math.hypot(p.pose.p[0] - st.x, p.pose.p[2] - st.z) > 1.6) { p.lseat = null; this.markDirty(); }
           }
           break;
         case 'profile':
@@ -201,6 +212,8 @@ export class Room {
           else if (msg.phase === 'cocktail') this.drinkCocktail(p);
           break;
         case 'smoke': this.smoke(p, msg.i); break;
+        case 'seat.take': this.takeSeat(p, msg.i); break;
+        case 'seat.leave': if (p.lseat != null) { p.lseat = null; this.markDirty(); } break;
         case 'vote.start': this.startVote(p, msg.type, msg.data || {}); break;
         case 'vote.cast': this.castVote(p, !!msg.yes); break;
         case 'table.sit': this.sit(p, msg.id); break;
@@ -320,7 +333,8 @@ export class Room {
 
   changeScene(scene, extra = {}) {
     this.scene = scene;
-    for (const p of this.players.values()) p.seat = null;
+    for (const p of this.players.values()) { p.seat = null; p.lseat = null; }
+    this.npcs.reset(scene, this.floor);
     this.event({ kind: 'scene', scene, floor: this.floor, ...extra });
     this.markDirty();
   }
@@ -357,7 +371,7 @@ export class Room {
       tables[def.id] = t;
     }
     this.floor = n;
-    this.session = { entryPot: this.pot, targetReached: false, ending: false, tables };
+    this.session = { entryPot: this.pot, targetReached: false, ending: false, tables, tracker: newTracker(n) };
     for (const p of this.players.values()) { p.used = {}; p.armed = {}; p.shishaRounds = 0; }
     this.changeScene('floor', { entryPot: this.pot });
   }
@@ -408,15 +422,31 @@ export class Room {
     this.event({ kind: 'smoke', pid: p.id, name: p.name, i: Math.max(0, Math.min(9, Math.floor(+i) || 0)) });
   }
 
+  // Sitzplatz in der Shishabar: Wer zuerst kommt, sitzt. Ist der Platz schon von einem Spieler belegt,
+  // gibt es den nächsten freien Platz auf demselben Möbelstück – sonst passiert einfach nichts (keine Fehlermeldung).
+  // NPCs machen echten Spielern sofort Platz.
+  takeSeat(p, i) {
+    if (this.scene !== 'lobby') return;
+    const seat = LOBBY_SEATS[Math.floor(+i)];
+    if (!seat) return;
+    const [x, , z] = p.pose.p;
+    const near = s => Math.hypot(x - s.x, z - s.z) <= SEAT_REACH;
+    const busy = s => [...this.players.values()].some(q => q !== p && q.lseat === s.i);
+    let target = !busy(seat) && near(seat) ? seat : null;
+    if (!target && near(seat)) target = LOBBY_SEATS.filter(s => s.furn === seat.furn && !busy(s) && near(s)).sort((a, b) => Math.hypot(a.x - seat.x, a.z - seat.z) - Math.hypot(b.x - seat.x, b.z - seat.z))[0] || null;
+    if (!target) return;
+    p.lseat = target.i;
+    this.npcs.evict(`seat:${target.i}`);
+    this.markDirty();
+  }
+
   leaveFloor(reason) {
     const n = this.floor;
     const f = floorDef(n);
-    if (reason === 'return' && this.pot >= f.target * CHALLENGE_FACTOR) {
-      for (const p of this.players.values()) {
-        if (p.challenged.has(n)) continue;
-        p.challenged.add(n);
-        p.conn.send({ t: 'reward', dildos: CHALLENGE_REWARDS[n - 1], reason: `Bonus-Challenge Stock ${n}: mit ≥150% des Ziels verlassen`, challenge: n });
-      }
+    const tr = this.session?.tracker;
+    if (reason === 'return' && tr && !this.session.ending) {
+      tr.flags.leaveFrac = this.pot / f.target;
+      this.checkChallenges();
     }
     this.session = null;
     this.makkaLuckUntil = 0;
@@ -446,6 +476,8 @@ export class Room {
       p.rewarded.add(n);
       p.conn.send({ t: 'reward', dildos: FLOOR_REWARDS[n - 1], reason: `Stock ${n} zum ersten Mal abgeschlossen`, floor: n });
     }
+    const tr = s.tracker;
+    if (tr && tr.flags.targetMs == null) tr.flags.targetMs = Date.now() - tr.startedAt;
     if (n === FLOORS.length) {
       this.run.finalUnlocked = true;
       if (!this.campaign.gameComplete) this.campaign.finishedAt = Date.now();
@@ -501,6 +533,7 @@ export class Room {
     if (p.seat && p.seat !== id) { this.leaveTable(p); if (p.seat) return; }
     t.occupant = p.id;
     p.seat = id;
+    this.npcs.evict(`table:${id}`);
     this.markDirty();
   }
 
@@ -531,6 +564,7 @@ export class Room {
       return false;
     }
     t.holder = { pid: p.id, until: now + SLOT_HOLD_MS };
+    this.npcs.evict(`slot:${t.id}`);
     return true;
   }
 
@@ -719,9 +753,44 @@ export class Room {
       straight: r.straight, blackjacks: r.blackjacks, tieWin: r.tieWin, pointHit: r.pointHit,
       pokerCat: r.pokerCat, wheel: r.wheel, roulette: r.roulette, newStake: r.newStake, pot: this.pot, lucky: !!r.lucky && net > 0,
     });
+    const tr = this.session?.tracker;
+    if (tr && p) trackResult(tr, { pid, game: table.type, stake, net, blackjacks: r.blackjacks, straight: r.straight, tieWin: r.tieWin, pointHit: r.pointHit, pokerCat: r.pokerCat, makka: !!mods.makka, tier: GAMES[table.type].walkUp ? tier : null, target: f.target });
     this.markDirty();
     this.checkTarget();
+    this.checkChallenges();
     this.checkBankrupt();
+  }
+
+  // ───────────────────────── Challenges (optional, blockieren nie) ─────────────────────────
+  challengeCtx() {
+    return { pot: this.pot, target: floorDef(this.floor).target, players: [...this.players.keys()] };
+  }
+
+  challengeStatus() {
+    const tr = this.session?.tracker;
+    if (!tr || !this.floor) return [];
+    const ctx = this.challengeCtx();
+    return challengesFor(this.floor).map(c => ({ id: c.id, ...challengeProgress(c, tr, ctx), done: tr.done.includes(c.id) }));
+  }
+
+  checkChallenges() {
+    const tr = this.session?.tracker;
+    if (!tr || !this.floor) return;
+    const ctx = this.challengeCtx();
+    for (const c of challengesFor(this.floor)) {
+      if (tr.done.includes(c.id)) continue;
+      const { prog, goal } = challengeProgress(c, tr, ctx);
+      if (prog < goal) continue;
+      tr.done.push(c.id);
+      this.event({ kind: 'challenge', id: c.id, floor: this.floor, text: c.text, reward: c.reward });
+      // Belohnung einmalig pro Spieler (wer sie schon früher geschafft hat, bekommt nichts doppelt)
+      for (const p of this.players.values()) {
+        if (p.chDone.has(c.id)) continue;
+        p.chDone.add(c.id);
+        p.conn.send({ t: 'reward', dildos: c.reward, reason: `CHALLENGE ABGESCHLOSSEN: ${c.text}`, challenge: c.id, kind: 'challenge' });
+      }
+      this.markDirty();
+    }
   }
 
   // ───────────────────────── Items ─────────────────────────

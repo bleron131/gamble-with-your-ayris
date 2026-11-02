@@ -420,3 +420,35 @@ body.touch .tablepanel .quick button.small { min-height: 32px; padding: 4px 8px;
 body.touch { -webkit-user-select: none; }
 .perfmon { position: fixed; left: calc(8px + var(--sl)); bottom: calc(8px + var(--sb)); z-index: 30; margin: 0; padding: 6px 9px; background: rgba(0, 0, 0, .72); color: #9effa0; font: 11px/1.35 ui-monospace, Menlo, Consolas, monospace; border-radius: 8px; pointer-events: none; white-space: pre; }
 body.touch .perfmon { bottom: auto; top: calc(110px + var(--st)); }
+
+/* ── Challenges im HUD ── */
+.chlist:empty { display: none; }
+.chlist { margin-top: 6px; border-top: 1px solid var(--line); padding-top: 5px; font-size: 12px; max-width: 300px; }
+.chlist .chhead { font-family: var(--title); font-size: 11px; letter-spacing: 1px; color: var(--muted); margin-bottom: 2px; }
+.chlist .ch { display: flex; gap: 6px; align-items: baseline; color: #d8cfe8; line-height: 1.35; }
+.chlist .ch .cb { width: 12px; color: var(--muted); }
+.chlist .ch .ct { flex: 1; }
+.chlist .ch .cp { color: var(--gold); font-weight: 800; white-space: nowrap; }
+.chlist .ch.ok { color: #8fe9a8; }
+.chlist .ch.ok .cb { color: #5dff8a; }
+.floor .fch { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.floor .fch .marks { color: #5dff8a; letter-spacing: 1px; }
+.floor.locked .fch { opacity: .6; }
+
+/* ── Feedback-Popups ── */
+.popups { position: absolute; left: 50%; top: calc(64px + var(--st, 0px)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; z-index: 30; }
+.popup { display: flex; align-items: center; gap: 12px; padding: 10px 22px 10px 14px; border-radius: 16px; background: linear-gradient(135deg, rgba(30, 14, 50, .94), rgba(16, 8, 28, .94)); border: 2px solid var(--pink); box-shadow: 0 0 24px rgba(255, 60, 172, .45), 0 6px 20px rgba(0, 0, 0, .5); animation: popin .55s cubic-bezier(.2, 1.6, .4, 1); transition: opacity .45s, transform .45s; min-width: 260px; max-width: min(560px, 90vw); }
+.popup.out { opacity: 0; transform: translateY(-14px) scale(.96); }
+.popup .pi { font-size: 30px; filter: drop-shadow(0 0 8px rgba(255, 255, 255, .4)); animation: popicon 1.2s ease-in-out infinite; }
+.popup .ptt { font-family: var(--title); font-size: 21px; color: #fff; letter-spacing: 1px; text-shadow: 0 0 10px rgba(255, 60, 172, .7); }
+.popup .pts { font-size: 13px; font-weight: 700; color: #d8cfe8; }
+.popup.challenge { border-color: #5dff8a; box-shadow: 0 0 24px rgba(93, 255, 138, .45), 0 6px 20px rgba(0, 0, 0, .5); }
+.popup.challenge .ptt { text-shadow: 0 0 10px rgba(93, 255, 138, .8); }
+.popup.floor { border-color: var(--cyan); box-shadow: 0 0 24px rgba(43, 217, 254, .5), 0 6px 20px rgba(0, 0, 0, .5); }
+.popup.floor .ptt { text-shadow: 0 0 10px rgba(43, 217, 254, .8); }
+.popup.achievement, .popup.jackpot, .popup.money { border-color: var(--gold); box-shadow: 0 0 28px rgba(255, 215, 0, .55), 0 6px 20px rgba(0, 0, 0, .5); }
+.popup.achievement .ptt, .popup.jackpot .ptt, .popup.money .ptt { color: var(--gold); text-shadow: 0 0 12px rgba(255, 200, 0, .8); }
+.popup.item { border-color: #c084ff; box-shadow: 0 0 24px rgba(192, 132, 255, .5), 0 6px 20px rgba(0, 0, 0, .5); }
+@keyframes popin { 0% { opacity: 0; transform: translateY(-20px) scale(.6); } 100% { opacity: 1; transform: none; } }
+@keyframes popicon { 0%, 100% { transform: scale(1) rotate(0); } 50% { transform: scale(1.15) rotate(-6deg); } }
+@media (max-height: 500px) { .popup { padding: 6px 14px 6px 10px; min-width: 200px; } .popup .ptt { font-size: 16px; } .popup .pi { font-size: 22px; } .chlist { font-size: 10.5px; max-width: 240px; } }

@@ -5,6 +5,8 @@ import { World } from './base.js';
 import { M, mesh, sofa, lowTable, shisha, plant, palm, neonSign, barCounter, pendantLamp, rug, elevator, speaker, painting, labelPlane } from './props.js';
 import { woodTexture, wallpaperTexture, tileTexture } from '../textures.js';
 import { Character, npcAppearance } from '../character.js';
+import { freeStandSpots, loungeSpot } from '../npcs.js';
+import { LOBBY_SEATS } from '../../shared/npcs.js';
 import { fmtMoney, FLOORS } from '../../shared/config.js';
 
 const W = 26, D = 20, H = 4.6;
@@ -104,7 +106,7 @@ export class LobbyWorld extends World {
     bar.position.set(-W / 2 + 2.6, 0, -2);
     bar.rotation.y = Math.PI / 2;
     s.add(bar);
-    this.addBox(-W / 2 + 2.6, -2, 0.9, 6.8);
+    this.addBox(-W / 2 + 2.6, -2, 0.9, 6.8, 1.15);
     this.addBox(-W / 2 + 1.2, -2, 0.6, 6.8);
     const tender = new Character(npcAppearance('bartender', 2), { npc: 'bartender' });
     tender.root.position.set(-W / 2 + 1.75, 0, -2);
@@ -136,7 +138,6 @@ export class LobbyWorld extends World {
     const s = this.scene;
     const groups = [[-5.5, 3.5, '#7a1230', '#2a9df4'], [1, 5.5, '#1d3557', '#ff3cac'], [6.8, 6, '#4a1a5a', '#2bd9fe'], [-1.5, 0.2, '#2a5a3a', '#ffd166']];
     this.shishas = [];
-    let seed = 0;
     for (const [x, z, col, shCol] of groups) {
       const r = rug(4.2, 3.4, '#5b1a2e', '#e8c36a');
       r.position.set(x, 0, z); s.add(r);
@@ -152,19 +153,10 @@ export class LobbyWorld extends World {
       for (const [dx, dz, ry] of [[0, -1.35, 0], [0, 1.35, Math.PI], [-1.5, 0, Math.PI / 2]]) {
         const so = sofa(col, dx === -1.5 ? 1.6 : 2.4);
         so.position.set(x + dx, 0, z + dz); so.rotation.y = ry; s.add(so);
-        if (dx === -1.5) this.addBox(x + dx, z + dz, 0.8, 1.6); else this.addBox(x + dx, z + dz, 2.4, 0.8);
+        if (dx === -1.5) this.addBox(x + dx, z + dz, 0.8, 1.6, 0.9); else this.addBox(x + dx, z + dz, 2.4, 0.8, 0.9);
       }
-      // Gäste-NPCs
-      if (seed < 3) {
-        const g = new Character(npcAppearance('guest', seed + 3));
-        g.root.position.set(x + 0.5, 0.38, z - 1.25);
-        g.setAnim('sit');
-        g.root.rotation.y = 0;
-        s.add(g.root);
-        this.updaters.push(dt => g.update(dt));
-      }
-      seed++;
     }
+    this.buildSeats();
     let smokeT = 0;
     this.updaters.push((dt, t) => {
       smokeT -= dt;
@@ -180,6 +172,28 @@ export class LobbyWorld extends World {
       }
     });
   }
+
+  // Sitzplätze (Sofas & Barhocker): [E] Hinsetzen – belegt wird serverseitig, NPCs machen Spielern Platz
+  buildSeats() {
+    const app = this.app;
+    for (const st of LOBBY_SEATS) {
+      this.addInteract({
+        pos: new THREE.Vector3(st.sx, 0, st.sz), radius: st.kind === 'stool' ? 0.7 : 0.8, seat: st,
+        verb: 'HINSETZEN', label: st.kind === 'stool' ? 'Hinsetzen (Barhocker)' : 'Hinsetzen',
+        enabled: () => !app.player.lounge && app.seatFree(st.i),
+        action: () => app.takeSeat(st.i),
+      });
+    }
+  }
+
+  // ───────────────────────── NPC-Plätze ─────────────────────────
+  npcBounds() { return [-W / 2, W / 2, -D / 2, D / 2]; }
+  npcKind() { return 'casual'; }
+  npcStandSpots() {
+    if (!this.standSpots) this.standSpots = freeStandSpots(this, this.npcBounds(), 12, 77, LOBBY_SEATS.map(s => ({ x: s.x, z: s.z, r: 1.2 })));
+    return this.standSpots;
+  }
+  npcSpot(spot) { return loungeSpot(this, spot); }
 
   // Shisha-Zug eines Charakters: Schlauch zur Hand, Ziehen (Blubbern), nach kurzer Pause sichtbare Rauchwolke ausatmen
   smokeAt(char, i, onExhale) {

@@ -4,6 +4,7 @@ import { h, clear } from './dom.js';
 import { FLOORS, ITEMS, LOADOUT_SLOTS, GAME_NAMES, GAME_ICONS, ACHIEVEMENTS, COSMETIC_UNLOCKS, fmtMoney, START_CAPITAL } from '../../shared/config.js';
 import { OPTIONS } from '../character.js';
 import * as Save from '../save.js';
+import { challengesFor } from '../../shared/challenges.js';
 import { enterFullscreen } from '../fullscreen.js';
 import { TIER_NAMES } from '../engine.js';
 import { sfx } from '../audio.js';
@@ -14,7 +15,9 @@ export function openElevator(ui) {
   if (!st) return;
   const camp = st.campaign;
   const grid = h('div.floors');
+  const mine = new Set(s.challenges || []);
   for (const f of FLOORS) {
+    const chs = challengesFor(f.n);
     const done = camp.completed.includes(f.n);
     const unlocked = f.n <= camp.unlocked;
     const afford = st.pot >= f.minBet;
@@ -30,8 +33,10 @@ export function openElevator(ui) {
       h('div.ftarget', `Ziel ${fmtMoney(f.target)}`),
       h('div.fmin', `Min. ${fmtMoney(f.minBet)}`),
       h('div.fstatus', status),
+      h('div.fch', `Challenges ${chs.filter(c => mine.has(c.id)).length}/${chs.length} `, h('span.marks', chs.map(c => mine.has(c.id) ? '✓' : '□').join(''))),
     );
-    card.title = f.games.map(g => `${GAME_NAMES[g]}: ${fmtMoney(f.limits[g].min)} – ${fmtMoney(f.limits[g].max)}`).join('\n');
+    card.title = f.games.map(g => `${GAME_NAMES[g]}: ${fmtMoney(f.limits[g].min)} – ${fmtMoney(f.limits[g].max)}`).join('\n')
+      + '\n\nOptionale Challenges (blockieren nichts):\n' + chs.map(c => `${mine.has(c.id) ? '✓' : '□'} ${c.text} (+${c.reward} 🍆)`).join('\n');
     grid.append(card);
   }
   if (st.run.finalUnlocked) {
@@ -42,6 +47,7 @@ export function openElevator(ui) {
     h('h2', '🛗 AUFZUG'),
     h('div.subtle', `Team-Pot: ${fmtMoney(st.pot)} – wird auf jedes Stockwerk mitgenommen. Alle freigeschalteten Stockwerke können jederzeit erneut besucht werden.`),
     grid,
+    h('div.subtle.small', `🏅 Challenges sind optional und geben einmalig Bonus-🍆 – freigeschaltet wird nur über das Ziel. Erledigt: ${mine.size}/${FLOORS.reduce((a, f) => a + challengesFor(f.n).length, 0)} (Maus über ein Stockwerk für Details).`),
     loadoutEditor(ui),
     h('div.subtle.small', `Bankrott (Pot unter Mindesteinsatz) ruft die Mafia: Der Run ist verloren – neuer Run mit ${fmtMoney(START_CAPITAL)}, nur Stock 1 freigeschaltet. 🍆, Items und Kosmetik bleiben.`),
   ), 'wide');

@@ -143,9 +143,7 @@ export function floorTables(n) {
 
 // Dildo-Belohnungen (einmalig pro Spieler & Stockwerk → kein Farming)
 export const FLOOR_REWARDS = [5, 5, 6, 6, 8, 8, 10, 10, 12, 12, 15, 15, 20, 20, 30];
-// Bonus-Challenge pro Stockwerk: Verlasse das Stockwerk mit mindestens 150% des Ziels.
-export const CHALLENGE_FACTOR = 1.5;
-export const CHALLENGE_REWARDS = [3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 10, 10, 12, 12, 20];
+// Optionale Challenges pro Stockwerk: siehe challenges.js
 
 // usage: 'single' = einmal verwendbar (verbraucht), 'perLevel' = permanent, einmal pro Level
 export const ITEMS = {

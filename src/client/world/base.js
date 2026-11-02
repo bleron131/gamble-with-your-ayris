@@ -16,7 +16,8 @@ export class World {
     this.updaters.push((dt) => this.particles.update(dt));
   }
 
-  addBox(cx, cz, w, d) { this.colliders.push({ type: 'box', minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2 }); }
+  // h = Höhe des Hindernisses (niedrige Möbel blockieren die Third-Person-Kamera nicht, wenn sie darüber schwebt)
+  addBox(cx, cz, w, d, h = 9) { this.colliders.push({ type: 'box', minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2, h }); }
   addCircle(x, z, r) { this.colliders.push({ type: 'circle', x, z, r }); }
   addInteract(o) { this.interactables.push({ radius: 1.6, ...o }); return o; }
 

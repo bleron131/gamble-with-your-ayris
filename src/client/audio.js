@@ -227,7 +227,19 @@ let nextBeat = 0;
 let beatIdx = 0;
 let ambience = null;
 
-export function setMusic(m, level = 0) {
+// Musikstil je Stockwerk (Akkordfolge, Tonleiter, Tempo, Klangfarbe)
+const CASINO_STYLES = {
+  lofi: { prog: [[45, 52, 55, 60], [41, 48, 52, 57], [43, 50, 53, 59], [40, 47, 50, 55]], scale: [69, 72, 74, 76, 79], bpm: 82, chord: 'triangle', lead: 'square', leadVol: 0.018, crackle: true },
+  synth: { prog: [[45, 52, 57, 60], [41, 48, 53, 57], [48, 55, 60, 64], [43, 50, 55, 59]], scale: [69, 72, 76, 79, 81, 84], bpm: 118, chord: 'sawtooth', lead: 'sawtooth', leadVol: 0.016, arp: true },
+  jazz: null, // Standard (Casino-Jazz)
+  tropical: { prog: [[48, 55, 60, 64], [53, 57, 60, 65], [55, 59, 62, 67], [48, 55, 60, 64]], scale: [72, 74, 76, 79, 81, 84], bpm: 112, chord: 'triangle', lead: 'triangle', leadVol: 0.05, marimba: true },
+  pentatonic: { prog: [[45, 52, 57, 64], [43, 50, 55, 62], [41, 48, 53, 60], [43, 50, 55, 62]], scale: [69, 71, 74, 76, 78, 81], bpm: 96, chord: 'sine', lead: 'triangle', leadVol: 0.045 },
+  ambient: { prog: [[50, 57, 62, 66], [47, 54, 59, 62], [43, 50, 55, 59], [45, 52, 57, 61]], scale: [74, 76, 78, 81, 83, 86], bpm: 72, chord: 'sine', lead: 'sine', leadVol: 0.03, pad: true },
+  royal: { prog: [[48, 55, 60, 64], [45, 52, 57, 60], [41, 48, 53, 57], [43, 50, 55, 59]], scale: [72, 76, 79, 84, 88], bpm: 104, chord: 'sawtooth', lead: 'square', leadVol: 0.02, brass: true },
+};
+let musicStyle = null, musicStyleKey = null;
+export function setMusic(m, level = 0, style = null) {
+  if (m === 'casino') { musicStyle = CASINO_STYLES[style] || null; musicStyleKey = style; }
   if (m !== 'jackpot') clearTimeout(jackpotTimer);
   if (!ctx) { mode = m; intensity = level; return; }
   if (m !== mode) { beatIdx = 0; nextBeat = now() + 0.1; }
@@ -238,7 +250,7 @@ export function setMusic(m, level = 0) {
 // Jackpot: eigene Musik für einige Sekunden, danach zurück zur vorherigen Musik
 let jackpotTimer = null, beforeJackpot = null;
 export function playJackpotMusic(sec = 7) {
-  if (mode !== 'jackpot') beforeJackpot = [mode, intensity];
+  if (mode !== 'jackpot') beforeJackpot = [mode, intensity, musicStyleKey];
   setMusic('jackpot');
   clearTimeout(jackpotTimer);
   jackpotTimer = setTimeout(() => { if (mode === 'jackpot' && beforeJackpot) setMusic(...beforeJackpot); }, sec * 1000);
@@ -267,7 +279,7 @@ const MELODY_SCALE = { lounge: [62, 63, 66, 67, 69, 70, 72, 74], casino: [72, 74
 
 function schedule() {
   if (!ctx || mode === 'none') return;
-  const bpm = mode === 'casino' ? 108 + intensity * 6 : mode === 'jackpot' ? 150 : mode === 'lounge' ? 84 : 66;
+  const bpm = mode === 'casino' ? (musicStyle?.bpm ?? 108) + intensity * 4 : mode === 'jackpot' ? 150 : mode === 'lounge' ? 84 : 66;
   const step = 60 / bpm / 2; // Achtel
   while (nextBeat < now() + 0.25) {
     playStep(nextBeat, beatIdx, step);
@@ -293,6 +305,20 @@ function playStep(t, i, step) {
     // Darbuka-artige Akzente
     if (pos === 7 || (pos === 5 && bar % 2)) tone(220, t, 0.08, { vol: 0.08, slide: 0.7, bus: B });
     if (Math.random() < 0.3 && pos % 2 === 0) tone(mtof(MELODY_SCALE.lounge[Math.floor(Math.random() * 8)]), t, step * 2, { type: 'sine', vol: 0.04, a: 0.02, bus: B });
+  } else if (mode === 'casino' && musicStyle) {
+    // Stockwerk-eigener Stil
+    const S = musicStyle, lvl = intensity;
+    const ch = S.prog[bar % S.prog.length];
+    if (S.pad && pos === 0 && bar % 2 === 0) ch.forEach(m => tone(mtof(m + 12), t, step * 15, { type: 'sine', vol: 0.028, a: 1, bus: B }));
+    else if (!S.pad && (pos === 0 || pos === 4)) ch.forEach(m => tone(mtof(m + 12), t, step * (S.brass ? 3.5 : 1.6), { type: S.chord, vol: S.brass ? 0.014 : 0.018, a: S.brass ? 0.06 : 0.01, bus: B, filter: S.brass ? 2200 : 1600 }));
+    if (S.arp) tone(mtof(ch[pos % 4] + 24), t, step * 0.8, { type: 'square', vol: 0.012, bus: B, filter: 3000 });
+    if (pos % 2 === 0) tone(mtof(ch[0] - 12 + (pos === 4 ? 7 : 0)), t, step * 1.6, { type: S.pad ? 'sine' : 'triangle', vol: 0.15, bus: B, filter: 900 });
+    if (!S.pad) noise(t, pos % 2 ? 0.03 : 0.06, { freq: S.crackle ? 3000 : 8000, q: 0.7, vol: 0.02, bus: B });
+    if (!S.pad && (pos === 2 || pos === 6)) noise(t, 0.09, { freq: 1800, q: 0.8, vol: 0.045, bus: B });
+    if (!S.pad && (pos === 0 || pos === 4)) tone(58, t, 0.13, { vol: 0.22, slide: 0.5, bus: B });
+    if (S.crackle && Math.random() < 0.3) noise(t, 0.01, { freq: 5000, q: 3, vol: 0.02, bus: B });
+    if (S.marimba && pos % 2 === 1 && Math.random() < 0.6) tone(mtof(S.scale[Math.floor(Math.random() * S.scale.length)]), t, 0.12, { type: 'triangle', vol: S.leadVol, bus: B });
+    else if (Math.random() < 0.22 + lvl * 0.04) tone(mtof(S.scale[Math.floor(Math.random() * S.scale.length)]), t, step * 1.5, { type: S.lead, vol: S.leadVol, bus: B, filter: 2600 });
   } else if (mode === 'casino') {
     const lvl = intensity;
     if (pos === 0 || pos === 3) chord.forEach(m => tone(mtof(m + 12), t, step * 0.9, { type: 'square', vol: 0.012 + lvl * 0.002, a: 0.005, bus: B, filter: 1800 + lvl * 300 }));

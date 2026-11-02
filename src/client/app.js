@@ -9,6 +9,8 @@ import { LobbyWorld } from './world/lobby.js';
 import { CasinoWorld } from './world/casino.js';
 import { FinalWorld } from './world/final.js';
 import { WSTransport, LocalTransport } from './net.js';
+import { NpcController } from './npcs.js';
+import { LOBBY_SEATS } from '../shared/npcs.js';
 import * as Save from './save.js';
 import { initAudio, sfx, sfxAt, setMusic, setAmbience, setDuck, setVolumes, setDizzyAudio, setShishaSounds, clearShishaSounds, updateListener, shishaDraw, shishaExhale } from './audio.js';
 import { bindSfx } from './tables/common.js';
@@ -214,6 +216,12 @@ export class App {
   // Kontextabhängige Touch-Buttons (nur wenn wirklich eine Interaktion möglich ist)
   contextActions() {
     const out = [];
+    if (this.player.lounge) {
+      const sh = this.player.lounge.seat.shisha;
+      if (sh >= 0) out.push({ label: 'SHISHA RAUCHEN', cls: 'main', run: () => this.smokeShisha(sh), disabled: this.player.smokeT > 0 });
+      out.push({ label: 'AUFSTEHEN', cls: 'main', run: () => this.standUp() });
+      return out;
+    }
     const it = this.world?.nearestInteract(this.player.pos);
     if (it?.table?.walkUp) {
       const v = it.table, busy = !!v.state?.busy, id = v.def.id;
@@ -315,6 +323,13 @@ export class App {
       if (me?.seat && !this.player.seated) this.enterSeat(me.seat);
       if (!me?.seat && this.player.seated) this.exitSeat();
     }
+    this.world.npcCtl?.sync(st.npcs);
+    // Sitzplatz in der Shishabar: erst wenn der Server ihn bestätigt, setzt sich der Spieler (kein Doppelbelegen)
+    if (this.world.kind === 'lobby') {
+      const ls = this.mePlayer?.lseat;
+      if (ls != null && !this.player.lounge) { this.seatPending = null; this.player.sitLounge(LOBBY_SEATS[ls]); sfx.pop?.(); }
+      else if (ls == null && this.player.lounge?.phase === 'down' && !this.seatPending) this.player.standLounge();
+    }
     this.world.onState?.();
     this.ui.refreshHud();
     this.ui.renderVote(st.vote);
@@ -333,6 +348,7 @@ export class App {
     old?.dispose();
     this.world.setupLod?.();
     this.engine.tuneScene(this.world.scene);
+    if (this.world.npcSpot) { this.world.npcCtl = new NpcController(this, this.world); if (this.state?.npcs) this.world.npcCtl.sync(this.state.npcs); }
     const idx = this.state ? Math.max(0, this.state.players.findIndex(p => p.id === this.me)) : 0;
     this.player.spawn(this.world, idx);
     this.cinematic = null;
@@ -346,7 +362,7 @@ export class App {
     this.selfChar.root.visible = this.world.mode === 'third';
     for (const a of this.avatars.values()) this.world.scene.add(a.root);
     // Musik & Atmosphäre
-    if (scene === 'floor') { setMusic('casino', floorDef(floor).tier); setAmbience('casino'); }
+    if (scene === 'floor') { setMusic('casino', floorDef(floor).tier, this.world.style?.music); setAmbience('casino'); }
     else if (scene === 'final') { setMusic('final'); setAmbience(null); }
     else { setMusic('lounge'); setAmbience('lounge'); }
     // Räumliche Shisha-Geräusche nur in der Shishabar
@@ -466,6 +482,13 @@ export class App {
         sfx.bigWin();
         this.world.particles?.confetti(this.player.pos.clone().setY(2.5), 160, 6);
         this.ui.targetReached(ev);
+        if (ev.newFloor) this.ui.popup('floor', `STOCKWERK ${ev.newFloor} FREIGESCHALTET`, floorDef(ev.newFloor).name);
+        break;
+      }
+      case 'challenge': {
+        this.ui.feed(`🏅 Challenge geschafft: <b>${esc(ev.text)}</b>`, 'good');
+        // Wer sie schon früher geschafft hat, bekommt keine 🍆 mehr – kurzer Hinweis statt Popup
+        if (this.save.challenges.includes(ev.id)) this.ui.toast(`🏅 ${ev.text} – schon früher geschafft`, 'info');
         break;
       }
       case 'mafia': this.mafiaSequence(ev); break;
@@ -566,9 +589,12 @@ export class App {
   onReward(m) {
     Save.addDildos(m.dildos);
     if (m.floor && !this.save.rewardedFloors.includes(m.floor)) this.save.rewardedFloors.push(m.floor);
-    if (m.challenge && !this.save.challengeFloors.includes(m.challenge)) this.save.challengeFloors.push(m.challenge);
+    if (m.challenge && !this.save.challenges.includes(m.challenge)) this.save.challenges.push(m.challenge);
     Save.save();
-    this.ui.reward(m.dildos, m.reason);
+    if (m.kind === 'challenge') this.save.stats.challengesDone = (this.save.stats.challengesDone || 0) + 1;
+    if (m.kind === 'challenge') this.ui.popup('challenge', `CHALLENGE ABGESCHLOSSEN +${m.dildos} 🍆`, m.reason.replace(/^CHALLENGE ABGESCHLOSSEN: /, ''));
+    else if (m.floor) this.ui.popup('floor', `STOCK ${m.floor} GESCHAFFT +${m.dildos} 🍆`, m.reason);
+    else this.ui.reward(m.dildos, m.reason);
     this.ui.refreshHud();
   }
 
@@ -640,6 +666,22 @@ export class App {
   }
 
   // ───────────────────────── Shisha ─────────────────────────
+  // ───────────────────────── Sitzen in der Shishabar ─────────────────────────
+  seatFree(i) { return !this.state?.players.some(p => p.id !== this.me && p.lseat === i); }
+  takeSeat(i) {
+    if (this.player.lounge || this.seatPending) return;
+    this.seatPending = { i, at: performance.now() };
+    // Wird der Platz nicht bestätigt (jemand war schneller), passiert einfach nichts
+    setTimeout(() => { if (this.seatPending?.i === i) this.seatPending = null; }, 1500);
+    this.send({ t: 'move', ...this.player.pose() }); // aktuelle Position zuerst (Server prüft die Entfernung)
+    this.send({ t: 'seat.take', i });
+  }
+  standUp() {
+    if (!this.player.lounge) return;
+    this.player.standLounge();
+    this.send({ t: 'seat.leave' });
+  }
+
   smokeShisha(i) {
     if (this.player.smokeT > 0 || this.player.drinkT > 0) return;
     this.send({ t: 'smoke', i });
@@ -654,9 +696,9 @@ export class App {
     if (mine) {
       const p = this.player;
       p.smokeEnd = performance.now() + 3400;
-      p.yaw = Math.atan2(sh.position.x - p.pos.x, sh.position.z - p.pos.z);
-      p.playEmote('smoke', 3.4);
-    } else { char.setAnim('smoke'); char.emoteUntil = performance.now() + 3400; }
+      // Im Sitzen bleibt der Spieler sitzen (nur Mundstück zum Mund), im Stehen dreht er sich zur Shisha
+      if (!p.lounge) { p.yaw = Math.atan2(sh.position.x - p.pos.x, sh.position.z - p.pos.z); p.playEmote('smoke', 3.4); }
+    } else if (char.anim !== 'sit') { char.setAnim('smoke'); char.emoteUntil = performance.now() + 3400; } else char.setFx('s');
     shishaDraw(ev.i, 1.7);
     w.smokeAt(char, ev.i, () => shishaExhale(ev.i));
   }
@@ -831,6 +873,14 @@ export class App {
     if (!this.state) return;
     if (this.mafiaLock) return;
     if (e.code === 'KeyC') { this.toggleBallCam(); return; }
+    if (this.player.lounge) {
+      // Sitzend: E = Shisha (falls an der Sitzgruppe), sonst Aufstehen; LEERTASTE = Aufstehen (im Spieler-Update)
+      if (e.code === 'KeyE' && this.player.lounge.phase === 'down') { const sh = this.player.lounge.seat.shisha; if (sh >= 0) this.smokeShisha(sh); else this.standUp(); }
+      if (e.code === 'KeyT') this.drinkMakka();
+      if (e.code === 'KeyG') this.drinkCocktail();
+      if (e.code === 'Tab') { e.preventDefault(); this.ui.toggleScoreboard(true); }
+      return;
+    }
     if (e.code === 'KeyE') { const it = this.world.nearestInteract(this.player.pos); if (it) { if (!it.table?.walkUp) sfx.click(); it.action(); } }
     if (e.code === 'KeyR' || e.code === 'KeyF') { const v = this.slotNear(); if (v) this.slotBet(v.def.id, e.code === 'KeyR' ? 1 : -1); }
     const emotes = { Digit1: 'cheer', Digit2: 'dance', Digit3: 'sad', Digit4: 'facepalm', Digit5: 'point' };
@@ -888,6 +938,7 @@ export class App {
       this.selfChar.root.visible = this.world.mode === 'third' || !!this.cinematic;
     }
     for (const a of this.avatars.values()) a.update(dt);
+    this.world.npcCtl?.update(dt, this.engine.camera);
     this.hands.group.visible = this.world.mode === 'first' && !this.cinematic && !this.ballCam;
     this.hands.update(dt, this.player.moving, !!this.player.seated);
     // Interaktionshinweis
@@ -896,6 +947,7 @@ export class App {
     const touch = this.touch.active;
     const camKey = touch ? '🎥' : 'C';
     if (this.ballCam) this.ui.setHint(`${camKey} – Kamera verlassen`);
+    else if (this.player.lounge) this.ui.setHint(touch ? '' : this.player.lounge.seat.shisha >= 0 ? '[E] Shisha rauchen · [LEERTASTE] Aufstehen' : '[E] / [LEERTASTE] Aufstehen');
     else if (this.state && !this.player.seated && !this.cinematic) {
       const it = this.world.nearestInteract(this.player.pos);
       if (this.world.kind === 'floor' && !touch) this.hoverButton = this.pickSlotButton(this.aimNdc());

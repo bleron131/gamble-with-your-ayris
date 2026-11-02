@@ -61,6 +61,8 @@ Der Gratis-Server schläft nach 15 Minuten ohne Besucher; das Spiel weckt ihn be
 | H / S / D / P / J | Blackjack: Hit / Stand / Double / Split / Joker |
 | C / F | Hold'em: Call / Fold (am Pokertisch) |
 | ESC / Q | Vom Tisch aufstehen |
+| E (Shishabar) | Vor einem Sofa/Barhocker: Hinsetzen · im Sitzen auf dem Sofa: Shisha rauchen |
+| Leertaste (sitzend) | Aufstehen (auf dem Barhocker auch E) |
 | T | MAKKA aus dem Inventar trinken |
 | G | Outfit-Cocktail trinken (wenn ausgerüstet) |
 | 1–5 | Emotes (Jubeln, Tanzen, Traurig, Facepalm, Zeigen) |
@@ -137,8 +139,27 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   Tischzustände, Wetten und aktive Item-Effekte verfallen. Permanent bleiben 🍆, Items im Inventar, Kosmetik,
   Achievements, Statistiken und Hall-of-Fame-Rekorde. Normales Zurückkehren, Stockwerkwechsel oder Keep Gambling
   setzen nichts zurück.
-- **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Bonus-Challenges
-  (Stockwerk mit ≥150 % des Ziels verlassen) und Achievements – jeweils nur einmal pro Spieler, also kein Farming.
+- **15 einzigartige Stockwerke**: Jedes Stockwerk hat einen eigenen Stil mit eigenen Böden, Wänden, Licht,
+  Requisiten, Schildern und Musik – vom Hinterhof (Beton, Neonröhren, Automaten) über Neon Corner (Arcade, Synthwave),
+  Lucky Basement (Fässer, Glühbirnen), Golden Palm (Sand, Tiki-Fackeln), Fortune Hall (Laternen, Drache, Gong),
+  Millionaires Club (Bücherregale, Kamin), Sapphire Room (Eisboden, Aquarien), Diamond Deck (Schiffsdeck, Meerblick),
+  Platinum Sky (Sternenhimmel) bis zum FINAL CASINO FLOOR mit Riesenkrone und Lichtshow.
+- **Challenges (optional)**: Jedes Stockwerk hat 2–3 Challenges (z. B. „Gewinne 3 Slot-Spins“, „Schafft 4 Gewinne
+  in Folge“, „Treffe eine Einzelzahl beim Roulette“, „Erreicht das Ziel in unter 8 Minuten“) mit +1 bis +3 🍆.
+  Sie blockieren **nie** das Freischalten – das hängt nur am Ziel. Fortschritt zählt für die ganze Gruppe und steht
+  im HUD unter dem Ziel; im Aufzug zeigt jedes Stockwerk `Challenges 2/3 ✓✓□`. Erledigte Challenges werden pro
+  Spieler dauerhaft gespeichert und nur einmal belohnt (`CHALLENGE ABGESCHLOSSEN +2 🍆`).
+- **NPCs**: Gäste laufen durch Casino und Shishabar, spielen an Automaten und Tischen (mit Jubel- und Ärger-Reaktionen),
+  trinken an der Bar, unterhalten sich, schauen zu, sitzen auf den Sofas und rauchen Shisha. Die NPC-Regie läuft auf dem
+  Server, daher sehen alle Spieler dieselben NPCs. **Echte Spieler haben immer Vorrang**: Wer an einem Automaten SPIN
+  drückt, sich an einen Tisch oder auf ein Sofa setzt, auf dem ein NPC ist, bekommt den Platz sofort – der NPC geht weg,
+  es gibt keine „besetzt“-Meldung.
+- **Sitzen in der Shishabar**: Sofas (mehrere Plätze pro Sofa) und Barhocker – `[E] Hinsetzen`, sanfte Sitz-/Aufsteh-
+  Animation, die Kamera bleibt frei drehbar. Auf dem Sofa raucht E die Shisha der Sitzgruppe, LEERTASTE steht auf.
+  Belegt wird serverseitig: Drücken zwei Spieler gleichzeitig E auf denselben Platz, bekommt ihn nur einer (der andere
+  ohne Fehlermeldung, ggf. den Nachbarplatz auf demselben Sofa).
+- **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Challenges und Achievements – jeweils nur
+  einmal pro Spieler, also kein Farming.
 - **MAKKA an der Bar**: Nur bei Kemal an der Bar der Shishabar gibt es die pinke Ayri-Limonade für genau 1 🍆.
   Gekaufte MAKKA landen im Inventar (HUD: `MAKKA ×2`), können mit ins Casino und auf höhere Stockwerke und werden
   mit T bzw. 🍾 getrunken: 10 Sekunden Schwindel (nur für dich; Mitspieler sehen dich torkeln). **Im Casino**
@@ -181,10 +202,13 @@ in Folge häufiger –, damit lange Pechsträhnen selten werden (`luckChance` in
 server/index.js        Node-Server: statische Auslieferung + WebSocket-Gruppen mit Join-Codes
 src/shared/            Autoritative Spiellogik (läuft auf dem Server ODER im Browser für Solo)
   room.js              Raum: Team-Pot, Abstimmungen, Stockwerke, Mafia, Items, Finale
+  challenges.js        Optionale Challenges pro Stockwerk (Definition + Fortschritt)
+  npcs.js              NPC-Regie (logische Plätze, Vorrang für Spieler) + Sitzplätze der Shishabar
   games/*.js           Slots, Roulette, Blackjack, Baccarat, Craps, Hold'em, Glücksrad
   config.js            Stockwerke, Limits, Items, Achievements
 src/client/            Three.js-Client
-  world/               Shishabar, Casino-Stockwerke, finale Shishabar, Requisiten
+  world/               Shishabar, Casino-Stockwerke (styles.js: Stil je Stockwerk), finale Shishabar, Requisiten
+  npcs.js              NPC-Darstellung: Plätze im Raum, A*-Wegfindung, Animationen, gedrosseltes Update
   tables/              3D-Tische mit Animationen und Einsatz-Panels
   character.js         Cartoon-Charaktere + First-Person-Hände
   audio.js             Prozedurale Musik & Sounds (WebAudio) + Dealer-Stimme (Web Speech API)

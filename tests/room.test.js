@@ -85,7 +85,7 @@ test('Kein Dildo-Farming: Belohnung pro Stockwerk nur einmal', () => {
     room.leaveFloor('return');
   }
   assert.equal(conns[0].msgs.filter(m => m.t === 'reward' && m.floor === 1).length, 1);
-  assert.equal(conns[0].msgs.filter(m => m.t === 'reward' && m.challenge === 1).length, 1);
+  assert.equal(conns[0].msgs.filter(m => m.t === 'reward' && m.challenge === 'f1-leave').length, 1);
   teardown(room);
 });
 

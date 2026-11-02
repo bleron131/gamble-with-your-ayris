@@ -3,9 +3,11 @@ import * as THREE from 'three';
 import { World } from './base.js';
 import { addElevatorColliders } from './lobby.js';
 import { M, mesh, neonSign, chandelier, pillar, plant, palm, velvetRope, skylineWindow, elevator, barCounter, painting, labelPlane, pendantLamp, sofa } from './props.js';
-import { carpetTexture, marbleTexture, wallpaperTexture, tileTexture } from '../textures.js';
+import { carpetTexture, marbleTexture, wallpaperTexture, tileTexture, woodTexture, floorTexture, wallTexture } from '../textures.js';
+import { floorStyle, buildProps, buildSigns, buildLamps, buildPillars, buildWindows } from './styles.js';
 import { floorDef, floorTables, fmtMoney, GAME_NAMES, GAME_ICONS } from '../../shared/config.js';
 import { Character, npcAppearance } from '../character.js';
+import { freeStandSpots, standSpot } from '../npcs.js';
 import { bakeView } from '../bake.js';
 import { SlotView } from '../tables/slots.js';
 import { RouletteView } from '../tables/roulette.js';
@@ -35,7 +37,12 @@ export class CasinoWorld extends World {
     this.n = n;
     this.def = floorDef(n);
     this.tier = this.def.tier;
-    this.theme = THEMES[this.tier];
+    // Jedes Stockwerk hat einen eigenen Stil (Architektur, Licht, Deko, Musik, NPCs)
+    this.style = floorStyle(n);
+    const st = this.style;
+    this.theme = { ...THEMES[this.tier], wall: st.wall[1], accent: st.wall[3], ceil: st.ceil, light: st.light, neon: st.neon, lights: st.lights };
+    this.decoBlocks = [];
+    this.wallUsed = [];
     const tables = floorTables(n);
     // Raumgrösse wächst mit der Zahl der Tische (Spiele bauen sich über die Stockwerke auf)
     const centerCount = tables.filter(t => !WALL_GAMES.includes(t.type)).length;
@@ -43,7 +50,7 @@ export class CasinoWorld extends World {
     this.perRow = Math.max(1, Math.ceil(centerCount / this.rows));
     this.W = Math.max(16, 13 + this.perRow * 6) + this.tier * 2;
     this.D = 15 + this.rows * 5 + this.tier * 2;
-    this.H = 4.5 + this.tier * 0.6;
+    this.H = st.H || 4.5 + this.tier * 0.6;
     const s = this.scene;
     s.background = new THREE.Color(this.theme.ceil);
     s.fog = new THREE.Fog(this.theme.ceil, 20, 50 + this.tier * 6);
@@ -54,12 +61,11 @@ export class CasinoWorld extends World {
     this.initFlash();
     this.plan = this.planTables(tables);
     this.buildDecor();
-    if (this.tier >= 4) this.buildLuxury();
+    if (this.style.luxury || this.style.redCarpet) this.buildLuxury();
     this.views = {};
     this.buildTables();
     this.buildElevator();
     this.buildInfoBoard();
-    this.buildGuests();
     this.addRoomWalls(-this.W / 2, this.W / 2, -this.D / 2, this.D / 2);
     this.updaters.push((dt, t) => { for (const v of Object.values(this.views)) v.tick(dt, t); });
     this.bakeWorld();
@@ -68,14 +74,17 @@ export class CasinoWorld extends World {
   buildRoom() {
     const { W, D, H, tier, theme } = this;
     const s = this.scene;
-    const carpet = carpetTexture(tier).clone();
+    const st = this.style;
+    const [fk, fa, fb, fc] = st.floor;
+    const carpet = (fk === 'carpet' ? carpetTexture(fa) : floorTexture(fk, fa, fb, fc)).clone();
     carpet.userData = {};
     carpet.needsUpdate = true;
-    carpet.repeat.set(W / 4, D / 4);
-    const floor = mesh(new THREE.PlaneGeometry(W, D), M.std('#ffffff', 0.95, 0, { map: carpet }), 0, 0, 0, { cast: false });
+    carpet.repeat.set(W / (fk === 'carpet' ? 4 : 3), D / (fk === 'carpet' ? 4 : 3));
+    const floorRough = { ice: 0.15, tiles: 0.35, checker: 0.4, wood: 0.6, deck: 0.7 }[fk] ?? 0.95;
+    const floor = mesh(new THREE.PlaneGeometry(W, D), M.std('#ffffff', floorRough, fk === 'ice' ? 0.2 : 0, { map: carpet }), 0, 0, 0, { cast: false });
     floor.rotation.x = -Math.PI / 2;
     s.add(floor);
-    if (tier >= 3) {
+    if (tier >= 3 && fk === 'carpet') {
       // Marmorrahmen um den Teppich
       for (const [x, z, w, d] of [[0, D / 2 - 1, W, 2], [0, -D / 2 + 1, W, 2], [W / 2 - 1, 0, 2, D], [-W / 2 + 1, 0, 2, D]]) {
         const m = mesh(new THREE.PlaneGeometry(w, d), M.std('#ffffff', 0.15, 0.05, { map: marbleTexture(tier >= 5 ? '#1a1a1a' : '#f1ece4', tier >= 5 ? 'rgba(255,215,120,0.4)' : undefined) }), x, 0.005, z, { cast: false });
@@ -83,24 +92,28 @@ export class CasinoWorld extends World {
         s.add(m);
       }
     }
-    const wallMat = M.std('#ffffff', 0.85, 0, { map: wallpaperTexture(theme.wall, theme.accent) });
-    wallMat.map = wallMat.map.clone(); wallMat.map.userData = {}; wallMat.map.needsUpdate = true; wallMat.map.repeat.set(W / 6, 1.5);
+    const [wk, wa, wb, wc] = st.wall;
+    const wallMat = M.std('#ffffff', wk === 'velvet' ? 0.95 : 0.85, 0, { map: wallTexture(wk, wa, wb, wc) });
+    wallMat.map = wallMat.map.clone(); wallMat.map.userData = {}; wallMat.map.needsUpdate = true; wallMat.map.repeat.set(W / (wk === 'brick' ? 3 : 6), wk === 'brick' ? H / 2 : 1.5);
+    const trimMat = { gold: M.gold(), wood: M.std('#4a2a12', 0.5), chrome: M.std('#d0d4dc', 0.15, 0.95), dark: M.std('#1a1814', 0.8), neon: M.glow(st.neon, 2) }[st.trim] || M.std('#1a0f08', 0.5);
     for (const [x, z, w, ry] of [[0, -D / 2, W, 0], [0, D / 2, W, Math.PI], [-W / 2, 0, D, Math.PI / 2], [W / 2, 0, D, -Math.PI / 2]]) {
       const m = mesh(new THREE.PlaneGeometry(w, H), wallMat, x, H / 2, z, { cast: false });
       m.rotation.y = ry;
       s.add(m);
       const off = new THREE.Vector3(Math.sin(ry), 0, Math.cos(ry));
-      const base = mesh(new THREE.BoxGeometry(w, 0.25, 0.08), tier >= 2 ? M.gold() : M.std('#1a0f08', 0.5), x, 0.125, z, { cast: false });
+      const base = mesh(new THREE.BoxGeometry(w, 0.25, 0.08), st.trim === 'neon' ? M.std('#0a0a12', 0.4) : trimMat, x, 0.125, z, { cast: false });
       base.rotation.y = ry; base.position.addScaledVector(off, 0.04); s.add(base);
-      const top = mesh(new THREE.BoxGeometry(w, 0.15, 0.12), tier >= 1 ? M.gold() : M.std('#3a2a1a'), x, H - 0.1, z, { cast: false });
+      const top = mesh(new THREE.BoxGeometry(w, 0.15, 0.12), trimMat, x, H - 0.1, z, { cast: false });
       top.rotation.y = ry; top.position.addScaledVector(off, 0.06); s.add(top);
     }
-    const ceil = mesh(new THREE.PlaneGeometry(W, D), M.std(theme.ceil, 0.9), 0, H, 0, { cast: false });
+    const ceilMat = st.ceilStars ? new THREE.MeshBasicMaterial({ map: (() => { const t = wallTexture('stars', '#03040e', '#0a1030', '#ffffff').clone(); t.userData = {}; t.repeat.set(W / 6, D / 6); t.needsUpdate = true; return t; })() }) : M.std(theme.ceil, 0.9);
+    const ceil = mesh(new THREE.PlaneGeometry(W, D), ceilMat, 0, H, 0, { cast: false });
     ceil.rotation.x = Math.PI / 2;
     s.add(ceil);
     // Deckenkassetten
-    for (let x = -W / 2 + 3; x < W / 2 - 1; x += 6) {
-      s.add(mesh(new THREE.BoxGeometry(0.25, 0.3, D), tier >= 2 ? M.gold() : M.std('#2a1a10'), x, H - 0.15, 0, { cast: false }));
+    if (st.beams) for (let z = -D / 2 + 2; z < D / 2; z += 3) s.add(mesh(new THREE.BoxGeometry(W, 0.35, 0.3), M.std('#3a2210', 0.8, 0, { map: woodTexture('#3a2210') }), 0, H - 0.2, z, { cast: false }));
+    else if (!st.ceilStars) for (let x = -W / 2 + 3; x < W / 2 - 1; x += 6) {
+      s.add(mesh(new THREE.BoxGeometry(0.25, 0.3, D), st.trim === 'gold' ? M.gold() : st.trim === 'chrome' ? M.std('#a0a4ac', 0.2, 0.9) : M.std('#2a1a10'), x, H - 0.15, 0, { cast: false }));
     }
     // Neonleiste
     for (const z of [-D / 2 + 0.1, D / 2 - 0.1]) s.add(mesh(new THREE.BoxGeometry(W, 0.04, 0.04), M.glow(theme.neon, 2), 0, H - 0.35, z, { cast: false }));
@@ -157,39 +170,17 @@ export class CasinoWorld extends World {
     const name = neonSign(this.def.name.toUpperCase(), '#ffd97a', Math.min(W - 4, 8), 1, { size: this.def.name.length > 16 ? 80 : 110 });
     name.position.set(0, H - 1.0, -D / 2 + 0.06);
     s.add(name);
-    // Pflanzen & Säulen
+    // Pflanzen in den Ecken, Säulen, Deckenlampen und Fenster – je nach Stil
     const corners = [[-W / 2 + 1, -D / 2 + 1], [W / 2 - 1, -D / 2 + 1], [-W / 2 + 1, D / 2 - 1.2], [W / 2 - 1, D / 2 - 1.2]];
-    for (const [x, z] of corners) { const p = tier >= 2 ? palm(2.8) : plant(1.5); p.position.set(x, 0, z); s.add(p); this.addCircle(x, z, 0.4); }
-    if (tier >= 1) {
-      for (const sx of [-1, 1]) for (const z of [-D / 4, D / 4]) {
-        const x = sx * (W / 2 - 3.2);
-        if (Math.abs(z) < 2 || !this.isFree(x, z, 1.1)) continue;
-        const pl = pillar(H, tier >= 3, 0.32);
-        pl.position.set(x, 0, z);
-        s.add(pl);
-        this.addCircle(x, z, 0.45);
-      }
-    }
-    if (tier >= 2) {
-      for (let i = 0; i < Math.min(5, 1 + tier); i++) {
-        const c = chandelier(0.8 + tier * 0.15);
-        c.position.set((i - (Math.min(5, 1 + tier) - 1) / 2) * (W / Math.min(5, 1 + tier)), H - 1.2, 0);
-        s.add(c);
-      }
-    } else {
-      for (let x = -W / 2 + 4; x < W / 2 - 2; x += 5) { const p = pendantLamp(theme.light); p.position.set(x, H - 1.3, 0); s.add(p); }
-    }
-    // Panoramafenster in den Luxusetagen
-    if (tier >= 3) {
-      const win = skylineWindow(Math.min(D - 8, 16), H - 1.6, true);
-      win.position.set(-W / 2 + 0.04, H / 2 + 0.2, 0);
-      win.rotation.y = Math.PI / 2;
-      s.add(win);
-    } else {
-      for (let i = 0; i < 2; i++) { const p = painting(1.8, 1.2, 30 + i * 140 + this.n * 20); p.position.set(-W / 2 + 0.06, 2.2, (i ? 1 : -1) * D / 5); p.rotation.y = Math.PI / 2; s.add(p); }
-    }
-    // Bar (ab Stufe 1), luxuriöser ab Stufe 3
-    if (tier >= 1) {
+    const st = this.style;
+    if (st.plant !== 'none') for (const [x, z] of corners) { const p = st.plant === 'palm' ? palm(2.8) : plant(1.5); p.position.set(x, 0, z); s.add(p); this.addCircle(x, z, 0.4); }
+    this.reserveWalls();
+    buildPillars(this, st.pillars);
+    buildLamps(this, st.lamps, theme.light);
+    buildWindows(this, st.windows);
+    if (!st.windows && tier < 3) for (let i = 0; i < 2; i++) { const p = painting(1.8, 1.2, 30 + i * 140 + this.n * 20); p.position.set(-W / 2 + 0.06, 2.6, (i ? 1 : -1) * D / 3); p.rotation.y = Math.PI / 2; s.add(p); }
+    // Bar
+    if (st.bar) {
       const bar = barCounter(tier >= 3 ? 6 : 4.5, tier >= 4 ? '#140808' : '#3a1f10');
       bar.position.set(W / 2 - 2.2, 0, -D / 2 + 5);
       bar.rotation.y = -Math.PI / 2;
@@ -201,16 +192,21 @@ export class CasinoWorld extends World {
       bt.root.rotation.y = -Math.PI / 2;
       s.add(bt.root);
       this.updaters.push(dt => bt.update(dt));
+      this.barPos = new THREE.Vector3(W / 2 - 3.1, 0, -D / 2 + 5);
     }
     // VIP-Lounge mit Absperrung
-    if (tier >= 2) {
+    if (st.vip) {
       const vx = W / 2 - 3, vz = D / 2 - 4.5;
       const so = sofa('#7a1230', 2.4); so.position.set(vx + 0.6, 0, vz); so.rotation.y = -Math.PI / 2; s.add(so);
       this.addBox(vx + 0.6, vz, 0.9, 2.4);
       const rope = velvetRope(2.4); rope.position.set(vx - 1.2, 0, vz); rope.rotation.y = Math.PI / 2; s.add(rope);
       this.addBox(vx - 1.2, vz, 0.2, 2.4);
       const vip = neonSign('VIP', '#ffd97a', 1.2, 0.5); vip.position.set(W / 2 - 0.06, 2.6, vz); vip.rotation.y = -Math.PI / 2; s.add(vip);
+      this.decoBlocks.push({ x: vx, z: vz, r: 2 });
     }
+    // Set-Pieces und Schilder dieses Stockwerks
+    buildProps(this, st.props);
+    buildSigns(this, st.signs, st.neon);
     // Personaltür für die Mafia
     const door = new THREE.Group();
     door.position.set(-W / 2 + 3, 0, -D / 2 + 0.05);
@@ -236,6 +232,7 @@ export class CasinoWorld extends World {
     carpet.rotation.x = -Math.PI / 2;
     s.add(carpet);
     for (const sx of [-1.25, 1.25]) { const e = mesh(new THREE.BoxGeometry(0.06, 0.02, D / 2 - 2), M.gold(), sx, 0.012, D / 4, { cast: false }); s.add(e); }
+    if (!this.style.luxury) return;
     // Geldbrunnen: an einer freien Stelle zwischen den Tischreihen (nie in Tische oder Laufwege)
     const fz = [-D / 16, ...this.rowGaps(), 0].find(z => this.isFree(0, z, 3.4));
     if (fz !== undefined) this.buildFountain(fz);
@@ -245,11 +242,6 @@ export class CasinoWorld extends World {
       const x = (i < 2 ? -1 : 1) * (W / 2 - 4.6), z = (i % 2 ? 1 : -1) * (D / 2 - 9);
       if (!this.isFree(x, z, 1.6)) continue;
       this.buildChipStack(x, z, chipCols, i);
-    }
-    if (tier >= 5) {
-      const big = neonSign('THE ULTIMATE CASINO', '#ffd700', 9, 1.4);
-      big.position.set(0, this.H - 2.4, -D / 2 + 0.1);
-      s.add(big);
     }
   }
 
@@ -338,10 +330,24 @@ export class CasinoWorld extends World {
     if (Math.abs(x) > W / 2 - r * 0.6 || Math.abs(z) > D / 2 - r * 0.6) return false;
     if (Math.abs(x) < 3.5 + r && z > D / 2 - 10 - r) return false;
     for (const p of this.plan || []) {
-      const hw = p.center ? 1.6 : 0.8, hd = p.center ? 1.9 : 1.0;
+      const hw = p.center ? 1.6 : p.def.type === 'wheel' ? 1.8 : 0.8, hd = p.center ? 1.9 : p.def.type === 'wheel' ? 1.3 : 1.0;
       if (Math.abs(x - p.x) < hw + r && Math.abs(z - p.z) < hd + r) return false;
     }
+    for (const b of this.decoBlocks || []) if (Math.hypot(x - b.x, z - b.z) < b.r + r) return false;
+    // Bar, Personaltür und Glücksrad an den Wänden freihalten
+    if (this.style?.bar && x > W / 2 - 4.5 && Math.abs(z - (-D / 2 + 5)) < 4) return false;
+    if (Math.abs(x - (-W / 2 + 3)) < 1.6 + r && z < -D / 2 + 2.2) return false;
     return true;
+  }
+
+  // Wandabschnitte, an denen schon etwas steht (Automaten, Bar, Glücksrad, Tür, VIP), für Wanddeko sperren
+  reserveWalls() {
+    const { W, D } = this;
+    const u = this.wallUsed;
+    for (const p of this.plan) if (!p.center) u.push({ x: p.x, z: p.z, w: p.def.type === 'wheel' ? 3 : 1.6 });
+    u.push({ x: -W / 2 + 3, z: -D / 2, w: 2.4 }, { x: 0, z: -D / 2, w: Math.min(W - 4, 8) });
+    if (this.style.bar) u.push({ x: W / 2, z: -D / 2 + 5, w: 7 });
+    if (this.style.vip) u.push({ x: W / 2, z: D / 2 - 4.5, w: 3 });
   }
 
   buildTables() {
@@ -428,39 +434,36 @@ export class CasinoWorld extends World {
     s.add(board);
   }
 
-  // Gäste-NPCs nur an freien Stellen (nicht an Tischen, Sitzplätzen oder im Aufzug)
-  buildGuests() {
-    const { W, D, tier } = this;
-    const blocked = [];
-    for (const v of Object.values(this.views)) {
-      blocked.push({ p: v.group.position, r: 2.4 });
-      blocked.push({ p: v.seatPose().stand, r: 1.6 });
+  // ───────────────────────── NPC-Plätze (Server wählt logische Plätze, hier liegen sie im Raum) ─────────────────────────
+  npcBounds() { return [-this.W / 2, this.W / 2, -this.D / 2, this.D / 2]; }
+  npcKind() { return this.style.npc?.kind || 'casual'; }
+  npcStandSpots() {
+    if (!this.standSpots) {
+      const st = this.mafiaStage(4).box;
+      const blocked = [{ x: (st.min.x + st.max.x) / 2, z: (st.min.z + st.max.z) / 2, r: 3.6 }, { x: this.mafiaDoorPos.x, z: this.mafiaDoorPos.z, r: 1.8 }];
+      for (const v of Object.values(this.views)) { const p = v.interactPos(); blocked.push({ x: p.x, z: p.z, r: 1.3 }); }
+      this.standSpots = freeStandSpots(this, this.npcBounds(), 14, this.n * 31 + 7, blocked);
     }
-    blocked.push({ p: new THREE.Vector3(0, 0, D / 2 - 2), r: 3.5 });
-    blocked.push({ p: this.mafiaDoorPos, r: 1.5 });
-    blocked.push({ p: new THREE.Vector3(0, 0, D / 2 - 5), r: 3.4 }); // Bühne der Mafia-Szene freihalten
-    this.guests = [];
-    const count = 2 + tier;
-    let seed = 0;
-    for (let i = 0; i < count; i++) {
-      let pos = null;
-      for (let k = 0; k < 40 && !pos; k++) {
-        const c = new THREE.Vector3((Math.random() - 0.5) * (W - 4), 0, (Math.random() - 0.5) * (D - 4));
-        if (blocked.every(b => c.distanceTo(b.p) > b.r)) pos = c;
-      }
-      if (!pos) continue;
-      const look = npcAppearance(tier >= 3 && i % 2 ? 'vipdealer' : 'guest', i + this.n * 3 + seed++);
-      if (tier >= 4) Object.assign(look, { hat: ['tophat', 'fedora', 'crown', 'none'][i % 4], jewelry: 'goldchain', jacket: i % 2 ? 'gold' : 'blazer' });
-      const g = new Character(look);
-      g.root.position.copy(pos);
-      g.root.rotation.y = Math.random() * 6;
-      g.setAnim(i % 3 === 0 ? 'dance' : 'idle');
-      this.scene.add(g.root);
-      this.addCircle(pos.x, pos.z, 0.35);
-      blocked.push({ p: pos, r: 1.2 });
-      this.guests.push(g);
-      this.updaters.push(dt => g.update(dt));
+    return this.standSpots;
+  }
+  npcSpot(spot) {
+    const [kind, id] = spot.split(':');
+    const v = this.views[id];
+    if ((kind === 'slot' || kind === 'table') && v) {
+      const p = kind === 'slot' ? v.interactPos() : v.seatPose().stand;
+      return { x: p.x, z: p.z, ry: v.group.rotation.y + Math.PI, pose: 'stand' };
     }
+    if (kind === 'watch' && v) {
+      const side = (id.charCodeAt(id.length - 1) % 2) ? 1 : -1;
+      const p = v.toWorld(new THREE.Vector3(side * 1.25, 0, v.seatLocal.z + 0.35));
+      const c = v.group.position;
+      return { x: p.x, z: p.z, ry: Math.atan2(c.x - p.x, c.z - p.z), pose: 'stand' };
+    }
+    if (kind === 'bar') {
+      if (this.barPos) return { x: this.barPos.x - 0.1, z: this.barPos.z + (+id - 1.5) * 1.05, ry: Math.PI / 2, pose: 'stand' };
+      return standSpot(this, 'wander', +id + 6);
+    }
+    return standSpot(this, kind, +id);
   }
 
   // Kurzer farbiger Lichtblitz an einem Automaten (BIG WIN und mehr) – ein gemeinsames Licht für alle Geräte

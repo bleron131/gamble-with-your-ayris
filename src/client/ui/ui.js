@@ -5,6 +5,7 @@ import { h, clear, esc } from './dom.js';
 import { fmtMoney, fmtShort, floorDef, ITEMS, RETRY_GAMES_HAT, FLOORS } from '../../shared/config.js';
 import { sfx, initAudio } from '../audio.js';
 import * as Save from '../save.js';
+import { CHALLENGE_BY_ID } from '../../shared/challenges.js';
 import { openElevator, openShop, openEditor, openStats, openSettings, renderScoreboard, openBar } from './modals.js';
 
 export class UI {
@@ -23,7 +24,8 @@ export class UI {
     this.targetEl = h('div.target');
     this.levelEl = h('div.level');
     this.progress = h('div.progress', h('div.bar'));
-    this.hud.append(h('div.panel.potpanel', h('div.lbl', 'TEAM POT'), this.potEl, this.targetEl, this.progress, this.levelEl));
+    this.chEl = h('div.chlist');
+    this.hud.append(h('div.panel.potpanel', h('div.lbl', 'TEAM POT'), this.potEl, this.targetEl, this.progress, this.levelEl, this.chEl));
     this.dildoEl = h('div.dildos');
     this.groupEl = h('div.group');
     this.hud.append(h('div.topright', this.dildoEl, this.groupEl,
@@ -64,6 +66,9 @@ export class UI {
     r.append(this.overlay);
     this.toasts = h('div.toasts');
     r.append(this.toasts);
+    this.popups = h('div.popups');
+    r.append(this.popups);
+    this.popupQueue = [];
     this.modal = h('div.modal.hidden');
     r.append(this.modal);
     this.menu = h('div.menu.hidden');
@@ -173,7 +178,9 @@ export class UI {
       this.progress.firstChild.style.width = Math.min(100, st.pot / f.target * 100) + '%';
       this.progress.classList.toggle('done', !!st.session?.targetReached);
       this.levelEl.innerHTML = `LEVEL <b>${st.floor}</b> · ${esc(f.name)}`;
+      this.renderChallenges(st);
     } else {
+      clear(this.chEl);
       this.targetEl.innerHTML = st.scene === 'final' ? '<span class="gold">DIE FINALE ENTSCHEIDUNG</span>' : `Stockwerke: <b>${st.campaign.completed.length}/15</b> · freigeschaltet bis <b>${st.campaign.unlocked}</b>`;
       this.progress.style.display = 'none';
       this.levelEl.innerHTML = st.scene === 'final' ? '???' : 'SHISHABAR';
@@ -184,6 +191,25 @@ export class UI {
     for (const p of st.players) this.groupEl.append(h('div.pl', { class: p.id === app.me ? 'me' : '' }, (p.id === st.hostId ? '★ ' : '• ') + p.name + (p.seat ? ' 🎲' : '')));
     this.renderItems();
     if (this.tableView) this.tableView.refreshPanel();
+  }
+
+  // Optionale Challenges des Stockwerks (blockieren nichts – nur Bonus-🍆)
+  renderChallenges(st) {
+    const list = st.session?.challenges || [];
+    const mine = new Set(Save.get().challenges || []);
+    const key = JSON.stringify(list) + [...mine].length;
+    if (key === this.chKey) return;
+    this.chKey = key;
+    clear(this.chEl);
+    if (!list.length) return;
+    const doneCount = list.filter(c => c.done || mine.has(c.id)).length;
+    this.chEl.append(h('div.chhead', `CHALLENGES ${doneCount}/${list.length} · optional`));
+    for (const c of list) {
+      const def = CHALLENGE_BY_ID[c.id];
+      const ok = c.done || mine.has(c.id);
+      this.chEl.append(h('div.ch', { class: ok ? 'ok' : '', title: ok && !c.done ? 'Bereits früher geschafft' : '' },
+        h('span.cb', ok ? '✓' : '□'), h('span.ct', def.text), h('span.cp', ok ? `+${def.reward}🍆` : c.goal > 1 ? `${c.prog}/${c.goal}` : `+${def.reward}🍆`)));
+    }
   }
 
   setPot(v) {
@@ -284,11 +310,27 @@ export class UI {
   }
 
   reward(n, reason, achievement) {
-    sfx.shop();
-    const el = h('div.reward', { class: achievement ? 'ach' : '' }, h('div.rn', `+${n} 🍆`), h('div.rr', reason));
-    this.overlay.append(el);
-    setTimeout(() => el.classList.add('out'), 3800);
-    setTimeout(() => el.remove(), 4400);
+    if (achievement) this.popup('achievement', `ACHIEVEMENT FREIGESCHALTET +${n} 🍆`, reason.replace(/^ACHIEVEMENT: /, ''));
+    else this.popup('reward', `+${n} 🍆`, reason);
+  }
+
+  // Animierte Feedback-Popups (Challenge, Stockwerk, neues Item, Achievement …) – verschwinden automatisch.
+  // Höchstens 3 gleichzeitig, der Rest wartet kurz in der Schlange.
+  popup(kind, title, sub = '', ms = 3600) {
+    this.popupQueue.push({ kind, title, sub, ms });
+    this.pumpPopups();
+  }
+
+  pumpPopups() {
+    while (this.popupQueue.length && this.popups.children.length < 3) {
+      const { kind, title, sub, ms } = this.popupQueue.shift();
+      const icon = { challenge: '🏅', floor: '🔓', item: '🎁', achievement: '🏆', reward: '🍆', money: '💰', jackpot: '💎', event: '⚡' }[kind] || '✨';
+      const el = h('div.popup', { class: kind }, h('span.pi', icon), h('div.pt', h('div.ptt', title), sub ? h('div.pts', sub) : null));
+      this.popups.append(el);
+      if (kind === 'reward' || kind === 'challenge') sfx.shop(); else if (kind === 'achievement' || kind === 'floor') sfx.ding();
+      setTimeout(() => el.classList.add('out'), ms);
+      setTimeout(() => { el.remove(); this.pumpPopups(); }, ms + 450);
+    }
   }
 
   bigText(title, sub, cls = '', ms = 2500) {

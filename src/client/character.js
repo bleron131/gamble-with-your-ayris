@@ -493,6 +493,30 @@ export function npcAppearance(kind, seed = 0) {
   return base;
 }
 
+// Dynamische Gäste-NPCs: Aussehen deterministisch aus Seed + Stil des Stockwerks (alle Clients sehen dieselben Leute)
+export function npcLook(kind, seed) {
+  let x = (seed * 2654435761) >>> 0 || 1;
+  const rnd = () => { x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; };
+  const r = a => a[Math.floor(rnd() * a.length)];
+  const ids = k => OPTIONS[k].map(o => (Array.isArray(o) ? o[0] : o));
+  const a = {
+    skin: r(OPTIONS.skin.slice(0, 6)), hair: r(['short', 'spiky', 'curly', 'quiff', 'afro', 'long', 'bun', 'none']), hairColor: r(OPTIONS.hairColor.slice(0, 7)),
+    eyes: r(['round', 'round', 'happy', 'sleepy', 'small', 'big']), eyeColor: r(OPTIONS.eyeColor), brows: r(['normal', 'normal', 'thick', 'raised']),
+    beard: r(['none', 'none', 'stubble', 'mustache', 'full', 'goatee']),
+    top: r(ids('top')), topColor: r(OPTIONS.topColor), pants: r(['jeans', 'jeans', 'jogger', 'shorts']), pantsColor: r(OPTIONS.pantsColor), shoes: r(['sneakers', 'sneakers', 'boots']), shoesColor: r(OPTIONS.shoesColor),
+    jacket: 'none', jacketColor: r(OPTIONS.jacketColor), hat: 'none', hatColor: r(OPTIONS.hatColor), glasses: 'none', jewelry: 'none', accessory: 'none',
+  };
+  switch (kind) {
+    case 'shabby': Object.assign(a, { top: r(['hoodie', 'tshirt', 'tank']), pants: r(['jogger', 'jeans', 'shorts']), hat: r(['none', 'cap', 'beanie', 'beanie']), jacket: r(['none', 'track', 'none']), beard: r(['stubble', 'full', 'none']) }); break;
+    case 'tropical': Object.assign(a, { top: r(['tank', 'shirt', 'tshirt']), topColor: r(['#ffd60a', '#06d6a0', '#f15bb5', '#f4a261', '#ffffff']), pants: 'shorts', shoes: 'sandals', hat: r(['none', 'cap', 'cowboy']), glasses: r(['shades', 'shades', 'none']) }); break;
+    case 'smart': Object.assign(a, { top: r(['shirt', 'polo']), pants: r(['suit', 'jeans']), shoes: r(['loafers', 'sneakers']), jacket: r(['blazer', 'leather', 'none']), hat: r(['none', 'none', 'fedora']), jewelry: r(['none', 'watch', 'chain']) }); break;
+    case 'vip': Object.assign(a, { top: 'shirt', pants: 'suit', shoes: 'loafers', jacket: r(['blazer', 'blazer', 'leather']), jacketColor: r(['#1a1a1a', '#7a1230', '#1d3557', '#f2f2f2']), hat: r(['none', 'fedora', 'none']), glasses: r(['none', 'shades', 'round']), jewelry: r(['watch', 'goldchain', 'earrings']) }); break;
+    case 'royal': Object.assign(a, { top: 'shirt', topColor: r(['#ffffff', '#111111', '#7a1230']), pants: 'suit', pantsColor: '#111111', shoes: 'loafers', shoesColor: r(['#111111', '#ffd700']), jacket: r(['gold', 'blazer', 'blazer']), jacketColor: r(['#1a1a1a', '#7a1230']), hat: r(['tophat', 'none', 'fedora', 'crown', 'none']), glasses: r(['monocle', 'shades', 'none']), jewelry: r(['diamond', 'goldchain', 'watch']), accessory: r(['none', 'none', 'moneybag', 'rose']) }); break;
+    default: Object.assign(a, { hat: r(['none', 'none', 'cap', 'fez', 'fedora']), jacket: r(['none', 'none', 'leather', 'track']), glasses: r(['none', 'none', 'none', 'round', 'shades']) });
+  }
+  return a;
+}
+
 // ───────────────────────── First-Person-Hände ─────────────────────────
 export class FPHands {
   constructor(appearance) {

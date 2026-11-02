@@ -1,6 +1,7 @@
 // Dauerhafter Spielstand im Browser (localStorage).
 import { START_CAPITAL, ACHIEVEMENTS } from '../shared/config.js';
 import { defaultCampaign } from '../shared/room.js';
+import { legacyChallengeIds, isChallengeId } from '../shared/challenges.js';
 import { defaultAppearance } from './character.js';
 import { isTouchDevice } from './touch.js';
 
@@ -25,7 +26,8 @@ function defaults() {
     inventory: {},
     loadout: [],
     rewardedFloors: [],
-    challengeFloors: [],
+    challengeFloors: [], // alt (vor den neuen Challenges)
+    challenges: [], // erledigte Challenge-IDs (permanent, pro Spieler)
     campaign: defaultCampaign(),
     // Aktueller Run (wird bei einer Niederlage komplett ersetzt); campaign enthält nur permanente Rekorde
     run: { id: null, pot: START_CAPITAL, finalUnlocked: false, startedAt: Date.now(), unlocked: 1, completed: [] },
@@ -62,6 +64,7 @@ function migrateRun(d, raw) {
   if (!Array.isArray(d.run.completed)) d.run.completed = Array.isArray(c.completed) ? c.completed : [];
   if (!Number.isFinite(d.run.unlocked)) d.run.unlocked = Number.isFinite(c.unlocked) ? c.unlocked : 1;
   d.campaign.everCompleted = [...new Set([...(c.everCompleted || []), ...(c.completed || []), ...d.run.completed])].sort((a, b) => a - b);
+  d.challenges = [...new Set([...(Array.isArray(d.challenges) ? d.challenges : []), ...legacyChallengeIds(d.challengeFloors)])].filter(isChallengeId);
 }
 
 // Grafik beim ersten Start: PC = Hoch (wie bisher), Handy/Tablet = AUTO (Stufe nach Gerät + gemessener Bildrate, FPS AUTO).
@@ -87,7 +90,7 @@ export function save() {
 export function profile() {
   const s = get();
   return {
-    name: s.name, appearance: s.appearance, rewardedFloors: s.rewardedFloors, challengeFloors: s.challengeFloors,
+    name: s.name, appearance: s.appearance, rewardedFloors: s.rewardedFloors, challenges: s.challenges,
     makka: s.makka || 0,
     campaign: s.campaign, run: s.run,
   };
