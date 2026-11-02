@@ -3,6 +3,7 @@
 import { GAMES } from '../src/shared/room.js';
 import { floorDef, luckChance, MAKKA_LUCK_BONUS } from '../src/shared/config.js';
 import { handTotal, cardValue } from '../src/shared/games/blackjack.js';
+import { rand } from '../src/shared/rng.js';
 
 const N = +process.argv[2] || 20000;
 const FLOOR = +process.env.FLOOR || 15;
@@ -22,7 +23,7 @@ export function simulate(type, rounds = N, withLuck = true, makka = false) {
     later: (ms, fn) => queue.push(fn),
     canUseItem: () => false, useItem: () => false,
     makka,
-    lucky: () => { const b = withLuck ? luckChance(streak) : 0; return Math.random() < b + (1 - b) * (makka ? MAKKA_LUCK_BONUS : 0); },
+    lucky: () => { const b = withLuck ? luckChance(streak) : 0; return rand() < b + (1 - b) * (makka ? MAKKA_LUCK_BONUS : 0); },
     settle: r => {
       if (!r.stake && !r.payout) return;
       staked += r.stake; paid += r.payout; played++;
@@ -72,7 +73,7 @@ export function simulate(type, rounds = N, withLuck = true, makka = false) {
       }
       case 'mines': {
         game.start(ctx, table, { bet, mines: [1, 3, 5][i % 3] });
-        const want = i % 4 + 1, order = Array.from({ length: 25 }, (_, k) => k).sort(() => Math.random() - 0.5);
+        const want = i % 4 + 1, order = Array.from({ length: 25 }, (_, k) => k).sort(() => rand() - 0.5);
         for (const k of order) { if (table.state.phase !== 'play' || table.state.open.length >= want) break; game.action(ctx, table, 'pick:' + k); }
         if (table.state.phase === 'play') game.action(ctx, table, 'cash');
         break;
@@ -81,7 +82,7 @@ export function simulate(type, rounds = N, withLuck = true, makka = false) {
         const mode = ['easy', 'medium', 'hard'][i % 3];
         game.start(ctx, table, { bet, mode });
         const want = i % 3 + 1, tiles = { easy: 4, medium: 3, hard: 2 }[mode];
-        while (table.state.phase === 'play' && table.state.level < want) game.action(ctx, table, 'pick:' + Math.floor(Math.random() * tiles));
+        while (table.state.phase === 'play' && table.state.level < want) game.action(ctx, table, 'pick:' + Math.floor(rand() * tiles));
         if (table.state.phase === 'play') game.action(ctx, table, 'cash');
         break;
       }
@@ -93,7 +94,7 @@ export function simulate(type, rounds = N, withLuck = true, makka = false) {
         break;
       }
       case 'plinko': game.start(ctx, table, { bet, risk: ['low', 'medium', 'high'][i % 3] }); break;
-      case 'keno': { const n = i % 8 + 1, pool = Array.from({ length: 40 }, (_, k) => k + 1).sort(() => Math.random() - 0.5); game.start(ctx, table, { bet, picks: pool.slice(0, n) }); break; }
+      case 'keno': { const n = i % 8 + 1, pool = Array.from({ length: 40 }, (_, k) => k + 1).sort(() => rand() - 0.5); game.start(ctx, table, { bet, picks: pool.slice(0, n) }); break; }
       case 'moneywheel': game.start(ctx, table, { bet }); break;
       case 'duck': game.start(ctx, table, { bet, pick: i % 5 }); break;
       case 'streetcraps': game.start(ctx, table, { bet, pick: ['high', 'low', 'seven', 'doubles'][i % 4] }); break;
