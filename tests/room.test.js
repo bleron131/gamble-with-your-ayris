@@ -279,13 +279,14 @@ test('Gewinnstufen: klein, mittel, gross, mega, Jackpot', () => {
   assert.equal(winTier(1, 500, true), 'jackpot');
 });
 
-test('Slots: ein Treffer bringt mindestens das Doppelte des Einsatzes zurück', () => {
-  let hits = 0;
+test('Slots: jeder Treffer zahlt mehr als den Einsatz zurück, kleine Treffer sind häufig', () => {
+  let hits = 0, small = 0;
   for (let i = 0; i < 20000; i++) {
     const r = spin('normal', 1000, 5, 1);
-    if (r.payout > 0) { hits++; assert.ok(r.payout >= 2000, `Auszahlung ${r.payout}`); }
+    if (r.payout > 0) { hits++; assert.ok(r.payout >= 1400, `Auszahlung ${r.payout}`); if (r.payout < 2500) small++; }
   }
-  assert.ok(hits > 3000 && hits < 7000, `Treffer ${hits}`);
+  assert.ok(hits > 5500 && hits < 9000, `Treffer ${hits}`);
+  assert.ok(small > hits * 0.4, `kleine Treffer ${small}/${hits}`);
 });
 
 test('Sprung: natürlicher Bogen, kein Luft- oder Doppelsprung, neuer Sprung erst nach Bodenkontakt', async () => {

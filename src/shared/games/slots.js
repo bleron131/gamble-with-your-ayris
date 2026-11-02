@@ -16,16 +16,17 @@ function buildStrip(counts) {
 }
 
 export const VARIANTS = {
-  // Rund jeder vierte Spin gewinnt (mit Ayri-Glück eher jeder dritte), ein Treffer bringt meist 2.5–5× den Einsatz zurück
+  // Prompt 10: gut jeder dritte Spin gewinnt (weniger Leerfelder), kleine Treffer (1.4–2.5×) häufig,
+  // grosse selten, Kronen-Jackpot sehr selten (wächst mit dem Stockwerk)
   normal: {
-    strip: buildStrip([7, 6, 2, 2, 1, 1, 1, 6]),
-    // Auszahlung in Vielfachen des Gesamteinsatzes (Jackpot wächst mit dem Stockwerk)
-    pay3: { [C]: 2, [L]: 2.5, [B]: 3, [R]: 4, [S]: 6, [D]: 12, [K]: 250 },
+    strip: buildStrip([8, 7, 3, 2, 1, 1, 1, 3]),
+    // Auszahlung in Vielfachen des Gesamteinsatzes
+    pay3: { [C]: 1.4, [L]: 1.8, [B]: 2.5, [R]: 4, [S]: 6, [D]: 12, [K]: 250 },
   },
   // High-Limit: etwas seltener, dafür grössere Treffer
   high: {
-    strip: buildStrip([7, 5, 3, 2, 2, 1, 1, 6]),
-    pay3: { [C]: 2, [L]: 3, [B]: 4, [R]: 5, [S]: 8, [D]: 15, [K]: 240 },
+    strip: buildStrip([8, 6, 3, 2, 2, 1, 1, 3]),
+    pay3: { [C]: 1.4, [L]: 2, [B]: 3, [R]: 5, [S]: 8, [D]: 15, [K]: 240 },
   },
 };
 

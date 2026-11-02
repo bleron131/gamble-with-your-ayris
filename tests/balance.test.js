@@ -11,11 +11,14 @@ for (const type of Object.keys(GAMES)) {
     const r = simulate(type, type.includes('slots') ? 120000 : 15000);
     assert.ok(r.rtp > 0.97 && r.rtp < 1.2, `RTP ${r.rtp}`);
     assert.ok(r.lossRate > 0.3, `Verlustquote ${r.lossRate}`);
-    assert.ok(r.winRate > 0.15, `Gewinnquote ${r.winRate}`);
+    assert.ok(r.winRate > 0.3, `Gewinnquote ${r.winRate}`);
+    // Prompt 10: sehr lange Verlustserien werden selten (Ayri-Glück steigt schneller)
+    assert.ok(r.maxLossRun < 30, `längste Pechsträhne ${r.maxLossRun}`);
   });
 }
 
 test('Ayri-Glück steigt mit der Pechsträhne und ist gedeckelt', () => {
   assert.ok(luckChance(0) < luckChance(5));
-  assert.ok(luckChance(100) <= 0.4);
+  assert.ok(luckChance(100) <= 0.55);
+  assert.ok(luckChance(0) > 0 && luckChance(0) < 0.2);
 });

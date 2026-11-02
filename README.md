@@ -245,7 +245,7 @@ Alles wird im Browser (`localStorage`) gespeichert, getrennt in zwei Teile:
 Alle Werte stehen in [`src/shared/config.js`](src/shared/config.js): Startkapital,
 Zielbeträge, Min/Max-Einsätze pro Spiel als Anteil des Stockwerk-Ziels, Belohnungen und Item-Preise.
 Das Spiel ist bewusst als Party-Casino balanciert: Alle Spiele zahlen leicht über 100 % aus, Verlieren bleibt aber
-jederzeit möglich. Slots zahlen in Vielfachen des Gesamteinsatzes (ein Treffer bringt mindestens das Doppelte zurück,
+jederzeit möglich. Slots zahlen in Vielfachen des Gesamteinsatzes (gut jeder dritte Spin trifft, ein Treffer bringt mindestens das 1.4-Fache zurück,
 dazu AYRI-Multiplikatoren bis ×38 und ein Kronen-Jackpot, der mit jedem Stockwerk wächst); die Tischlimits steigen
 mit dem Stockwerk, damit die 15 Ziele bis $500'000'000 realistisch erreichbar sind. Das **Ayri-Glück** würfelt einen verlorenen Ausgang gelegentlich neu – nach mehreren Niederlagen
 in Folge häufiger –, damit lange Pechsträhnen selten werden (`luckChance` in `config.js`).

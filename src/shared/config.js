@@ -14,8 +14,10 @@ export const LOADOUT_SLOTS = 4;
 
 // Ayri-Glück: Chance, dass ein verlorener Ausgang einmal neu ausgewürfelt wird.
 // Steigt mit jeder weiteren verlorenen Runde, damit lange Pechsträhnen selten werden.
+// Prompt 10: spürbar spielerfreundlicher (Arcade-Casino) – schon nach einer Niederlage etwas Glück,
+// danach steigt es zügig, damit sehr lange Verlustserien selten werden. Nie garantiert.
 export function luckChance(lossStreak) {
-  return Math.min(0.4, 0.08 + Math.max(0, lossStreak - 2) * 0.08);
+  return Math.min(0.55, 0.14 + Math.max(0, lossStreak - 1) * 0.09);
 }
 
 export const GAME_NAMES = {
