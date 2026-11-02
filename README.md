@@ -113,6 +113,20 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   3 Blackjack-, 2 Roulette-, 2 Baccarat- und 2 Poker-Tische), die Limits steigen mit jedem Stockwerk und die Räume
   wachsen mit (bis zu drei Tischreihen, Laufwege und Aufzugsbereich bleiben frei).
   Andere Spieler sehen jede Wette (`BLERON SETZT $10'000 AUF ROT`) und können am Tisch zuschauen.
+- **Arcade-Stationen (Prompt 10)**: zusätzlich zu den Tischen stehen an den Wänden zehn Arcade-Spiele als 3D-Stationen
+  mit grossem Bildschirm, den alle sehen:
+  **HiLo** (ab Stock 1; höher/tiefer, Chance und Multiplikator vor jedem Tipp, gleiche Karte = PUSH) ·
+  **Mines** (ab 2; Touchscreen-Terminal, 5×5 Felder, 1–20 Minen, jederzeit CASH OUT) ·
+  **Crash** (ab 3; grosse Multiplikator-Anzeige mit Verlauf, CASH OUT oder Auto-Cashout, „CRASHED @ X.XX“; ab Stock 12 zwei Maschinen) ·
+  **Plinko** (ab 4; echte Pin-Maschine, die Kugel folgt exakt dem berechneten Pfad, Risiko LOW/MEDIUM/HIGH) ·
+  **Keno** (ab 5; 1–8 aus 40 Zahlen, 10 Zahlen werden nacheinander gezogen) ·
+  **Money Wheel** (ab 6; grosses Rad mit 0×–25×) · **Dragon Tower** (ab 8; 8 Ebenen, Schwierigkeit wählbar, Top-Bonus) ·
+  **Penguin Cross** (ab 9; Abschnitt für Abschnitt WEITER oder CASH OUT) · **Duck Race** (ab 10; Rennbahn mit 5 Enten,
+  Führungswechsel, feste Quoten) · **Street Craps** (ab 11; ein Wurf, HOCH/TIEF/SIEBEN/PASCH, Regeln auf dem Tisch).
+  Alle Ergebnisse bestimmt der Server, alle Zuschauer sehen dieselbe Runde. Einsätze und Gewinne laufen über den
+  Team-Pot, landen in Bilanz und Statistiken, NPCs spielen mit und machen Spielern Platz. Wer mitten in einer Runde
+  aufsteht oder die Verbindung verliert, wird automatisch ausgezahlt (bzw. bekommt den Einsatz zurück, wenn noch
+  nichts gespielt wurde). Baccarat und Craps gibt es schon als Tische.
 - **Roulette**: Chipwert wählen (`SELECTED CHIP`, Werte passend zum Stockwerk), Chips direkt aufs 3D-Tableau legen –
   Zahlen, Rot/Schwarz, Gerade/Ungerade, 1–18/19–36, Dutzende, Spalten sowie Split, Street, Corner und Six Line auf den
   Linien und Ecken. `TOTAL BET` steht im Panel und auf einer Anzeige am Tisch. Die Chips bleiben nach jedem Spin liegen:

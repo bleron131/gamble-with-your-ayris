@@ -16,9 +16,12 @@ import { BaccaratView } from '../tables/baccarat.js';
 import { CrapsView } from '../tables/craps.js';
 import { PokerView } from '../tables/poker.js';
 import { WheelView } from '../tables/wheel.js';
+import { ARCADE_VIEWS, ARCADE_WIDTH } from '../tables/arcade.js';
+import { ARCADE_TYPES } from '../../shared/config.js';
 
-const WALL_GAMES = ['slots', 'highslots', 'wheel'];
-const VIEWS = { slots: SlotView, highslots: SlotView, roulette: RouletteView, blackjack: BlackjackView, baccarat: BaccaratView, craps: CrapsView, poker: PokerView, wheel: WheelView };
+// Arcade-Stationen (Prompt 10) stehen wie Automaten an den Wänden
+const WALL_GAMES = ['slots', 'highslots', 'wheel', ...ARCADE_TYPES];
+const VIEWS = { slots: SlotView, highslots: SlotView, roulette: RouletteView, blackjack: BlackjackView, baccarat: BaccaratView, craps: CrapsView, poker: PokerView, wheel: WheelView, ...ARCADE_VIEWS };
 
 const THEMES = [
   { wall: '#2a1a14', accent: '#a07850', ceil: '#141010', light: '#ffe2b8', neon: '#ff3cac', lights: 0.9 },
@@ -51,6 +54,9 @@ export class CasinoWorld extends World {
     this.W = Math.max(16, 13 + this.perRow * 6) + this.tier * 2;
     this.D = 15 + this.rows * 5 + this.tier * 2;
     this.H = st.H || 4.5 + this.tier * 0.6;
+    // Platz für die Arcade-Stationen an den Wänden: Raum wird bei Bedarf breiter
+    this.arcadeDefs = tables.filter(t => ARCADE_TYPES.includes(t.type));
+    for (let k = 0; k < 20 && !this.planArcade(true); k++) this.W += 2;
     const s = this.scene;
     s.background = new THREE.Color(this.theme.ceil);
     s.fog = new THREE.Fog(this.theme.ceil, 20, 50 + this.tier * 6);
@@ -308,6 +314,7 @@ export class CasinoWorld extends World {
     slots.forEach((d, i) => plan.push({ def: d, x: -W / 2 + 0.75, z: -((slots.length - 1) / 2 - i) * 1.4 + 1, rot: Math.PI / 2 }));
     high.forEach((d, i) => plan.push({ def: d, x: W / 2 - 0.75, z: ((high.length - 1) / 2 - i) * 1.4 + 2, rot: -Math.PI / 2 }));
     wheel.forEach(d => plan.push({ def: d, x: W / 4, z: -D / 2 + 1.1, rot: 0 }));
+    plan.push(...this.planArcade());
     const { rows, perRow } = this;
     const zFront = D / 2 - 10.5, zBack = -D / 2 + 4.5;
     this.rowZ = rows === 1 ? [Math.max(zBack, Math.min(zFront, -1))] : Array.from({ length: rows }, (_, r) => zBack + r * (zFront - zBack) / (rows - 1));
@@ -321,6 +328,44 @@ export class CasinoWorld extends World {
     return plan;
   }
 
+  // Arcade-Stationen auf freie Wandabschnitte verteilen (hinten, vorne neben dem Aufzug, Seitenwände).
+  // dry = nur prüfen, ob alles passt (für die Raumgrösse)
+  planArcade(dry = false) {
+    const { W, D } = this;
+    const defs = this.arcadeDefs || [];
+    if (!defs.length) return dry ? true : [];
+    const margin = 1.5, gap = 0.35;
+    // Wände als Intervalle [a, b] entlang der Wand, mit gesperrten Bereichen
+    const walls = [
+      { side: 'back', a: -W / 2 + margin, b: W / 2 - margin, block: [[-W / 2 + 1.2, -W / 2 + 4.8], [W / 4 - 2.5, W / 4 + 2.5]] },
+      { side: 'front', a: -W / 2 + margin, b: W / 2 - margin, block: [[-4.8, 4.8], ...(this.style.vip ? [[W / 2 - 6, W / 2]] : [])] },
+      { side: 'left', a: -D / 2 + margin, b: D / 2 - margin, block: [[1 - 0.9 - 4 * 0.7 - 0.6, 1 + 0.9 + 4 * 0.7 + 0.6], [D / 2 - 11, D / 2]] },
+      { side: 'right', a: -D / 2 + margin, b: D / 2 - margin, block: [[2 - 0.9 - 3 * 0.7 - 0.6, 2 + 0.9 + 3 * 0.7 + 0.6], ...(this.style.bar ? [[-D / 2 + 0.5, -D / 2 + 9.5]] : []), [D / 2 - 11, D / 2]] },
+    ];
+    const free = [];
+    for (const w of walls) {
+      let segs = [[w.a, w.b]];
+      for (const [x0, x1] of w.block) segs = segs.flatMap(([a, b]) => (x1 <= a || x0 >= b ? [[a, b]] : [[a, x0], [x1, b]].filter(([p, q]) => q - p > 0.5)));
+      for (const sg of segs) free.push({ side: w.side, a: sg[0], b: sg[1], cur: sg[0] });
+    }
+    // Breite Stationen zuerst (Duck Race, Money Wheel …), damit sie einen langen Abschnitt bekommen
+    const order = [...defs].sort((p, q) => (ARCADE_WIDTH[q.type] || 1.7) - (ARCADE_WIDTH[p.type] || 1.7));
+    const out = [];
+    for (const d of order) {
+      const wd = ARCADE_WIDTH[d.type] || 1.7;
+      const seg = free.find(f => f.b - f.cur >= wd);
+      if (!seg) return dry ? false : out;
+      const c = seg.cur + wd / 2;
+      seg.cur += wd + gap;
+      const inset = 0.65;
+      const pos = seg.side === 'back' ? { x: c, z: -D / 2 + inset, rot: 0 }
+        : seg.side === 'front' ? { x: c, z: D / 2 - inset, rot: Math.PI }
+          : seg.side === 'left' ? { x: -W / 2 + inset, z: c, rot: Math.PI / 2 } : { x: W / 2 - inset, z: c, rot: -Math.PI / 2 };
+      out.push({ def: d, ...pos, arcade: wd });
+    }
+    return dry ? true : out;
+  }
+
   // Mitte zwischen zwei Tischreihen (für Deko wie den Geldbrunnen)
   rowGaps() { return (this.rowZ || []).slice(1).map((z, i) => (z + this.rowZ[i]) / 2); }
 
@@ -330,7 +375,7 @@ export class CasinoWorld extends World {
     if (Math.abs(x) > W / 2 - r * 0.6 || Math.abs(z) > D / 2 - r * 0.6) return false;
     if (Math.abs(x) < 3.5 + r && z > D / 2 - 10 - r) return false;
     for (const p of this.plan || []) {
-      const hw = p.center ? 1.6 : p.def.type === 'wheel' ? 1.8 : 0.8, hd = p.center ? 1.9 : p.def.type === 'wheel' ? 1.3 : 1.0;
+      const hw = p.center ? 1.6 : p.arcade ? p.arcade / 2 + 0.35 : p.def.type === 'wheel' ? 1.8 : 0.8, hd = p.center ? 1.9 : p.arcade ? 1.6 : p.def.type === 'wheel' ? 1.3 : 1.0;
       if (Math.abs(x - p.x) < hw + r && Math.abs(z - p.z) < hd + r) return false;
     }
     for (const b of this.decoBlocks || []) if (Math.hypot(x - b.x, z - b.z) < b.r + r) return false;
@@ -344,7 +389,7 @@ export class CasinoWorld extends World {
   reserveWalls() {
     const { W, D } = this;
     const u = this.wallUsed;
-    for (const p of this.plan) if (!p.center) u.push({ x: p.x, z: p.z, w: p.def.type === 'wheel' ? 3 : 1.6 });
+    for (const p of this.plan) if (!p.center) u.push({ x: p.x, z: p.z, w: p.arcade || (p.def.type === 'wheel' ? 3 : 1.6) });
     u.push({ x: -W / 2 + 3, z: -D / 2, w: 2.4 }, { x: 0, z: -D / 2, w: Math.min(W - 4, 8) });
     if (this.style.bar) u.push({ x: W / 2, z: -D / 2 + 5, w: 7 });
     if (this.style.vip) u.push({ x: W / 2, z: D / 2 - 4.5, w: 3 });
@@ -381,7 +426,7 @@ export class CasinoWorld extends World {
         action: () => this.app.sitAt(def.id),
       });
       // Lampe über dem Tisch
-      if (!['slots', 'highslots', 'wheel'].includes(def.type)) {
+      if (!WALL_GAMES.includes(def.type)) {
         const lamp = new THREE.Group();
         lamp.position.copy(v.group.position).setY(this.H - 1.4);
         lamp.add(mesh(new THREE.BoxGeometry(1.6, 0.08, 0.5), this.tier >= 2 ? M.gold() : M.std('#222', 0.4, 0.5), 0, 0, 0, { cast: false }));

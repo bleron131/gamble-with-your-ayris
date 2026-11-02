@@ -96,7 +96,7 @@ export function openBalance(ui, b) {
 // ── Liniendiagramm: x = Reihenfolge der Runden auf dem Stockwerk, y = Kontostand; eine Linie pro Spieler ──
 function drawChart(wrap, tip, players, L) {
   const W = Math.max(320, wrap.clientWidth || 860), H = Math.max(170, Math.min(340, Math.round(W * 0.38), Math.round(window.innerHeight * 0.48)));
-  const pad = { l: 64, r: 92, t: 14, b: 26 };
+  const pad = { l: 96, r: 92, t: 14, b: 26 };
   const series = players.map(p => ({ p, pts: [{ i: 0, bal: p.start, net: 0, game: null }, ...L.points.filter(pt => pt.pid === p.id)] }));
   const maxI = Math.max(1, L.seq);
   let lo = Infinity, hi = -Infinity;
@@ -107,11 +107,12 @@ function drawChart(wrap, tip, players, L) {
   const X = i => pad.l + (i / maxI) * (W - pad.l - pad.r);
   const Y = v => pad.t + (1 - (v - lo) / (hi - lo)) * (H - pad.t - pad.b);
   const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: 'img', 'aria-label': 'Geldverlauf pro Spieler auf diesem Stockwerk' });
-  // Raster & Achsen (zurückhaltend)
+  // Raster & Achsen (zurückhaltend); bei kleiner Spanne volle Beträge statt gerundeter Kurzform
+  const fine = (hi - lo) / Math.max(1, hi) < 0.15;
   for (let k = 0; k <= 4; k++) {
     const v = lo + (hi - lo) * k / 4, y = Y(v);
     root.append(svg('line', { x1: pad.l, x2: W - pad.r, y1: y, y2: y, class: 'grid' }));
-    const t = svg('text', { x: pad.l - 8, y: y + 4, class: 'ax', 'text-anchor': 'end' }); t.textContent = fmtShort(v); root.append(t);
+    const t = svg('text', { x: pad.l - 8, y: y + 4, class: 'ax', 'text-anchor': 'end' }); t.textContent = fine ? fmtMoney(Math.round(v)) : fmtShort(v); root.append(t);
   }
   const xl = svg('text', { x: pad.l, y: H - 6, class: 'ax' }); xl.textContent = 'Start'; root.append(xl);
   const xr = svg('text', { x: W - pad.r, y: H - 6, class: 'ax', 'text-anchor': 'end' }); xr.textContent = `Runde ${maxI}`; root.append(xr);
