@@ -2,6 +2,12 @@
 // Alle Beträge sind rein virtuelle Spielwährung – kein echtes Geld.
 
 export const START_CAPITAL = 7500;
+// MAKKA: nur an Kemals Bar in der Shishabar (Position der Bar, Radius für den Kauf), als Item mitnehmbar.
+// Im Casino getrunken: 10 Sekunden MAKKA-LUCK für die ganze Gruppe (feste Stärke, kein Stapeln).
+export const MAKKA_BAR = { x: -9.4, z: -2, r: 3.4 };
+export const MAKKA_MAX = 20;
+export const MAKKA_LUCK_MS = 10000;
+export const MAKKA_LUCK_BONUS = 0.55; // zusätzliche Chance, dass ein verlorener Ausgang neu ausgewürfelt wird
 export const FINAL_TARGET = 500_000_000;
 export const MAX_PLAYERS = 6;
 export const LOADOUT_SLOTS = 4;

@@ -4,6 +4,8 @@ import { h, clear } from './dom.js';
 import { FLOORS, ITEMS, LOADOUT_SLOTS, GAME_NAMES, GAME_ICONS, ACHIEVEMENTS, COSMETIC_UNLOCKS, fmtMoney, START_CAPITAL } from '../../shared/config.js';
 import { OPTIONS } from '../character.js';
 import * as Save from '../save.js';
+import { enterFullscreen } from '../fullscreen.js';
+import { TIER_NAMES } from '../engine.js';
 import { sfx } from '../audio.js';
 
 // ───────────────────────── Aufzug ─────────────────────────
@@ -83,7 +85,7 @@ export function openBar(ui, nextLine) {
   const app = ui.app;
   const line = h('div.barline', nextLine());
   const buy = h('button.primary.big', {
-    disabled: s.dildos < Save.MAKKA_PRICE || app.player.hasBottle || app.player.drinkT > 0 ? true : null,
+    disabled: s.dildos < Save.MAKKA_PRICE ? true : null,
     onclick: () => { if (app.buyMakka()) ui.closeModal(); },
   }, `MAKKA kaufen – ${Save.MAKKA_PRICE} 🍆`);
   ui.openModal(h('div.bar',
@@ -92,14 +94,14 @@ export function openBar(ui, nextLine) {
       h('div.makkaicon', '🍾'),
       h('div',
         h('div.sname', 'MAKKA'),
-        h('div.sdesc', 'Pinke Ayri-Limonade in der klaren Flasche. Schmeckt nach Zitrone – und dreht dir für 10 Sekunden die ganze Shishabar.'),
+        h('div.sdesc', 'Pinke Ayri-Limonade in der klaren Flasche. Schmeckt nach Zitrone – und dreht dir 10 Sekunden lang die Welt. Im Casino getrunken: MAKKA LUCK (bessere Chancen für die Gruppe, aber kein garantierter Gewinn).'),
         h('div.susage', `Preis: ${Save.MAKKA_PRICE} 🍆 · Dein Bestand: ${s.dildos} 🍆`))),
     line,
     h('div.actions',
       buy,
       h('button', { onclick: () => { line.textContent = nextLine(); sfx.click(); } }, 'Mit Kemal reden'),
     ),
-    app.player.hasBottle ? h('div.subtle.small', 'Du hast schon einen MAKKA in der Hand – drücke T zum Trinken.') : null,
+    h('div.subtle.small', `Im Inventar: MAKKA ×${app.makkaCount}. MAKKA kann mitgenommen werden – trinken mit T bzw. 🍾. Im Casino gibt es dazu 10 Sekunden MAKKA LUCK für die ganze Gruppe.`),
   ), 'small');
 }
 
@@ -308,21 +310,25 @@ export function openSettings(ui) {
   const toggle = (key, label) => h('label.toggle', h('input', { type: 'checkbox', checked: st[key] ? true : null, onchange: e => { st[key] = e.target.checked; app.applySettings(); } }), label);
   // Grafikstufe (setzt Bloom/Schatten passend) und FPS-Limit
   const seg = (title, opts, key, onPick) => h('div.setrow', h('span', title), h('div.seg', ...opts.map(([v, l]) => h('button', { class: st[key] === v ? 'sel' : '', onclick: e => { onPick(v); for (const b of e.target.parentNode.children) b.classList.toggle('sel', b === e.target); sfx.click(); } }, l))));
+  const mobile = !!app.touch?.active;
   const graphics = h('div',
-    seg('Grafik', [['low', 'Niedrig'], ['medium', 'Mittel'], ['high', 'Hoch']], 'quality', v => {
+    seg('Grafik', [...(mobile ? [['auto', 'Auto']] : []), ['low', 'Niedrig'], ['medium', 'Mittel'], ['high', 'Hoch'], ...(mobile ? [['ultra', 'Ultra']] : [])], 'quality', v => {
       st.quality = v;
       st.bloom = v !== 'low'; st.shadows = v !== 'low';
       app.applySettings();
       ui.toast('Grafik geändert – Lichter und Schatten passen sich beim nächsten Raumwechsel ganz an.', 'info', 2500);
     }),
-    seg('FPS-Limit', [[30, '30'], [60, '60'], [0, 'Max']], 'fpsLimit', v => { st.fpsLimit = v; app.applySettings(); }),
+    seg('FPS', mobile ? [['auto', 'Auto'], [30, '30'], [60, '60']] : [[30, '30'], [60, '60'], [0, 'Max']], 'fpsLimit', v => { st.fpsLimit = v; app.applySettings(); }),
+    h('div.subtle.small', mobile ? `Aktuell: ${TIER_NAMES[app.engine.quality]} · Auflösung passt sich automatisch an die Bildrate an.` : ''),
   );
   ui.openModal(h('div.settings',
     h('h2', '⚙️ EINSTELLUNGEN'),
     slider('master', 'Gesamtlautstärke'), slider('music', 'Musik'), slider('sfx', 'Effekte'),
     app.touch?.active ? slider('touchSensitivity', 'Kamera-Empfindlichkeit (Touch)', 0.4, 2.2, 0.1) : slider('sensitivity', 'Mausempfindlichkeit', 0.3, 2.5, 0.1),
     graphics,
+    app.touch?.active ? h('div.actions', h('button', { onclick: async () => { sfx.click(); const ok = await enterFullscreen(); if (!ok) ui.toast('Vollbild wird von diesem Browser nicht unterstützt – über „Zum Home-Bildschirm“ startet das Spiel wie eine App.', 'info', 4000); } }, '⛶ VOLLBILD')) : null,
     toggle('bloom', 'Neon-Glow (Bloom)'), toggle('shadows', 'Schatten'),
+    h('label.toggle', h('input', { type: 'checkbox', checked: app.perfOn ? true : null, onchange: e => app.togglePerf(e.target.checked) }), 'Performance-Anzeige (Entwickler)'),
     h('div.actions',
       app.state ? h('button.danger', { onclick: () => { ui.closeModal(); app.disconnect(); ui.showMenu(); } }, app.mode === 'solo' ? 'Zum Hauptmenü' : 'Gruppe verlassen') : null,
       h('button', { onclick: async () => { if (await ui.confirm('Wirklich ALLE Fortschritte, Dildos und Items löschen?')) { Save.resetAll(); location.reload(); } } }, 'Spielstand zurücksetzen'),

@@ -4,7 +4,7 @@
 // Wetten auf denselben Betrag können daher nie beide akzeptiert werden (kein Geld-Duplizieren).
 import {
   START_CAPITAL, FLOORS, floorDef, floorTables, ITEMS, RETRY_GAMES_HAT,
-  FLOOR_REWARDS, CHALLENGE_FACTOR, CHALLENGE_REWARDS, LOADOUT_SLOTS, MAX_PLAYERS, fmtMoney, GAME_NAMES, luckChance, slotSteps,
+  FLOOR_REWARDS, CHALLENGE_FACTOR, CHALLENGE_REWARDS, LOADOUT_SLOTS, MAX_PLAYERS, fmtMoney, GAME_NAMES, luckChance, slotSteps, MAKKA_BAR, MAKKA_MAX, MAKKA_LUCK_MS, MAKKA_LUCK_BONUS,
 } from './config.js';
 import { rand } from './rng.js';
 import { slotsGame, winTier } from './games/slots.js';
@@ -83,6 +83,7 @@ export class Room {
       rewarded: new Set(profile.rewardedFloors || []),
       challenged: new Set(profile.challengeFloors || []),
       inventory: {}, loadout: [], used: {}, armed: {}, shishaRounds: 0, lossStreak: 0,
+      makka: Math.max(0, Math.min(MAKKA_MAX, Math.floor(+profile.makka) || 0)), cocktails: 0, smokeAt: 0,
       seat: null, pose: { p: [0, 0, 0], r: 0, a: 'idle' }, poseDirty: true,
       joinedAt: Date.now(),
     };
@@ -160,7 +161,7 @@ export class Room {
   snapshot() {
     const players = [...this.players.values()].map(p => ({
       id: p.id, name: p.name, appearance: p.appearance, seat: p.seat, loadout: p.loadout,
-      inventory: p.inventory, used: p.used, armed: p.armed, shishaRounds: p.shishaRounds, pose: p.pose,
+      inventory: p.inventory, used: p.used, armed: p.armed, shishaRounds: p.shishaRounds, pose: p.pose, makka: p.makka,
     }));
     let session = null;
     if (this.session) {
@@ -170,6 +171,7 @@ export class Room {
     }
     return {
       code: this.code, hostId: this.hostId, players, pot: this.pot, campaign: this.campaign, run: this.run,
+      makkaLuckMs: Math.max(0, (this.makkaLuckUntil || 0) - Date.now()),
       scene: this.scene, floor: this.floor, session, vote: this.vote && { ...this.vote },
     };
   }
@@ -193,7 +195,12 @@ export class Room {
           break;
         case 'loadout': this.setLoadout(p, msg); break;
         case 'emote': this.event({ kind: 'emote', pid: id, e: String(msg.e).slice(0, 12) }); break;
-        case 'drink': if (['buy', 'drink'].includes(msg.phase)) this.event({ kind: 'drink', pid: id, name: p.name, phase: msg.phase }); break;
+        case 'makka.buy': this.buyMakka(p); break;
+        case 'drink':
+          if (msg.phase === 'drink') this.drinkMakka(p);
+          else if (msg.phase === 'cocktail') this.drinkCocktail(p);
+          break;
+        case 'smoke': this.smoke(p, msg.i); break;
         case 'vote.start': this.startVote(p, msg.type, msg.data || {}); break;
         case 'vote.cast': this.castVote(p, !!msg.yes); break;
         case 'table.sit': this.sit(p, msg.id); break;
@@ -330,6 +337,7 @@ export class Room {
     if (this.session) for (const t of Object.values(this.session.tables)) { t.occupant = null; t.busy = false; t.lastRound = {}; t.roundMods = null; }
     this.vote = null;
     for (const p of this.players.values()) { p.used = {}; p.armed = {}; p.shishaRounds = 0; p.lossStreak = 0; p.seat = null; }
+    this.makkaLuckUntil = 0;
     this.event({ kind: 'newrun', reason, pot: this.pot, runId: this.run.id, oldRunId: oldId });
     this.markDirty();
   }
@@ -354,6 +362,52 @@ export class Room {
     this.changeScene('floor', { entryPot: this.pot });
   }
 
+  // ───────────────────────── MAKKA, Cocktail, Shisha ─────────────────────────
+  makkaActive() { return Date.now() < (this.makkaLuckUntil || 0); }
+
+  // MAKKA gibt es nur an Kemals Bar in der Shishabar (der Server prüft Szene und Position)
+  buyMakka(p) {
+    if (this.scene !== 'lobby') return this.error(p.id, 'MAKKA gibt es nur an der Bar in der Shishabar');
+    const [x, , z] = p.pose.p;
+    if (Math.hypot(x - MAKKA_BAR.x, z - MAKKA_BAR.z) > MAKKA_BAR.r) return this.error(p.id, 'Geh zuerst zu Kemal an die Bar');
+    if (p.makka >= MAKKA_MAX) return this.error(p.id, `Mehr als ${MAKKA_MAX} MAKKA kannst du nicht tragen`);
+    p.makka++;
+    this.event({ kind: 'drink', pid: p.id, name: p.name, phase: 'buy', count: p.makka });
+    this.markDirty();
+  }
+
+  drinkMakka(p) {
+    if (!(p.makka > 0)) return this.error(p.id, 'Du hast keinen MAKKA – kauf einen an der Bar in der Shishabar');
+    if (Date.now() < (p.drinkUntil || 0)) return;
+    p.makka--;
+    p.drinkUntil = Date.now() + 2400;
+    const casino = this.scene === 'floor' && this.session && !this.session.ending;
+    this.event({ kind: 'drink', pid: p.id, name: p.name, phase: 'drink', count: p.makka, luck: casino });
+    if (casino) {
+      // Feste Stärke: weiteres Trinken erneuert nur die Dauer
+      this.makkaLuckUntil = Date.now() + MAKKA_LUCK_MS;
+      this.event({ kind: 'makkaLuck', pid: p.id, name: p.name, ms: MAKKA_LUCK_MS });
+    }
+    this.markDirty();
+  }
+
+  // Outfit-Cocktail: jeder dritte Drink macht schwindlig – kein Einfluss auf Glück oder Team-Pot
+  drinkCocktail(p) {
+    if (p.appearance?.accessory !== 'cocktail') return this.error(p.id, 'Rüste zuerst den Cocktail im Outfit aus');
+    if (Date.now() < (p.drinkUntil || 0)) return;
+    p.drinkUntil = Date.now() + 1800;
+    p.cocktails = (p.cocktails % 3) + 1;
+    this.event({ kind: 'drink', pid: p.id, name: p.name, phase: 'cocktail', n: p.cocktails });
+  }
+
+  // Shisha in der Shishabar rauchen (rein sozial, keine Wirkung auf das Spiel)
+  smoke(p, i) {
+    if (this.scene !== 'lobby') return;
+    if (Date.now() < p.smokeAt) return;
+    p.smokeAt = Date.now() + 3600;
+    this.event({ kind: 'smoke', pid: p.id, name: p.name, i: Math.max(0, Math.min(9, Math.floor(+i) || 0)) });
+  }
+
   leaveFloor(reason) {
     const n = this.floor;
     const f = floorDef(n);
@@ -365,6 +419,7 @@ export class Room {
       }
     }
     this.session = null;
+    this.makkaLuckUntil = 0;
     const from = n;
     this.floor = null;
     for (const p of this.players.values()) { p.armed = {}; p.shishaRounds = 0; }
@@ -519,8 +574,11 @@ export class Room {
     if (!idleish) return this.error(p.id, 'Runde läuft bereits');
     const wasBusy = t.busy;
     const rollBefore = JSON.stringify(t.state.spinId ?? t.state.dealId ?? t.state.rollId);
+    // MAKKA-LUCK gilt für die ganze Runde, wenn sie gestartet wird, solange der Boost läuft (auch wenn er währenddessen abläuft)
+    if (this.makkaActive()) t.roundMods = { ...(t.roundMods || {}), makka: true };
     game.start(this.makeCtx(p.id, t), t, payload);
     const started = JSON.stringify(t.state.spinId ?? t.state.dealId ?? t.state.rollId) !== rollBefore;
+    if (!started && t.roundMods?.makka && !t.busy) delete t.roundMods.makka;
     if (started) {
       t.lastRound[p.id] = null;
       // Golden Coin wird beim Start einer Wette geworfen
@@ -590,7 +648,15 @@ export class Room {
         room.event({ kind: 'item', pid, name: p.name, item, msg: `${ITEMS[item].name} eingesetzt!` });
         return true;
       },
-      lucky() { const p = room.players.get(pid); return !!p && rand() < luckChance(p.lossStreak); },
+      // Ayri-Glück (nach Pechsträhnen) – während MAKKA-LUCK deutlich häufiger, aber nie garantiert
+      lucky() {
+        const p = room.players.get(pid);
+        if (!p) return false;
+        const base = luckChance(p.lossStreak);
+        const bonus = table.roundMods?.makka ? MAKKA_LUCK_BONUS : 0;
+        return rand() < base + (1 - base) * bonus;
+      },
+      get makka() { return !!table.roundMods?.makka; },
       settle(r) { room.settle(pid, table, r); },
     };
   }

@@ -1,5 +1,6 @@
 // UI: Hauptmenü, HUD, Feed, Overlays, Abstimmungen und Tischpanel.
 import { serverHost } from '../server.js';
+import { enterFullscreen, fullscreenSupported, isFullscreen, isStandalone } from '../fullscreen.js';
 import { h, clear, esc } from './dom.js';
 import { fmtMoney, fmtShort, floorDef, ITEMS, RETRY_GAMES_HAT, FLOORS } from '../../shared/config.js';
 import { sfx, initAudio } from '../audio.js';
@@ -37,6 +38,10 @@ export class UI {
     this.hud.append(this.itemBar);
     this.makkaEl = h('button.makka.hidden', { onclick: () => this.app.drinkMakka() });
     this.hud.append(this.makkaEl);
+    this.luckEl = h('div.makkaluck.hidden');
+    this.hud.append(this.luckEl);
+    this.perfEl = h('pre.perfmon.hidden');
+    r.append(this.perfEl);
     this.feedEl = h('div.feed');
     this.hud.append(this.feedEl);
     this.hintEl = h('div.hint');
@@ -68,6 +73,30 @@ export class UI {
     window.addEventListener('keyup', e => { if (e.code === 'Tab') this.toggleScoreboard(false); });
   }
 
+  // ───────────────────────── Mobile-Start ─────────────────────────
+  // Ein Tippen auf SPIEL STARTEN aktiviert Audio, Vollbild, Querformat und die Touch-Steuerung zugleich
+  showMobileStart(onStart) {
+    if (this.mstart || isStandalone() && isFullscreen() && this.mstartDone) return onStart?.();
+    const hint = !fullscreenSupported() && !isStandalone()
+      ? h('div.mhint', 'Für das beste Spielerlebnis im Vollbild spielen: im Browser „Teilen → Zum Home-Bildschirm“ wählen und das Spiel von dort starten.')
+      : null;
+    const btn = h('button.big.primary.mstartbtn', 'SPIEL STARTEN');
+    this.mstart = h('div.mstart', h('div.logo', h('span.l1', 'GAMBLE'), h('span.l2', 'with your'), h('span.l3', 'AYRIS')), btn, hint);
+    this.root.append(this.mstart);
+    const go = async () => {
+      btn.disabled = true;
+      initAudio(Save.get().settings);
+      sfx.click();
+      this.app.touch?.enable();
+      await enterFullscreen();
+      this.mstart.remove();
+      this.mstart = null;
+      this.mstartDone = true;
+      onStart?.();
+    };
+    btn.addEventListener('click', go, { once: true });
+  }
+
   // ───────────────────────── Hauptmenü ─────────────────────────
   showMenu() {
     const s = Save.get();
@@ -84,11 +113,8 @@ export class UI {
       sfx.click();
       this.menuErr.textContent = '';
       this.menu.classList.add('busy');
-      // Handy/Tablet: Vollbild und Querformat sperren, wo der Browser es erlaubt (Android); iOS ignoriert das still
-      if (this.app.touch?.active) {
-        try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); } catch { /* nicht unterstützt */ }
-        try { await screen.orientation?.lock?.('landscape'); } catch { /* nicht unterstützt */ }
-      }
+      // Handy/Tablet: Vollbild und Querformat, wo der Browser es erlaubt (Android); iOS ignoriert das still
+      if (this.app.touch?.active) await enterFullscreen();
       try {
         if (mode !== 'solo') this.menuErr.textContent = 'Verbinde mit dem Multiplayer-Server…';
         await this.app.connect(mode, code.value.trim().toUpperCase(), msg => { this.menuErr.textContent = msg; });
@@ -184,8 +210,14 @@ export class UI {
     } else if (this.potTarget !== undefined) this.potEl.textContent = fmtMoney(this.potTarget);
     // MAKKA-Anzeige: Flasche in der Hand bzw. Schwindel-Countdown
     const p = this.app.player;
-    const txt = p.drinkT > 0 ? '🍾 Gluck, gluck…' : p.hasBottle ? '🍾 MAKKA trinken (T)' : p.dizzyT > 0 ? `😵‍💫 Schwindelig ${Math.ceil(p.dizzyT)}s` : '';
-    if (this.makkaEl.textContent !== txt) { this.makkaEl.textContent = txt; this.makkaEl.classList.toggle('hidden', !txt || !this.app.state); this.makkaEl.disabled = !p.hasBottle || p.drinkT > 0; }
+    const n = this.app.makkaCount;
+    const touch = this.app.touch?.active;
+    const txt = p.drinkT > 0 ? (p.drinkKind === 'cocktail' ? '🍹 Schlürf…' : '🍾 Gluck, gluck…') : p.dizzyT > 0 && p.dizzyMax >= 0.5 ? `😵‍💫 Schwindelig ${Math.ceil(p.dizzyT)}s` : n > 0 ? `🍾 MAKKA ×${n}${touch ? '' : ' · T trinken'}` : '';
+    if (this.makkaEl.textContent !== txt) { this.makkaEl.textContent = txt; this.makkaEl.classList.toggle('hidden', !txt || !this.app.state); this.makkaEl.disabled = !(n > 0) || p.drinkT > 0; }
+    // MAKKA-LUCK-Countdown (läuft serverseitig; hier nur die Anzeige)
+    const left = Math.max(0, Math.ceil(((this.app.makkaLuckEnd || 0) - performance.now()) / 1000));
+    const ltxt = left > 0 && this.app.world?.kind === 'floor' ? `🍹 MAKKA LUCK – ${left}s` : '';
+    if (this.luckEl.textContent !== ltxt) { this.luckEl.textContent = ltxt; this.luckEl.classList.toggle('hidden', !ltxt); }
     if (this.voteDeadline) {
       const left = Math.max(0, Math.ceil((this.voteDeadline - Date.now()) / 1000));
       if (this.voteTimer) this.voteTimer.textContent = `${left}s`;

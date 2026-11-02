@@ -211,6 +211,8 @@ export const sfx = {
     sfx.coins(30);
   },
   // Roulette: Kugel springt über die Fachstege, landet mit deutlichem KLACK
+  sip() { if (!ctx) return; const t = now(); noise(t, 0.18, { type: 'bandpass', freq: 1400, q: 2, vol: 0.08, sweep: 600 }); tone(520, t + 0.05, 0.08, { vol: 0.05, slide: 0.7 }); },
+  exhale() { if (!ctx) return; const t = now(); noise(t, 1.3, { type: 'bandpass', freq: 700, q: 0.6, vol: 0.09, a: 0.25, sweep: 300 }); },
   ballTick(v = 0.08) { if (!ctx) return; const t = now(); tone(2600 + Math.random() * 600, t, 0.018, { type: 'triangle', vol: v }); noise(t, 0.015, { freq: 5000, q: 6, vol: v * 0.8 }); },
   ballClack() { if (!ctx) return; const t = now(); noise(t, 0.05, { freq: 2200, q: 4, vol: 0.35 }); tone(1300, t, 0.07, { type: 'triangle', vol: 0.2 }); tone(700, t + 0.01, 0.12, { type: 'sine', vol: 0.12 }); },
   jump() { if (!ctx) return; const t = now(); noise(t, 0.08, { type: 'lowpass', freq: 600, vol: 0.06 }); tone(260, t, 0.16, { type: 'sine', vol: 0.06, slide: 1.8 }); },
@@ -373,6 +375,21 @@ export function setShishaSounds(positions) {
   });
   spatialTimer = setInterval(scheduleShishas, 60);
 }
+// Jemand zieht an Shisha i: kräftiges, räumliches Blubbern + Ziehgeräusch an genau dieser Shisha
+export function shishaDraw(i, sec = 1.6) {
+  const s = spatial[i];
+  if (!ctx || !s) return;
+  const t0 = now();
+  s.drawUntil = t0 + sec;
+  s.next = Math.min(s.next, t0 + 0.05);
+  noise(t0, sec, { type: 'bandpass', freq: 900, q: 0.8, vol: 0.09, bus: s.pan, a: 0.3 });
+}
+export function shishaExhale(i) {
+  const s = spatial[i];
+  if (!ctx || !s) return;
+  noise(now(), 1.3, { type: 'bandpass', freq: 700, q: 0.6, vol: 0.14, a: 0.25, sweep: 300, bus: s.pan });
+}
+
 export function clearShishaSounds() {
   clearInterval(spatialTimer);
   for (const s of spatial.splice(0)) { s.g.gain.setTargetAtTime(0, now(), 0.3); const p = s.pan; setTimeout(() => p.disconnect(), 1500); }
@@ -410,7 +427,7 @@ function scheduleShishas() {
     while (s.next < t0 + 0.15) {
       const drawing = s.next < s.drawUntil;
       const f = (drawing ? 160 : 220) + Math.random() * (drawing ? 260 : 380);
-      tone(f, s.next, drawing ? 0.07 : 0.05, { type: 'sine', vol: drawing ? 0.09 : 0.035, bus: s.pan, slide: 1.9 + Math.random() });
+      tone(f, s.next, drawing ? 0.07 : 0.05, { type: 'sine', vol: drawing ? 0.12 : 0.035, bus: s.pan, slide: 1.9 + Math.random() });
       s.next += drawing ? 0.05 + Math.random() * 0.07 : 0.35 + Math.random() * 1.1;
     }
   }

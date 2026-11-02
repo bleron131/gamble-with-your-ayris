@@ -31,13 +31,16 @@ export const VARIANTS = {
 
 // AYRI-Multiplikator auf Gewinne: ×2, ×3, ×5 und ein seltener Top-Multiplikator, der mit dem Stockwerk wächst.
 // Der Top-Multiplikator wird mit steigendem Wert seltener, damit der Erwartungswert gleich bleibt.
-export function rollMultiplier(floor = 1) {
+// Während MAKKA-LUCK (boost) sind hohe Multiplikatoren etwas häufiger.
+export function rollMultiplier(floor = 1, boost = false) {
   const top = slotTopMultiplier(floor);
+  const k = boost ? 1.3 : 1;
   const r = rand();
-  if (r < 0.1 / top) return top;
-  if (r < 0.1 / top + 0.02) return 5;
-  if (r < 0.1 / top + 0.07) return 3;
-  if (r < 0.1 / top + 0.19) return 2;
+  const pTop = 0.1 / top * k;
+  if (r < pTop) return top;
+  if (r < pTop + 0.02 * k) return 5;
+  if (r < pTop + 0.07 * k) return 3;
+  if (r < pTop + 0.19 * k) return 2;
   return 1;
 }
 
@@ -70,7 +73,7 @@ export function winTier(net, stake, jackpot = false) {
   return 'small';
 }
 
-export function spin(variantName, totalBet, lineCount = 5, floor = 1) {
+export function spin(variantName, totalBet, lineCount = 5, floor = 1, boost = false) {
   const v = VARIANTS[variantName];
   const n = v.strip.length;
   const stops = [randInt(n), randInt(n), randInt(n)];
@@ -88,7 +91,7 @@ export function spin(variantName, totalBet, lineCount = 5, floor = 1) {
   // Beste Linie zählt voll, jede weitere zur Hälfte
   const sorted = wins.map(w => w.mult).sort((a, b) => b - a);
   const factor = sorted.reduce((s, m, i) => s + (i ? m * EXTRA_LINE_SHARE : m), 0);
-  const multiplier = factor > 0 && !jackpot ? rollMultiplier(floor) : 1;
+  const multiplier = factor > 0 && !jackpot ? rollMultiplier(floor, boost) : 1;
   return { stops, grid, payout: Math.floor(factor * totalBet * multiplier), wins, jackpot, multiplier };
 }
 
@@ -107,11 +110,12 @@ export const slotsGame = (variant) => ({
     // Einsatz wird beim Start sofort aus dem Team-Pot reserviert (abgebucht)
     if (!ctx.debit(bet, { label: `SPIN ${ctx.money(bet)}` })) return;
     const floor = ctx.floor || 1;
-    let r = spin(variant, bet, lines, floor);
+    const boost = !!ctx.makka; // MAKKA-LUCK beim Start des Spins
+    let r = spin(variant, bet, lines, floor, boost);
     let lucky = false;
     // Ayri-Glück: ein verlorener Spin wird manchmal (häufiger nach Pechsträhnen) neu gedreht
     if (r.payout < bet && ctx.lucky?.()) {
-      const r2 = spin(variant, bet, lines, floor);
+      const r2 = spin(variant, bet, lines, floor, boost);
       if (r2.payout > r.payout) { r = r2; lucky = r2.payout > bet; }
     }
     const s = table.state;

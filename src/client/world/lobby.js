@@ -27,12 +27,13 @@ export class LobbyWorld extends World {
     this.buildHall();
     this.buildElevator();
     this.addRoomWalls(-W / 2, W / 2, -D / 2, D / 2);
+    this.bakeWorld();
   }
 
   buildRoom() {
     const s = this.scene;
     const floor = mesh(new THREE.PlaneGeometry(W, D), M.std('#5a3a22', 0.55, 0.05, { map: woodTexture('#4a2c18') }), 0, 0, 0, { cast: false });
-    floor.material.map = floor.material.map.clone(); floor.material.map.needsUpdate = true; floor.material.map.repeat.set(8, 6);
+    floor.material.map = floor.material.map.clone(); floor.material.map.userData = {}; floor.material.map.needsUpdate = true; floor.material.map.repeat.set(8, 6);
     floor.rotation.x = -Math.PI / 2;
     s.add(floor);
     const wallMat = M.std('#3a1a2a', 0.85, 0, { map: wallpaperTexture('#2a0f20', '#e8b65a') });
@@ -144,7 +145,10 @@ export class LobbyWorld extends World {
       this.addCircle(x, z, 0.6);
       const sh = shisha(shCol);
       sh.position.set(x, 0.45, z); s.add(sh);
+      const si = this.shishas.length;
       this.shishas.push(sh);
+      // Rauchbar: von der offenen Seite der Sitzgruppe aus
+      this.addInteract({ pos: new THREE.Vector3(x + 1.25, 0, z), radius: 1.6, verb: 'SHISHA RAUCHEN', label: 'Shisha rauchen', action: () => this.app.smokeShisha(si), enabled: () => !(this.app.player.smokeT > 0) });
       for (const [dx, dz, ry] of [[0, -1.35, 0], [0, 1.35, Math.PI], [-1.5, 0, Math.PI / 2]]) {
         const so = sofa(col, dx === -1.5 ? 1.6 : 2.4);
         so.position.set(x + dx, 0, z + dz); so.rotation.y = ry; s.add(so);
@@ -175,6 +179,52 @@ export class LobbyWorld extends World {
         this.particles.emit({ pos: p, vel: [(Math.random() - 0.5) * 0.15, 0.35, (Math.random() - 0.5) * 0.15], life: 4, size: 0.25, grow: 1.2, opacity: 0.25, color: '#e8e0ff' });
       }
     });
+  }
+
+  // Shisha-Zug eines Charakters: Schlauch zur Hand, Ziehen (Blubbern), nach kurzer Pause sichtbare Rauchwolke ausatmen
+  smokeAt(char, i, onExhale) {
+    const sh = this.shishas[i];
+    if (!sh || !char) return;
+    const base = sh.position.clone().add(new THREE.Vector3(0.06, 0.35, 0));
+    const mat = new THREE.MeshStandardMaterial({ color: '#3a2a5a', roughness: 0.6 });
+    let hose = null, t = 0, exhaled = false;
+    const hand = new THREE.Vector3(), mouth = new THREE.Vector3();
+    const upd = (dt) => {
+      t += dt;
+      // Schlauch: weicher Bogen von der Shisha zur Hand (jedes Frame neu)
+      char.armR.updateWorldMatrix(true, false);
+      hand.set(0.02, -0.33, 0.06).applyMatrix4(char.armR.matrixWorld);
+      const mid = base.clone().lerp(hand, 0.5); mid.y = Math.min(base.y, hand.y) - 0.25;
+      if (hose) { this.scene.remove(hose); hose.geometry.dispose(); }
+      hose = new THREE.Mesh(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(base, mid, hand), 14, 0.012, 5), mat);
+      this.scene.add(hose);
+      if (!exhaled && t > 2.2) {
+        exhaled = true;
+        char.head.updateWorldMatrix(true, false);
+        mouth.set(0, -0.14, 0.34).applyMatrix4(char.head.matrixWorld);
+        const fwd = new THREE.Vector3(Math.sin(char.root.rotation.y), 0, Math.cos(char.root.rotation.y));
+        this.exhaleSmoke(mouth, fwd);
+        onExhale?.();
+      }
+      if (t > 3.4) {
+        this.scene.remove(hose); hose.geometry.dispose(); mat.dispose();
+        this.updaters.splice(this.updaters.indexOf(upd), 1);
+      }
+    };
+    this.updaters.push(upd);
+  }
+
+  // Weiche, grosse Rauchwolke aus mehreren leicht unterschiedlichen Schwaden
+  exhaleSmoke(pos, fwd) {
+    const n = 16;
+    for (let k = 0; k < n; k++) {
+      const d = k / n;
+      setTimeout(() => {
+        const side = new THREE.Vector3(-fwd.z, 0, fwd.x).multiplyScalar((Math.random() - 0.5) * 0.35);
+        const v = fwd.clone().multiplyScalar(0.35 + Math.random() * 0.35 - d * 0.2).add(side).add(new THREE.Vector3(0, 0.12 + Math.random() * 0.12, 0));
+        this.particles.emit({ pos: pos.clone(), vel: v.toArray(), life: 3.8 + Math.random() * 1.8, size: 0.22 + Math.random() * 0.12, grow: 1.8 + Math.random() * 1.0, opacity: 0.38 + Math.random() * 0.12, color: Math.random() < 0.5 ? '#f1ecff' : '#e3dcf5', smoke: true });
+      }, k * 45);
+    }
   }
 
   buildShop() {

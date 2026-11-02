@@ -22,13 +22,14 @@ export class FinalWorld extends World {
     this.anim = [];
     this.build();
     this.addRoomWalls(-W / 2, W / 2, Z1, Z0);
+    this.bakeWorld();
   }
 
   build() {
     const s = this.scene;
     const D = Z0 - Z1, cz = (Z0 + Z1) / 2;
     const floor = mesh(new THREE.PlaneGeometry(W, D), M.std('#ffffff', 0.12, 0.05, { map: marbleTexture('#1a1418', 'rgba(255,215,140,0.35)') }), 0, 0, cz, { cast: false });
-    floor.material.map = floor.material.map.clone(); floor.material.map.needsUpdate = true; floor.material.map.repeat.set(4, 12);
+    floor.material.map = floor.material.map.clone(); floor.material.map.userData = {}; floor.material.map.needsUpdate = true; floor.material.map.repeat.set(4, 12);
     floor.rotation.x = -Math.PI / 2;
     s.add(floor);
     const ceil = mesh(new THREE.PlaneGeometry(W, D), M.std('#0a0810', 0.9), 0, H, cz, { cast: false });

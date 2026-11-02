@@ -10,7 +10,7 @@ import { CasinoWorld } from './world/casino.js';
 import { FinalWorld } from './world/final.js';
 import { WSTransport, LocalTransport } from './net.js';
 import * as Save from './save.js';
-import { initAudio, sfx, setMusic, setAmbience, setDuck, setVolumes, setDizzyAudio, setShishaSounds, clearShishaSounds, updateListener } from './audio.js';
+import { initAudio, sfx, sfxAt, setMusic, setAmbience, setDuck, setVolumes, setDizzyAudio, setShishaSounds, clearShishaSounds, updateListener, shishaDraw, shishaExhale } from './audio.js';
 import { bindSfx } from './tables/common.js';
 import { UI } from './ui/ui.js';
 import { esc } from './ui/dom.js';
@@ -40,6 +40,8 @@ export class App {
     this.engine.onTick((dt, t) => this.tick(dt, t));
     this.input.onClick(e => this.onCanvasClick(e));
     this.touch = new TouchControls(this);
+    this.engine.onAdapt = kind => { if (this.perfOn) this.ui.toast(kind === 'fps' ? 'Performance: stabile 30 FPS' : `Performance: Grafik automatisch auf ${this.engine.quality}`, 'info', 2500); };
+    if (/[?&]perf=1/.test(location.search)) setTimeout(() => this.togglePerf(true), 0);
     window.addEventListener('keydown', e => this.onKey(e));
     window.app = this;
   }
@@ -48,6 +50,8 @@ export class App {
     this.loadWorld('lobby');
     this.engine.start();
     this.ui.showMenu();
+    // Handy: zuerst der Startbildschirm, damit ein Tippen Vollbild + Audio freischalten kann
+    if (this.touch.active) this.ui.showMobileStart();
   }
 
   get pot() { return this.state?.pot ?? 0; }
@@ -166,7 +170,28 @@ export class App {
   onTouchEnabled() {
     this.input.noLock = true;
     this.input.exitLock();
-    this.engine.applyQuality?.(this.save.settings);
+    this.engine.setMobile(true);
+  }
+
+  // ───────────────────────── Performance-Monitor (Entwickler) ─────────────────────────
+  togglePerf(on) {
+    this.perfOn = on;
+    this.ui.perfEl.classList.toggle('hidden', !on);
+    clearInterval(this.pingTimer);
+    if (on) this.pingTimer = setInterval(() => { if (this.mode && this.mode !== 'solo') this.send({ t: 'ping', at: performance.now() }); }, 2000);
+  }
+  updatePerf() {
+    if (!this.perfOn || (this.perfT = (this.perfT || 0) + 1) % 15) return;
+    const e = this.engine, r = e.renderer, i = r.info, s = e.stats;
+    const c = r.domElement;
+    this.ui.perfEl.textContent = [
+      `FPS ${s.fps.toFixed(0)} (min ${s.minFps.toFixed(0)}) · ${s.ms.toFixed(1)} ms`,
+      `Render ${c.width}×${c.height} · PR ${r.getPixelRatio().toFixed(2)}${e.dynamic ? ' (dyn)' : ''}`,
+      `Draw Calls ${i.render.calls} · Tris ${(i.render.triangles / 1000).toFixed(0)}k`,
+      `Texturen ${i.memory.textures} · Geometrien ${i.memory.geometries}`,
+      `Qualität ${e.quality}${this.save.settings.quality === 'auto' ? ' (auto)' : ''} · FPS-Ziel ${e.fpsTarget || 'max'}${e.msaa ? ` · MSAA ${e.msaa}×` : ''}`,
+      this.mode && this.mode !== 'solo' ? `Ping ${this.ping != null ? this.ping.toFixed(0) + ' ms' : '…'} · Updates 15/s` : 'Solo (kein Netzwerk)',
+    ].join('\n');
   }
 
   // Tippen auf den Bildschirm: wie ein Mausklick an dieser Stelle (Tischfelder, Automatenknöpfe); langes Drücken = Rechtsklick
@@ -199,7 +224,11 @@ export class App {
       const verb = typeof it.verb === 'function' ? it.verb() : it.verb;
       out.push({ label: verb || 'BENUTZEN', cls: 'main', run: () => it.action() });
     }
-    if (this.player.hasBottle && !(this.player.drinkT > 0)) out.push({ label: '🍾 TRINKEN', cls: 'drink', run: () => this.drinkMakka() });
+    const p = this.player;
+    if (!(p.drinkT > 0)) {
+      if (this.makkaCount > 0) out.push({ label: `🍾 MAKKA TRINKEN ×${this.makkaCount}`, cls: 'drink', run: () => this.drinkMakka() });
+      if (this.save.appearance.accessory === 'cocktail') out.push({ label: '🍹 TRINKEN', cls: 'drink cocktail', run: () => this.drinkCocktail() });
+    }
     return out;
   }
 
@@ -230,6 +259,7 @@ export class App {
         if (m.fatal) this.ui.menuError(m.msg);
         break;
       case 'reward': this.onReward(m); break;
+      case 'pong': this.ping = performance.now() - m.at; break;
       case 'itemConsumed': {
         const inv = this.save.inventory;
         inv[m.item] = Math.max(0, (inv[m.item] || 0) - 1);
@@ -272,6 +302,8 @@ export class App {
     // Run-Fortschritt kommt immer exakt vom Server (kein Zusammenführen mit alten Runs); gespeichert wird er vom Gruppenersteller
     if (st.hostId === this.me) s.run = { id: st.run.id, pot: st.pot, finalUnlocked: st.run.finalUnlocked, startedAt: st.run.startedAt, unlocked: c.unlocked, completed: [...c.completed] };
     if (st.pot > s.stats.highestPot) s.stats.highestPot = st.pot;
+    const meP = st.players.find(p => p.id === this.me);
+    if (meP && Number.isFinite(meP.makka)) s.makka = meP.makka;
     if (st.pot >= 1e6) this.achieve('millionaire');
     if (st.pot >= 1e8) this.achieve('hundred_m');
     Save.save();
@@ -294,10 +326,13 @@ export class App {
     if (this.player.seated) this.exitSeat(true);
     const old = this.world;
     for (const a of this.avatars.values()) a.root.removeFromParent();
+    this.selfChar?.root.removeFromParent(); // eigener Charakter wird weiterverwendet, nicht mit dem alten Raum freigeben
     this.world = scene === 'floor' ? new CasinoWorld(this, floor) : scene === 'final' ? new FinalWorld(this) : new LobbyWorld(this);
     this.engine.setScene(this.world.scene);
     this.world.scene.add(this.engine.camera);
     old?.dispose();
+    this.world.setupLod?.();
+    this.engine.tuneScene(this.world.scene);
     const idx = this.state ? Math.max(0, this.state.players.findIndex(p => p.id === this.me)) : 0;
     this.player.spawn(this.world, idx);
     this.cinematic = null;
@@ -447,9 +482,18 @@ export class App {
         break;
       }
       case 'drink':
+        if (mine) this.onDrink(ev);
         if (ev.phase === 'buy') this.ui.feed(`🍾 <b>${esc(ev.name)}</b> kauft einen MAKKA`);
-        else { this.ui.feed(`🥴 <b>${esc(ev.name)}</b> trinkt MAKKA – alles dreht sich!`); if (!mine) { this.avatarIcon(ev.pid, '🥴'); sfx.gulp(); } }
+        else if (ev.phase === 'cocktail') { if (!mine) { sfxAt(this.avatarVolume(ev.pid), () => sfx.sip()); if (ev.n === 3) this.avatarIcon(ev.pid, '🥴'); } }
+        else { this.ui.feed(`🥴 <b>${esc(ev.name)}</b> trinkt MAKKA – alles dreht sich!`); if (!mine) { this.avatarIcon(ev.pid, '🥴'); sfxAt(this.avatarVolume(ev.pid), () => sfx.gulp()); } }
         break;
+      case 'makkaLuck':
+        this.makkaLuckEnd = performance.now() + ev.ms;
+        this.ui.feed(`🍹 <b>${esc(ev.name)}</b> trinkt MAKKA im Casino – <b class="win">MAKKA LUCK</b> für die ganze Gruppe (${Math.round(ev.ms / 1000)}s)!`, 'item');
+        if (!mine) this.ui.toast(`🍹 ${ev.name}: MAKKA LUCK für ${Math.round(ev.ms / 1000)} Sekunden!`, 'good', 2500);
+        sfx.shop();
+        break;
+      case 'smoke': this.onSmoke(ev, mine); break;
       case 'emote': {
         const a = this.avatars.get(ev.pid);
         if (a) { a.setAnim(ev.e); a.emoteUntil = performance.now() + 2600; }
@@ -538,39 +582,89 @@ export class App {
 
   bumpStat(k, v) { this.save.stats[k] = (this.save.stats[k] || 0) + v; if (k === 'itemsUsed' && this.save.stats.itemsUsed >= 5) this.achieve('item5'); Save.save(); }
 
-  // ───────────────────────── MAKKA ─────────────────────────
+  // ───────────────────────── MAKKA & Cocktail ─────────────────────────
+  // MAKKA-Anzahl, Verbrauch und MAKKA-LUCK verwaltet der Server; der Client fragt nur an.
+  get makkaCount() { return this.mePlayer?.makka ?? this.save.makka ?? 0; }
+
   buyMakka() {
-    const p = this.player;
-    if (p.hasBottle || p.drinkT > 0) { this.ui.toast('Du hast schon einen MAKKA in der Hand – erst austrinken (T)', 'warn'); return false; }
-    if (!Save.buyMakka()) { sfx.error(); this.ui.toast('Du brauchst 1 🍆 für einen MAKKA', 'error'); return false; }
-    sfx.register();
-    setTimeout(() => sfx.bottle(), 350);
-    p.hasBottle = true;
-    this.send({ t: 'drink', phase: 'buy' });
-    this.ui.toast('MAKKA gekauft (−1 🍆). Drücke T zum Trinken!', 'good', 4000);
-    this.ui.refreshHud();
+    if (this.save.dildos < Save.MAKKA_PRICE) { sfx.error(); this.ui.toast('Du brauchst 1 🍆 für einen MAKKA', 'error'); return false; }
+    this.send({ t: 'makka.buy' });
     return true;
   }
 
   drinkMakka() {
     const p = this.player;
-    if (!p.hasBottle || p.drinkT > 0 || this.ui.modalOpen) return;
-    p.startDrink(2.4);
-    p.emoteT = 0;
+    if (p.drinkT > 0 || this.ui.modalOpen) return;
+    if (!(this.makkaCount > 0)) { sfx.error(); this.ui.toast('Kein MAKKA im Inventar – kauf einen an Kemals Bar in der Shishabar', 'warn'); return; }
     this.send({ t: 'drink', phase: 'drink' });
-    sfx.open();
-    if (this.world.mode === 'first') { this.hands.holdItem(makkaBottle(1)); this.hands.itemT = 2.4; }
-    [0.7, 1.15, 1.6, 2.0].forEach(d => setTimeout(() => sfx.gulp(), d * 1000));
+  }
+
+  drinkCocktail() {
+    const p = this.player;
+    if (p.drinkT > 0 || this.ui.modalOpen || this.save.appearance.accessory !== 'cocktail') return;
+    this.send({ t: 'drink', phase: 'cocktail' });
+  }
+
+  // Bestätigung vom Server: eigene Trink-Animation, Sound und Schwindel starten
+  onDrink(ev) {
+    const p = this.player;
+    if (ev.phase === 'buy') {
+      Save.buyMakka();
+      sfx.register();
+      setTimeout(() => sfx.bottle(), 350);
+      this.ui.toast(`MAKKA gekauft (−1 🍆) · MAKKA ×${ev.count} im Inventar · T bzw. 🍾 zum Trinken`, 'good', 4000);
+      this.ui.refreshHud();
+      return;
+    }
+    const makka = ev.phase === 'drink';
+    const dur = makka ? 2.4 : 1.6;
+    p.startDrink(dur, makka ? 'makka' : 'cocktail');
+    p.emoteT = 0;
+    if (makka) { sfx.open(); this.save.stats.makkas = (this.save.stats.makkas || 0) + 1; Save.save(); }
+    if (this.world.mode === 'first') { this.hands.holdItem(makka ? makkaBottle(1) : cocktailModel()); this.hands.itemT = dur; }
+    (makka ? [0.7, 1.15, 1.6, 2.0] : [0.6, 1.0]).forEach(d => setTimeout(() => (makka ? sfx.gulp() : sfx.sip()), d * 1000));
     clearTimeout(this.drinkTimer);
     this.drinkTimer = setTimeout(() => {
-      p.hasBottle = false;
-      p.startDizzy();
-      sfx.dizzy();
-      setDizzyAudio(true);
-      this.ui.toast('😵‍💫 Uff… alles dreht sich!', 'info', 2500);
-      clearTimeout(this.dizzyTimer);
-      this.dizzyTimer = setTimeout(() => setDizzyAudio(false), 8800);
-    }, 2400);
+      if (makka || ev.n === 3) {
+        p.startDizzy(10, 1);
+        sfx.dizzy();
+        setDizzyAudio(true);
+        this.ui.toast(makka ? '😵‍💫 Uff… alles dreht sich!' : '🍹 Dritter Cocktail – jetzt dreht sich alles!', 'info', 2500);
+        clearTimeout(this.dizzyTimer);
+        this.dizzyTimer = setTimeout(() => setDizzyAudio(false), 8800);
+      } else if (ev.n === 2) {
+        p.startDizzy(3, 0.25); // nur ein leichtes Schwanken
+        this.ui.toast('🍹 Zweiter Cocktail … noch einer und es dreht sich.', 'info', 2200);
+      } else this.ui.toast('🍹 Prost!', 'info', 1500);
+    }, dur * 1000);
+  }
+
+  // ───────────────────────── Shisha ─────────────────────────
+  smokeShisha(i) {
+    if (this.player.smokeT > 0 || this.player.drinkT > 0) return;
+    this.send({ t: 'smoke', i });
+  }
+
+  onSmoke(ev, mine) {
+    const w = this.world;
+    if (!w.smokeAt) return;
+    const sh = w.shishas?.[ev.i];
+    const char = mine ? this.selfChar : this.avatars.get(ev.pid);
+    if (!sh || !char) return;
+    if (mine) {
+      const p = this.player;
+      p.smokeEnd = performance.now() + 3400;
+      p.yaw = Math.atan2(sh.position.x - p.pos.x, sh.position.z - p.pos.z);
+      p.playEmote('smoke', 3.4);
+    } else { char.setAnim('smoke'); char.emoteUntil = performance.now() + 3400; }
+    shishaDraw(ev.i, 1.7);
+    w.smokeAt(char, ev.i, () => shishaExhale(ev.i));
+  }
+
+  avatarVolume(pid) {
+    const a = this.avatars.get(pid);
+    if (!a) return 0;
+    return Math.max(0, Math.min(1, 1.2 - this.player.pos.distanceTo(a.root.position) / 10));
   }
 
   // Schwebendes Item-Symbol über einem Mitspieler
@@ -744,6 +838,7 @@ export class App {
     if (e.code === 'Tab') { e.preventDefault(); this.ui.toggleScoreboard(true); }
     if (e.code === 'KeyI' && this.world.kind === 'floor') this.ui.focusItems();
     if (e.code === 'KeyT') this.drinkMakka();
+    if (e.code === 'KeyG') this.drinkCocktail();
   }
 
   emote(name) {
@@ -828,6 +923,8 @@ export class App {
     if (this.engine.renderer.domElement.style.filter !== filter) this.engine.renderer.domElement.style.filter = filter;
     updateListener(this.engine.camera);
     this.touch.update();
+    this.updatePerf();
+    this.world.updateLod?.(this.engine.camera, this.engine.q.lod, dt);
     this.ui.tick(dt);
     this.input.endFrame();
   }
@@ -853,6 +950,14 @@ export class App {
   }
 }
 
+
+function cocktailModel() {
+  const g = new THREE.Group();
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.065, 16, 1, true), new THREE.MeshStandardMaterial({ color: '#ff8fcf', transparent: true, opacity: 0.75, side: THREE.DoubleSide }));
+  cone.rotation.x = Math.PI; cone.position.y = 0.06;
+  g.add(cone, new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.07), new THREE.MeshStandardMaterial({ color: '#ddd' })));
+  return g;
+}
 
 function itemModel(item) {
   const g = new THREE.Group();

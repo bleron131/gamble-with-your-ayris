@@ -61,7 +61,8 @@ Der Gratis-Server schläft nach 15 Minuten ohne Besucher; das Spiel weckt ihn be
 | H / S / D / P / J | Blackjack: Hit / Stand / Double / Split / Joker |
 | C / F | Hold'em: Call / Fold (am Pokertisch) |
 | ESC / Q | Vom Tisch aufstehen |
-| T | MAKKA trinken (nach dem Kauf an der Bar) |
+| T | MAKKA aus dem Inventar trinken |
+| G | Outfit-Cocktail trinken (wenn ausgerüstet) |
 | 1–5 | Emotes (Jubeln, Tanzen, Traurig, Facepalm, Zeigen) |
 | TAB | Gruppenübersicht |
 | Mausrad | Kamera-Zoom (Shishabar) |
@@ -81,10 +82,19 @@ Auf Touch-Geräten schaltet sich die Mobile-Steuerung automatisch ein (auf dem P
 | 🎥 | Roulette-Kugelkamera an/aus (nur während eines Spins) |
 | 👥 / 😀 oben rechts | Gruppe anzeigen / Emotes |
 
-Im Hochformat erscheint „Drehe dein Gerät ins Querformat“ und die Eingaben ruhen. Unter ⚙️ gibt es **Grafik**
-(Niedrig/Mittel/Hoch) und ein **FPS-Limit** (30/60/Max); beim ersten Start wird beides passend zum Gerät gewählt
-(Handys: Mittel bzw. Niedrig mit weniger Lichtern, Schatten, Partikeln und halbem Bloom). PC- und Handy-Spieler
-können gemeinsam in einer Gruppe spielen.
+Auf dem Handy startet das Spiel mit **SPIEL STARTEN**: Dieses eine Tippen aktiviert Audio, Vollbild und Querformat
+(wo der Browser es erlaubt, z. B. Android Chrome). Unter ⚙️ → **⛶ VOLLBILD** lässt sich das Vollbild jederzeit
+wieder aktivieren. Das Spiel ist als **App installierbar** (Manifest, Icons, Service Worker): „Zum Home-Bildschirm“
+startet es im Vollbild ohne Browserleiste (auch iOS-Safari). Im Hochformat erscheint „Drehe dein Gerät ins Querformat“.
+
+**Grafik auf Handys**: Stufe *Auto* (Niedrig/Mittel/Hoch/Ultra wird nach Gerät gewählt und bei anhaltenden Rucklern
+vorsichtig gesenkt), **dynamische Render-Auflösung** (Pixel Ratio passt sich der geglätteten Bildrate an, mit Abkühlzeit
+und Grenzen je Stufe), **FPS Auto/30/60**, Kantenglättung (MSAA) auch mit Neon-Bloom, Bloom in halber Auflösung,
+anisotrope Texturfilterung, Schatten mit dem Spieler mitgeführt und ohne Kleinteile, Detail-LOD in der Ferne und ein
+Partikel-Limit. Statische Teile von Räumen, Tischen, Automaten und Charakteren werden je Material zusammengefasst
+(deutlich weniger Draw Calls – das hilft auch dem PC). Die PC-Grafik bleibt unverändert hoch. Eine
+**Performance-Anzeige** (FPS, Frame Time, Auflösung, Pixel Ratio, Draw Calls, Dreiecke, Texturen, Stufe, Ping) gibt es
+unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können gemeinsam in einer Gruppe spielen.
 
 ## Spielablauf
 
@@ -129,8 +139,16 @@ können gemeinsam in einer Gruppe spielen.
   setzen nichts zurück.
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Bonus-Challenges
   (Stockwerk mit ≥150 % des Ziels verlassen) und Achievements – jeweils nur einmal pro Spieler, also kein Farming.
-- **MAKKA an der Bar**: Bei Kemal gibt es die pinke Ayri-Limonade für genau 1 🍆. Mit T trinken –
-  danach dreht und schwankt die Shishabar 10 Sekunden lang (nur für dich; Mitspieler sehen dich torkeln).
+- **MAKKA an der Bar**: Nur bei Kemal an der Bar der Shishabar gibt es die pinke Ayri-Limonade für genau 1 🍆.
+  Gekaufte MAKKA landen im Inventar (HUD: `MAKKA ×2`), können mit ins Casino und auf höhere Stockwerke und werden
+  mit T bzw. 🍾 getrunken: 10 Sekunden Schwindel (nur für dich; Mitspieler sehen dich torkeln). **Im Casino**
+  bekommt die ganze Gruppe zusätzlich 10 Sekunden **MAKKA LUCK** (`🍹 MAKKA LUCK – 7s`): Der Server würfelt verlorene
+  Ausgänge deutlich öfter neu aus und gibt Slots etwas höhere Multiplikatoren – spürbar bessere Chancen, aber kein
+  garantierter Gewinn. Es zählt der Zeitpunkt, an dem der Server die Runde startet; weitere MAKKA verlängern nur die
+  Dauer, die Stärke stapelt sich nicht.
+- **Shishas & Cocktail**: Jede Shisha in der Lounge ist rauchbar (E bzw. „SHISHA RAUCHEN“): Schlauch zur Hand, Ziehen
+  mit räumlichem Blubbern, danach eine sichtbare Rauchwolke – alle Mitspieler sehen es. Der Cocktail aus dem Outfit ist
+  trinkbar (G bzw. „TRINKEN“); jeder dritte Drink macht 10 Sekunden schwindlig. Beides hat keinen Einfluss auf Pot oder Chancen.
 - **AYRI SHOP**: Pokal, Glücks-Shisha, Lucky Hat, Golden Coin, Ayri-Versicherung, Joker Card,
   Mafia Briefcase, Devil Dice, Ayris Crown – jeweils als „einmal verwendbar“ oder „permanent, 1× pro Level“ gekennzeichnet.
 - **Finale**: Nach $500'000'000 auf Stock 15 erscheint im Aufzug **???**. In der luxuriösen

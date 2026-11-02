@@ -21,6 +21,7 @@ function defaults() {
     name: 'Ayri' + Math.floor(Math.random() * 900 + 100),
     appearance: defaultAppearance(),
     dildos: 0,
+    makka: 0, // MAKKA im Inventar (der Server führt die Anzahl, gespeichert wird sie hier)
     inventory: {},
     loadout: [],
     rewardedFloors: [],
@@ -63,16 +64,14 @@ function migrateRun(d, raw) {
   d.campaign.everCompleted = [...new Set([...(c.everCompleted || []), ...(c.completed || []), ...d.run.completed])].sort((a, b) => a - b);
 }
 
-// Grafik beim ersten Start automatisch wählen: PC = Hoch, Handy/Tablet = Mittel (schwache Geräte: Niedrig, 30 FPS)
+// Grafik beim ersten Start: PC = Hoch (wie bisher), Handy/Tablet = AUTO (Stufe nach Gerät + gemessener Bildrate, FPS AUTO).
+// gfx: 2 = Version der Mobile-Grafik; ältere automatisch gewählte Handy-Einstellungen werden einmalig auf AUTO gestellt.
 function autoGraphics(st) {
-  if (st.quality && st.fpsLimit !== null && st.fpsLimit !== undefined) return;
   const touch = isTouchDevice();
-  const weak = (navigator.deviceMemory && navigator.deviceMemory <= 3) || (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4);
-  if (!st.quality) {
-    st.quality = touch ? (weak ? 'low' : 'medium') : 'high';
-    if (st.quality === 'low') { st.bloom = false; st.shadows = false; }
-  }
-  if (st.fpsLimit === null || st.fpsLimit === undefined) st.fpsLimit = touch ? (weak ? 30 : 60) : 0;
+  if (touch && st.gfx !== 2) { st.quality = 'auto'; st.fpsLimit = 'auto'; st.bloom = true; st.shadows = true; }
+  if (!st.quality) st.quality = touch ? 'auto' : 'high';
+  if (st.fpsLimit === null || st.fpsLimit === undefined) st.fpsLimit = touch ? 'auto' : 0;
+  if (touch) st.gfx = 2;
 }
 
 export function get() { return data || load(); }
@@ -89,13 +88,14 @@ export function profile() {
   const s = get();
   return {
     name: s.name, appearance: s.appearance, rewardedFloors: s.rewardedFloors, challengeFloors: s.challengeFloors,
+    makka: s.makka || 0,
     campaign: s.campaign, run: s.run,
   };
 }
 
 export const MAKKA_PRICE = 1;
 
-// Kauft einen MAKKA an der Bar: zieht genau 1 Dildo ab, sonst nichts
+// Bezahlt einen MAKKA an der Bar (nachdem der Server den Kauf bestätigt hat): genau 1 Dildo
 export function buyMakka() {
   const s = get();
   if (s.dildos < MAKKA_PRICE) return false;

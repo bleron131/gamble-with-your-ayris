@@ -1,6 +1,7 @@
 // Basisklasse für begehbare 3D-Welten (Lobby, Casino, Finale).
 import * as THREE from 'three';
 import { smokeTexture, confettiTexture } from '../textures.js';
+import { bakeStatic, referencedObjects } from '../bake.js';
 
 export class World {
   constructor(app) {
@@ -66,16 +67,71 @@ export class World {
 
   update(dt, t) { for (const u of this.updaters) u(dt, t); }
 
+  // Detail-LOD (Handy): kleine Teile von Tischen/Automaten und Gesichtsdetails von NPCs werden in der Ferne ausgeblendet
+  setupLod() {
+    const details = [];
+    const v = new THREE.Vector3(), sc = new THREE.Vector3();
+    this.scene.updateMatrixWorld(true);
+    const npcs = [];
+    const walk = o => {
+      for (const c of o.children) {
+        if (c.userData.character) { npcs.push(c); continue; }
+        if (c.isMesh) {
+          if (!c.geometry.boundingSphere) c.geometry.computeBoundingSphere();
+          c.getWorldScale(sc);
+          if (c.geometry.boundingSphere.radius * Math.max(sc.x, sc.y, sc.z) < 0.07) details.push({ o: c, p: c.getWorldPosition(v.clone()) });
+        }
+        walk(c);
+      }
+    };
+    walk(this.scene);
+    this.lod = { details, npcs, t: 0, dist: -1 };
+  }
+
+  updateLod(camera, dist, dt) {
+    const L = this.lod;
+    if (!L || (L.t += dt) < 0.3 && L.dist === dist) return;
+    L.t = 0;
+    if (!dist) { if (L.dist !== 0) for (const d of L.details) d.o.visible = true; L.dist = 0; return; }
+    L.dist = dist;
+    const cp = camera.position;
+    for (const d of L.details) d.o.visible = d.p.distanceTo(cp) < dist;
+    for (const r of L.npcs) { const near = r.position.distanceTo(cp) < dist * 1.2; for (const o of r.userData.details || []) o.visible = near; }
+  }
+
+  // Raum, Wände und als statisch markierte Deko je Material zusammenfassen (weniger Draw Calls)
+  bakeWorld() {
+    const keep = referencedObjects(this);
+    for (const c of this.scene.children) if (!(c.isMesh || c.userData.static)) keep.add(c);
+    this.bakedParts = bakeStatic(this.scene, { keep });
+  }
+
+  // Beim Raumwechsel alles freigeben, was nur zu diesem Raum gehört (Geometrien, Materialien, Canvas-Texturen).
+  // Geteilte Ressourcen (Karten, Chips, gecachte Texturen und Materialien) bleiben erhalten.
   dispose() {
+    for (const p of this.particles.list) p.s.material.dispose();
+    this.particles.list = [];
+    const mats = new Set();
     this.scene.traverse(o => {
+      if (typeof o.getRenderTarget === 'function') o.getRenderTarget()?.dispose(); // Spiegel (Reflector)
       if (o.geometry && !o.geometry.userData?.shared) o.geometry.dispose();
+      if (o.material) for (const m of [].concat(o.material)) if (m && !m.userData?.shared) mats.add(m);
     });
+    for (const m of mats) {
+      for (const k of ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'alphaMap']) {
+        const t = m[k];
+        if (t && !t.userData?.cached) t.dispose();
+      }
+      m.dispose();
+    }
+    this.updaters = [];
   }
 }
 
 // Einfaches Sprite-Partikelsystem (Shisha-Rauch, Konfetti, Explosionen)
 export class Particles {
   static density = 1;
+  static max = 600; // Obergrenze gleichzeitiger Partikel (auf Handys kleiner)
   constructor(scene) {
     this.scene = scene;
     this.list = [];
@@ -84,6 +140,7 @@ export class Particles {
   emit(opts) {
     // Weniger Partikel auf niedrigen Grafikstufen (Konfetti/Rauch bleiben sichtbar, nur dünner)
     if (Particles.density < 1 && Math.random() > Particles.density) return;
+    if (this.list.length >= Particles.max) return;
     this.spawn(opts);
   }
   spawn({ pos, vel = [0, 0.3, 0], life = 3, size = 0.3, grow = 0.4, color = '#ffffff', opacity = 0.45, gravity = 0, type = 'smoke', spin = 0, additive = false }) {

@@ -1,5 +1,6 @@
 // Cartoon-Charaktere: grosser runder Kopf, kleiner Körper, kurze Arme & Beine.
 import * as THREE from 'three';
+import { bakeStatic, referencedObjects } from './bake.js';
 import { nameTagTexture } from './textures.js';
 
 export const OPTIONS = {
@@ -36,7 +37,7 @@ export function defaultAppearance() {
 }
 
 const geoCache = new Map();
-function geo(key, fn) { if (!geoCache.has(key)) geoCache.set(key, fn()); return geoCache.get(key); }
+function geo(key, fn) { if (!geoCache.has(key)) { const g = fn(); g.userData.shared = true; geoCache.set(key, g); } return geoCache.get(key); }
 const sphere = (r, w = 24, h = 16) => geo(`s${r}${w}${h}`, () => new THREE.SphereGeometry(r, w, h));
 const capsule = (r, l) => geo(`c${r}${l}`, () => new THREE.CapsuleGeometry(r, l, 6, 12));
 const cyl = (rt, rb, h, s = 20) => geo(`y${rt}${rb}${h}${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s));
@@ -57,6 +58,7 @@ function mesh(g, m, x = 0, y = 0, z = 0) {
 export class Character {
   constructor(appearance = defaultAppearance(), { name = null, npc = null } = {}) {
     this.root = new THREE.Group();
+    this.root.userData.character = true;
     this.body = new THREE.Group();
     this.root.add(this.body);
     this.anim = 'idle';
@@ -239,6 +241,17 @@ export class Character {
     // Accessoire (in der rechten Hand)
     this.buildAccessory(a);
     if (npc) this.applyNpc(npc);
+    this.bake();
+  }
+
+  // Starre Körperteile je Material zusammenfassen (Augen, Mund, Hände & Accessoire bleiben einzeln animierbar)
+  bake() {
+    const keep = referencedObjects(this);
+    for (const part of [this.legL, this.legR, this.armL, this.armR, this.head]) if (part) bakeStatic(part, { keep });
+    bakeStatic(this.body, { keep, deep: false });
+    // Charaktere behalten ihre Schatten auch auf dem Handy; Augen/Mund/Accessoire sind Details für das LOD
+    this.root.traverse(o => { if (o.isMesh) o.userData.bigShadow = true; });
+    this.root.userData.details = [...(this.eyes || []), this.mouth, this.accessory].filter(Boolean);
   }
 
   buildHair(H, a, hm) {
@@ -311,12 +324,20 @@ export class Character {
   }
 
   // ───────────────────────── Animation ─────────────────────────
-  setAnim(a) { this.anim = a; }
+  setAnim(a) { if (a === this.anim) return; this.anim = a; if (a === 'smoke' || this.pipe) this.setFx(this.fx || ''); }
 
   // Effekte von Mitspielern (b = Flasche, d = trinkt, z = schwindelig)
   setFx(fx = '') {
     this.fx = fx;
-    const wantBottle = fx.includes('b') || fx.includes('d');
+    const wantBottle = fx.includes('d');
+    // Shisha: Mundstück in der Hand
+    const wantPipe = fx.includes('s') || this.anim === 'smoke';
+    if (wantPipe && !this.pipe) {
+      this.pipe = new THREE.Mesh(cyl(0.012, 0.016, 0.12), mat('#c9a14a', { metal: 0.8, rough: 0.3 }));
+      this.pipe.position.set(0.02, -0.33, 0.06);
+      this.pipe.rotation.x = Math.PI / 2;
+      this.armR.add(this.pipe);
+    } else if (!wantPipe && this.pipe) { this.armR.remove(this.pipe); this.pipe = null; }
     if (wantBottle && !this.bottle) {
       this.bottle = makkaBottle(1.6);
       // In der Faust gehalten: Flaschenhals zeigt quer zum Arm (beim Trinken Richtung Mund)
@@ -367,13 +388,21 @@ export class Character {
     this.head.rotation.x = headTilt;
     this.head.rotation.z = 0;
     // Flasche halten / trinken
-    if (fx.includes('d')) {
+    if (fx.includes('d') || fx.includes('c')) {
+      // Flasche bzw. Cocktail zum Mund führen und trinken
       const k = 0.5 + 0.5 * Math.sin(t * 2.2);
       this.armR.rotation.set(-2.5 - k * 0.3, 0, 0.45);
       this.head.rotation.x = -0.45 - k * 0.1;
     } else if (this.bottle) {
       this.armR.rotation.set(-0.9, 0, 0.25);
     }
+    if (this.anim === 'smoke' || fx.includes('s')) {
+      // Mundstück am Mund, beim Ziehen leicht zurückgelehnt
+      const k = 0.5 + 0.5 * Math.sin(t * 1.6);
+      this.armR.rotation.set(-2.2 - k * 0.15, 0, 0.55);
+      this.head.rotation.x = -0.12 - k * 0.08;
+    }
+    if (this.pipe && !(this.anim === 'smoke' || fx.includes('s'))) this.setFx(this.fx);
     // Schwindel: schwankender Gang
     if (fx.includes('z')) {
       this.body.rotation.z = Math.sin(t * 2.1) * 0.18 + Math.sin(t * 5.3) * 0.04;

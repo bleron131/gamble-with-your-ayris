@@ -1,14 +1,14 @@
 // Simuliert alle Casinospiele mit den echten Spielmodulen und misst Gewinnquote & Auszahlungsquote (RTP).
 // Nutzung: node scripts/balance.js [Runden]
 import { GAMES } from '../src/shared/room.js';
-import { floorDef, luckChance } from '../src/shared/config.js';
+import { floorDef, luckChance, MAKKA_LUCK_BONUS } from '../src/shared/config.js';
 import { handTotal, cardValue } from '../src/shared/games/blackjack.js';
 
 const N = +process.argv[2] || 20000;
 const FLOOR = +process.env.FLOOR || 15;
 
 // Spieler mit Pechsträhnen-Zähler wie im Raum
-export function simulate(type, rounds = N, withLuck = true) {
+export function simulate(type, rounds = N, withLuck = true, makka = false) {
   const game = GAMES[type];
   const limits = floorDef(FLOOR).limits[type] || floorDef(15).limits[type];
   const table = { id: type, type, state: game.init(), busy: false };
@@ -21,7 +21,8 @@ export function simulate(type, rounds = N, withLuck = true) {
     debit: () => true, refund() {}, busy() {}, changed() {},
     later: (ms, fn) => queue.push(fn),
     canUseItem: () => false, useItem: () => false,
-    lucky: () => withLuck && Math.random() < luckChance(streak),
+    makka,
+    lucky: () => { const b = withLuck ? luckChance(streak) : 0; return Math.random() < b + (1 - b) * (makka ? MAKKA_LUCK_BONUS : 0); },
     settle: r => {
       if (!r.stake && !r.payout) return;
       staked += r.stake; paid += r.payout; played++;

@@ -2,12 +2,23 @@
 import * as THREE from 'three';
 import { neonTexture, woodTexture, marbleTexture, skylineTexture, signTexture } from '../textures.js';
 
+// Gleiche Materialien werden wiederverwendet (weniger Shader-Wechsel; erlaubt das Zusammenfassen statischer Teile).
+// Leuchtmaterialien (glow) bleiben einzeln, weil ihre Helligkeit animiert wird.
+const matCache = new Map();
+function shared(key, make) {
+  if (!matCache.has(key)) { const m = make(); m.userData.shared = true; matCache.set(key, m); }
+  return matCache.get(key);
+}
 export const M = {
-  std: (color, rough = 0.6, metal = 0, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, ...extra }),
-  gold: () => new THREE.MeshStandardMaterial({ color: '#d4af37', roughness: 0.25, metalness: 0.9 }),
-  brass: () => new THREE.MeshStandardMaterial({ color: '#b08d57', roughness: 0.35, metalness: 0.8 }),
+  std: (color, rough = 0.6, metal = 0, extra = {}) => {
+    const plain = !extra || Object.keys(extra).length === 0;
+    const make = () => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, ...extra });
+    return plain ? shared(`std|${new THREE.Color(color).getHexString()}|${rough}|${metal}`, make) : make();
+  },
+  gold: () => shared('gold', () => new THREE.MeshStandardMaterial({ color: '#d4af37', roughness: 0.25, metalness: 0.9 })),
+  brass: () => shared('brass', () => new THREE.MeshStandardMaterial({ color: '#b08d57', roughness: 0.35, metalness: 0.8 })),
   glow: (color, intensity = 2) => new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: intensity, roughness: 0.4 }),
-  glass: (color = '#88ccff', opacity = 0.35) => new THREE.MeshStandardMaterial({ color, transparent: true, opacity, roughness: 0.05, metalness: 0.2 }),
+  glass: (color = '#88ccff', opacity = 0.35) => shared(`glass|${color}|${opacity}`, () => new THREE.MeshStandardMaterial({ color, transparent: true, opacity, roughness: 0.05, metalness: 0.2 })),
 };
 
 export function mesh(geo, mat, x = 0, y = 0, z = 0, { cast = true, receive = true } = {}) {
@@ -48,6 +59,7 @@ export function sofa(color = '#7a1230', len = 2.2) {
     g.add(pillow);
   }
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(mesh(new THREE.CylinderGeometry(0.03, 0.02, 0.12), M.gold(), sx * (len / 2 - 0.1), 0.06, sz * 0.3));
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 
@@ -56,6 +68,7 @@ export function lowTable(r = 0.55, top = '#2a1a10') {
   g.add(mesh(new THREE.CylinderGeometry(r, r, 0.06, 32), M.std(top, 0.3, 0.1, { map: woodTexture(top) }), 0, 0.42, 0));
   g.add(mesh(new THREE.CylinderGeometry(r + 0.01, r + 0.01, 0.02, 32), M.gold(), 0, 0.39, 0));
   g.add(mesh(new THREE.CylinderGeometry(0.08, 0.2, 0.38, 16), M.gold(), 0, 0.2, 0));
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 
@@ -96,6 +109,7 @@ export function plant(h = 1.4) {
     g.add(l);
   }
   g.add(mesh(new THREE.CylinderGeometry(0.02, 0.03, h - 0.4, 6), M.std('#5a3a1a'), 0, 0.4 + (h - 0.4) / 2, 0));
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 
@@ -115,6 +129,7 @@ export function palm(h = 2.6) {
     l.rotation.y = -a + Math.PI / 2;
     g.add(l);
   }
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 
@@ -164,6 +179,7 @@ export function barCounter(len = 6, color = '#3a1f10') {
     s.add(mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.03, 20), M.gold(), 0, 0.015, 0));
     g.add(s);
   }
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 
@@ -171,6 +187,7 @@ export function chandelier(scale = 1) {
   const g = new THREE.Group();
   const gold = M.gold();
   const crystal = new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#ffe9b0', emissiveIntensity: 0.8, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.9 });
+  const bulb = M.glow('#fff1c1', 3);
   g.add(mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.8, 6), gold, 0, 0.4, 0, { cast: false }));
   for (let ring = 0; ring < 3; ring++) {
     const r = (0.4 + ring * 0.3) * scale;
@@ -184,9 +201,10 @@ export function chandelier(scale = 1) {
       const c = mesh(new THREE.OctahedronGeometry(0.05 * scale), crystal, Math.cos(a) * r, y - 0.1, Math.sin(a) * r, { cast: false });
       c.scale.y = 1.8;
       g.add(c);
-      if (i % 2 === 0) g.add(mesh(new THREE.SphereGeometry(0.04 * scale, 8, 6), M.glow('#fff1c1', 3), Math.cos(a) * r, y + 0.06, Math.sin(a) * r, { cast: false }));
+      if (i % 2 === 0) g.add(mesh(new THREE.SphereGeometry(0.04 * scale, 8, 6), bulb, Math.cos(a) * r, y + 0.06, Math.sin(a) * r, { cast: false }));
     }
   }
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 
@@ -196,6 +214,7 @@ export function pendantLamp(color = '#ffb35c') {
   const shade = mesh(new THREE.SphereGeometry(0.22, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.std('#c9902c', 0.3, 0.7, { side: THREE.DoubleSide }), 0, 0, 0, { cast: false });
   g.add(shade);
   g.add(mesh(new THREE.SphereGeometry(0.08, 10, 8), M.glow(color, 4), 0, -0.02, 0, { cast: false }));
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 
@@ -211,6 +230,7 @@ export function rug(w, d, color = '#7a1230', border = '#e8c36a') {
     e.rotation.x = -Math.PI / 2;
     g.add(e);
   }
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 
@@ -220,6 +240,7 @@ export function pillar(h, marble = true, r = 0.35) {
   g.add(mesh(new THREE.CylinderGeometry(r, r, h, 24), mm, 0, h / 2, 0));
   g.add(mesh(new THREE.CylinderGeometry(r + 0.08, r + 0.1, 0.2, 24), M.gold(), 0, 0.1, 0));
   g.add(mesh(new THREE.CylinderGeometry(r + 0.1, r + 0.06, 0.2, 24), M.gold(), 0, h - 0.1, 0));
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 
@@ -232,12 +253,14 @@ export function velvetRope(len) {
   }
   const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-len / 2, 0.85, 0), new THREE.Vector3(0, 0.55, 0), new THREE.Vector3(len / 2, 0.85, 0));
   g.add(mesh(new THREE.TubeGeometry(curve, 20, 0.025, 8), M.std('#a4122f', 0.8)));
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 
 export function skylineWindow(w, h, night = true) {
   const g = new THREE.Group();
   const tex = skylineTexture(night).clone();
+  tex.userData = {};
   tex.needsUpdate = true;
   tex.repeat.set(w / 20, 1);
   tex.offset.x = Math.random();
@@ -265,6 +288,7 @@ export function painting(w, h, hue = 0) {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   g.add(mesh(new THREE.PlaneGeometry(w, h), M.std('#fff', 0.8, 0, { map: t }), 0, 0, 0.03, { cast: false }));
   g.add(mesh(new THREE.BoxGeometry(w + 0.16, h + 0.16, 0.05), M.gold(), 0, 0, 0, { cast: false }));
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 
@@ -276,6 +300,7 @@ export function speaker() {
     c.rotation.x = Math.PI / 2;
     g.add(c);
   }
+  g.userData.static = true; // unbewegliche Deko → wird zusammengefasst
   return g;
 }
 

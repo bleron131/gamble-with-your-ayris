@@ -6,6 +6,7 @@ import { M, mesh, neonSign, chandelier, pillar, plant, palm, velvetRope, skyline
 import { carpetTexture, marbleTexture, wallpaperTexture, tileTexture } from '../textures.js';
 import { floorDef, floorTables, fmtMoney, GAME_NAMES, GAME_ICONS } from '../../shared/config.js';
 import { Character, npcAppearance } from '../character.js';
+import { bakeView } from '../bake.js';
 import { SlotView } from '../tables/slots.js';
 import { RouletteView } from '../tables/roulette.js';
 import { BlackjackView } from '../tables/blackjack.js';
@@ -61,12 +62,14 @@ export class CasinoWorld extends World {
     this.buildGuests();
     this.addRoomWalls(-this.W / 2, this.W / 2, -this.D / 2, this.D / 2);
     this.updaters.push((dt, t) => { for (const v of Object.values(this.views)) v.tick(dt, t); });
+    this.bakeWorld();
   }
 
   buildRoom() {
     const { W, D, H, tier, theme } = this;
     const s = this.scene;
     const carpet = carpetTexture(tier).clone();
+    carpet.userData = {};
     carpet.needsUpdate = true;
     carpet.repeat.set(W / 4, D / 4);
     const floor = mesh(new THREE.PlaneGeometry(W, D), M.std('#ffffff', 0.95, 0, { map: carpet }), 0, 0, 0, { cast: false });
@@ -81,7 +84,7 @@ export class CasinoWorld extends World {
       }
     }
     const wallMat = M.std('#ffffff', 0.85, 0, { map: wallpaperTexture(theme.wall, theme.accent) });
-    wallMat.map = wallMat.map.clone(); wallMat.map.needsUpdate = true; wallMat.map.repeat.set(W / 6, 1.5);
+    wallMat.map = wallMat.map.clone(); wallMat.map.userData = {}; wallMat.map.needsUpdate = true; wallMat.map.repeat.set(W / 6, 1.5);
     for (const [x, z, w, ry] of [[0, -D / 2, W, 0], [0, D / 2, W, Math.PI], [-W / 2, 0, D, Math.PI / 2], [W / 2, 0, D, -Math.PI / 2]]) {
       const m = mesh(new THREE.PlaneGeometry(w, H), wallMat, x, H / 2, z, { cast: false });
       m.rotation.y = ry;
@@ -114,11 +117,24 @@ export class CasinoWorld extends World {
     key.castShadow = true;
     const q = this.app.engine.q;
     key.shadow.mapSize.set(q.shadowMap, q.shadowMap);
-    const ext = Math.max(W, D) / 2 + 2;
+    // Handy: Schattenbereich begrenzt und mit dem Spieler mitgeführt (schärfere Schatten, kleinere Shadow Map)
+    const follow = this.app.engine.mobile;
+    const ext = follow ? Math.min(Math.max(W, D) / 2 + 2, 12) : Math.max(W, D) / 2 + 2;
     Object.assign(key.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 40 });
     key.shadow.bias = -0.0005;
     s.add(key);
     this.keyLight = key;
+    if (follow) {
+      s.add(key.target);
+      const off = key.position.clone();
+      this.updaters.push(() => {
+        const p = this.app.player.pos;
+        const x = Math.round(p.x * 2) / 2, z = Math.round(p.z * 2) / 2; // in Rasterschritten, damit die Schatten nicht flimmern
+        key.position.set(x + off.x, off.y, z + off.z);
+        key.target.position.set(x, 0, z);
+        key.target.updateMatrixWorld();
+      });
+    }
     // Höchstens 3×3 Punktlichter (Performance); auf niedrigeren Stufen weniger, dafür heller
     const [nx, nz] = q.lights >= 9 ? [3, 3] : q.lights >= 6 ? [3, 2] : [2, 2];
     const boost = 9 / (nx * nz);
@@ -279,6 +295,7 @@ export class CasinoWorld extends World {
     const lbl = neonSign('$1M', '#ffd97a', 1.2, 0.4);
     lbl.position.set(0, 1.4, 0);
     stack.add(lbl);
+    stack.userData.static = true;
     s.add(stack);
     this.addCircle(x, z, 0.6);
   }
@@ -333,6 +350,7 @@ export class CasinoWorld extends World {
       const V = VIEWS[def.type];
       const v = new V(this.app, def, this.def);
       v.place(x, z, rot);
+      bakeView(v);
       this.scene.add(v.group);
       v.addColliders(this);
       for (const npc of [v.dealer, v.stick, v.host]) {
@@ -364,6 +382,7 @@ export class CasinoWorld extends World {
         lamp.add(mesh(new THREE.BoxGeometry(1.5, 0.02, 0.42), M.glow(this.theme.light, 2.5), 0, -0.05, 0, { cast: false }));
         lamp.add(mesh(new THREE.CylinderGeometry(0.01, 0.01, 1.4), M.std('#111'), 0, 0.7, 0, { cast: false }));
         lamp.rotation.y = rot;
+        lamp.userData.static = true;
         this.scene.add(lamp);
       }
     };

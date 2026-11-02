@@ -19,7 +19,7 @@
   --sb: env(safe-area-inset-bottom, 0px);
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0510; color: var(--text); font-family: var(--font); user-select: none; }
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: #0a0510; color: var(--text); font-family: var(--font); user-select: none; }
 #game { position: fixed; inset: 0; }
 #game canvas { display: block; }
 #ui { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
@@ -405,3 +405,18 @@ body.touch .tablepanel .rtotal { order: -3; }
 body.touch .tablepanel .rspin { order: -3; margin-top: 0; }
 body.touch .tablepanel .redit { order: -2; margin-top: 0; }
 body.touch .tablepanel .quick button.small { min-height: 32px; padding: 4px 8px; font-size: 12px; }
+
+/* MAKKA LUCK: dezente Anzeige mit leichtem Schimmer */
+.makkaluck { position: absolute; left: 50%; top: calc(16px + var(--st)); transform: translateX(-50%); padding: 6px 16px; border-radius: 20px; font-weight: 900; font-size: 15px; color: #fff; background: linear-gradient(90deg, rgba(255, 60, 172, .8), rgba(255, 140, 60, .8)); border: 1px solid #ffc2e6; box-shadow: 0 0 16px rgba(255, 60, 172, .5); animation: luckglow 1.2s ease-in-out infinite; pointer-events: none; }
+@keyframes luckglow { 50% { box-shadow: 0 0 26px rgba(255, 140, 60, .75); } }
+@media (max-height: 520px) { .makkaluck { top: calc(8px + var(--st)); font-size: 12px; padding: 4px 10px; } }
+
+/* Mobile-Startbildschirm */
+.mstart { position: fixed; inset: 0; z-index: 40; pointer-events: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; padding: calc(16px + var(--st)) calc(16px + var(--sr)) calc(16px + var(--sb)) calc(16px + var(--sl)); background: radial-gradient(circle at 50% 40%, rgba(58, 15, 74, .96), rgba(8, 3, 14, .98)); text-align: center; }
+.mstart .logo { align-items: center; }
+.mstart .mstartbtn { font-size: 22px; padding: 16px 40px; border-radius: 30px; box-shadow: 0 0 30px rgba(255, 217, 122, .5); }
+.mstart .mhint { max-width: 520px; color: var(--muted); font-size: 13px; font-weight: 700; }
+@media (max-height: 520px) { .mstart { gap: 12px; } .mstart .logo .l1 { font-size: 36px; } .mstart .logo .l3 { font-size: 44px; } }
+body.touch { -webkit-user-select: none; }
+.perfmon { position: fixed; left: calc(8px + var(--sl)); bottom: calc(8px + var(--sb)); z-index: 30; margin: 0; padding: 6px 9px; background: rgba(0, 0, 0, .72); color: #9effa0; font: 11px/1.35 ui-monospace, Menlo, Consolas, monospace; border-radius: 8px; pointer-events: none; white-space: pre; }
+body.touch .perfmon { bottom: auto; top: calc(110px + var(--st)); }

@@ -20,7 +20,7 @@ export function toTex(c, { repeat = null, srgb = true, aniso = 8 } = {}) {
 }
 
 function cached(key, fn) {
-  if (!cache.has(key)) cache.set(key, fn());
+  if (!cache.has(key)) { const v = fn(); if (v?.isTexture) v.userData.cached = true; else if (v?.texture?.isTexture) v.texture.userData.cached = true; cache.set(key, v); }
   return cache.get(key);
 }
 

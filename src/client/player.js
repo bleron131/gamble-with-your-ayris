@@ -26,7 +26,9 @@ export class LocalPlayer {
     this.basisYaw = 0;
     this.dizzyEnd = 0;
     this.drinkEnd = 0;
-    this.hasBottle = false;
+    this.drinkKind = 'makka';
+    this.dizzyDur = DIZZY_TIME;
+    this.dizzyMax = 1;
     this.time = 0;
     this.jump = new Jumper();
   }
@@ -34,14 +36,20 @@ export class LocalPlayer {
   // Trinken & Schwindel laufen auf Echtzeit, damit sie unabhängig von der Bildrate exakt 2.4 s bzw. 10 s dauern
   get dizzyT() { return Math.max(0, (this.dizzyEnd - performance.now()) / 1000); }
   get drinkT() { return Math.max(0, (this.drinkEnd - performance.now()) / 1000); }
-  startDrink(sec) { this.drinkEnd = performance.now() + sec * 1000; }
+  startDrink(sec, kind = 'makka') { this.drinkEnd = performance.now() + sec * 1000; this.drinkKind = kind; }
 
-  // Schwindel nach MAKKA: weich ein- und ausblenden
-  startDizzy() { this.dizzyEnd = performance.now() + DIZZY_TIME * 1000; }
+  // Schwindel nach MAKKA bzw. dem dritten Cocktail: weich ein- und ausblenden (strength < 1 = nur leichtes Schwanken)
+  startDizzy(sec = DIZZY_TIME, strength = 1) {
+    // Ein laufender stärkerer Schwindel wird nicht durch einen schwächeren ersetzt
+    if (this.dizzyT > 0 && this.dizzyMax > strength) return;
+    this.dizzyDur = sec;
+    this.dizzyMax = strength;
+    this.dizzyEnd = performance.now() + sec * 1000;
+  }
   get dizzyK() {
     if (!(this.dizzyT > 0)) return 0;
-    const k = Math.min(1, (DIZZY_TIME - this.dizzyT) / 0.8, this.dizzyT / 1.6);
-    return k * k * (3 - 2 * k);
+    const k = Math.min(1, (this.dizzyDur - this.dizzyT) / 0.8, this.dizzyT / 1.6);
+    return k * k * (3 - 2 * k) * this.dizzyMax;
   }
 
   spawn(world, index = 0) {
@@ -195,7 +203,7 @@ export class LocalPlayer {
     if (input.hit('Space') && this.jump.tryJump()) { this.app.sfx.jump(); this.emoteT = 0; }
     if (this.jump.step(dt) === 'land') this.app.sfx.land();
     this.pos.y = this.jump.y;
-    if (this.moving || this.jump.airborne) this.emoteT = 0;
+    if (this.moving || this.jump.airborne) { this.emoteT = 0; this.smokeEnd = 0; }
     if (!(this.emoteT > 0)) this.anim = this.jump.airborne ? 'jump' : this.moving ? 'walk' : 'idle';
     // Schwindel: Kamera schwankt, rollt leicht und reagiert verzögert
     const sway = dz ? { roll: dz * (0.13 * Math.sin(this.time * 0.9) + 0.04 * Math.sin(this.time * 2.3)), side: dz * 0.28 * Math.sin(this.time * 0.7), up: dz * 0.09 * Math.sin(this.time * 1.1) } : null;
@@ -258,7 +266,12 @@ export class LocalPlayer {
   playEmote(a, dur = 2.6) { this.emote = a; this.emoteT = dur; }
 
   // Sichtbare Effekte für Mitspieler: b = Flasche in der Hand, d = trinkt, z = schwindelig
-  get fx() { return (this.hasBottle ? 'b' : '') + (this.drinkT > 0 ? 'd' : '') + (this.dizzyT > 0 ? 'z' : ''); }
+  // d = trinkt MAKKA (Flasche sichtbar), c = trinkt Cocktail, z = schwindelig, s = raucht Shisha
+  get fx() {
+    const drink = this.drinkT > 0 ? (this.drinkKind === 'cocktail' ? 'c' : 'd') : '';
+    return drink + (this.dizzyT > 0 && this.dizzyMax >= 0.5 ? 'z' : '') + (this.smokeT > 0 ? 's' : '');
+  }
+  get smokeT() { return Math.max(0, ((this.smokeEnd || 0) - performance.now()) / 1000); }
 
   pose() {
     return { p: [+this.pos.x.toFixed(3), +this.jump.y.toFixed(2), +this.pos.z.toFixed(3)], r: +this.yaw.toFixed(3), a: this.seated ? 'idle' : this.anim, pitch: +this.pitch.toFixed(2), fx: this.fx };

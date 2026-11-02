@@ -67,6 +67,8 @@ export class TouchControls {
     this.joy.addEventListener('touchmove', e => this.onMove(e), { passive: false });
     this.joy.addEventListener('touchend', e => this.onEnd(e), { passive: false });
     this.joy.addEventListener('touchcancel', e => this.onEnd(e), { passive: false });
+    // iOS: Pinch-Zoom der Seite durch Spielgesten verhindern
+    document.addEventListener('gesturestart', e => e.preventDefault());
     this.app.onTouchEnabled?.();
   }
 
