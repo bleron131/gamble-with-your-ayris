@@ -226,6 +226,23 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   gesetzt hat (der Team-Pot beim Betreten wird gleichmässig auf die Spieler aufgeteilt, die Summe ergibt immer den Pot).
   „WEITER ZUM NÄCHSTEN STOCKWERK“ fährt direkt mit dem Aufzug ins nächste Stockwerk (in der Gruppe per Abstimmung);
   alternativ „Zur Shishabar“ oder „Hier weiterspielen“. Die Bilanz lässt sich über „📈 Bilanz“ im HUD erneut öffnen.
+- **Floor Modifier**: Beim Betreten eines Stockwerks gibt es mit ca. 30 % Chance einen Modifier für das ganze Stockwerk
+  (für alle gleich, klein im HUD sichtbar): HOT FLOOR 🔥 (Gewinne +15 %, Mindesteinsätze ×1.5), RISK NIGHT 💀 (Gewinne −10 %,
+  +3 🍆 beim Abschluss), LUCKY FLOOR 🍀 (etwas mehr Glück), DOUBLE CASH 💰 (Gewinne ab 3× bekommen ×1.5), JACKPOT NIGHT 🎰
+  (Jackpots etwas häufiger), HIGH ROLLER 👑 (Mindesteinsätze ×2, Maximum ×1.5, Gewinne +10 %) oder MYSTERY ❓ (wird nach dem
+  ersten Spiel enthüllt).
+- **Rush Events**: Ab und zu startet für genau 30 Sekunden ein Rush (BLACKJACK, SLOT, ROULETTE, CRASH, PLINKO, DILDO,
+  HIGH ROLLER, JACKPOT) mit grosser Leiste und Countdown 00:30 → 00:00, danach „RUSH VORBEI“ und eine längere Pause.
+  Regel: Der Bonus gilt für Runden, die während des Rushs gestartet werden, und nur, wenn sie spätestens 15 Sekunden
+  nach Rush-Ende abgerechnet sind – kein Mitnehmen des Bonus. DILDO RUSH: kleine Chance auf +1 🍆 pro Runde (max. 3).
+- **Hot Streak**: HOT STREAK ×2/×3, ab 5 Siegen in Folge ON FIRE 🔥, ab 10 UNSTOPPABLE 🔥🔥 – im HUD, mit Flammen über dem
+  Spieler (für alle sichtbar). +1 🍆 bei 5 und +2 🍆 bei 10 Siegen (einmal pro Spieler, Run und Stockwerk), Achievements
+  ON FIRE / UNSTOPPABLE / INFERNO (20 Siege, schaltet die Feuerfackel frei). Verlustserien: „Läuft bei dir.“ (5),
+  „Finanzberater des Jahres“ (10), „Das Casino bedankt sich.“ (15).
+- **Persönliche Rekorde** (📊 → Rekorde): höchster Einzelgewinn/-verlust, höchster eigener Geldstand, grösster Team-Pot,
+  längste Gewinn-/Verlustserie, höchster Crash-Cashout, grösste Gewinne bei Blackjack, Roulette, Slots, Plinko, Mines und
+  Dragon Tower, meiste 🍆 in einem Run, schnellster Abschluss aller 15 Stockwerke, grösster Nettogewinn/-verlust auf einem
+  Stockwerk. Neue Rekorde melden sich mit „🏆 NEUER PERSÖNLICHER REKORD – alt → neu“.
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Challenges und Achievements – jeweils nur
   einmal pro Spieler, also kein Farming.
 - **MAKKA an der Bar**: Nur bei Kemal an der Bar der Shishabar gibt es die pinke Ayri-Limonade für genau 1 🍆.

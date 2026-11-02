@@ -27,9 +27,10 @@ export class UI {
     this.levelEl = h('div.level');
     this.progress = h('div.progress', h('div.bar'));
     this.chEl = h('div.chlist');
+    this.dynEl = h('div.dynchips');
     this.feedEl = h('div.feed');
     // Pot-Anzeige und Feed untereinander: der Feed rutscht automatisch nach unten, wenn die Challenge-Liste sichtbar ist
-    this.hud.append(h('div.topleft', h('div.panel.potpanel', h('div.lbl', 'TEAM POT'), this.potEl, this.targetEl, this.progress, this.levelEl, this.chEl), this.feedEl));
+    this.hud.append(h('div.topleft', h('div.panel.potpanel', h('div.lbl', 'TEAM POT'), this.potEl, this.targetEl, this.progress, this.levelEl, this.dynEl, this.chEl), this.feedEl));
     this.dildoEl = h('div.dildos');
     this.groupEl = h('div.group');
     this.hud.append(h('div.topright', this.dildoEl, this.groupEl,
@@ -46,9 +47,10 @@ export class UI {
     this.makkaEl = h('button.makka.hidden', { onclick: () => this.app.drinkMakka() });
     this.hud.append(this.makkaEl);
     this.luckEl = h('div.makkaluck.hidden');
-    this.hud.append(this.luckEl);
+    this.rushEl = h('div.rushbar.hidden');
     this.eventEl = h('div.eventbar.hidden');
-    this.hud.append(this.eventEl);
+    // Oben mittig untereinander: MAKKA LUCK, Rush-Countdown, Co-op-Event
+    this.hud.append(h('div.topcenter', this.luckEl, this.rushEl, this.eventEl));
     this.perfEl = h('pre.perfmon.hidden');
     r.append(this.perfEl);
     this.hintEl = h('div.hint');
@@ -192,8 +194,11 @@ export class UI {
       this.levelEl.innerHTML = `LEVEL <b>${st.floor}</b> · ${esc(f.name)}${this.app.prestige ? ` · <span class="gold">★ P${this.app.prestige}</span>` : ''}`;
       this.renderChallenges(st);
       this.renderEvent(st);
+      this.renderDyn(st);
     } else {
       this.eventEl.classList.add('hidden');
+      this.rushEl.classList.add('hidden');
+      this.renderDyn(st);
       clear(this.chEl);
       this.targetEl.innerHTML = st.scene === 'final' ? '<span class="gold">DIE FINALE ENTSCHEIDUNG</span>' : `Stockwerke: <b>${st.campaign.completed.length}/15</b> · freigeschaltet bis <b>${st.campaign.unlocked}</b>`;
       this.progress.style.display = 'none';
@@ -236,6 +241,25 @@ export class UI {
     clearTimeout(this.helpTimer);
     this.helpEl.classList.add('out');
     setTimeout(() => this.helpEl.classList.add('hidden'), 500);
+  }
+
+  // Floor Modifier (klein im HUD), eigene Hot Streak, Rush-Leiste
+  renderDyn(st) {
+    clear(this.dynEl);
+    const floor = st.scene === 'floor';
+    const m = floor ? st.dyn?.modifier : null;
+    if (m) this.dynEl.append(h('span.dchip.mod', { title: m.desc }, `${m.icon} ${m.name}`));
+    const me = st.players.find(p => p.id === this.app.me);
+    const hot = me?.hot || 0;
+    if (floor && hot >= 2) this.dynEl.append(h('span.dchip.hot', { class: hot >= 10 ? 'x10' : hot >= 5 ? 'x5' : '' }, hot >= 10 ? `UNSTOPPABLE 🔥🔥 ×${hot}` : hot >= 5 ? `ON FIRE 🔥 ×${hot}` : `HOT STREAK ×${hot}`));
+    const r = floor ? st.dyn?.rush : null;
+    this.rushEl.classList.toggle('hidden', !r);
+    // Popups unter die Rush-/Event-Leisten schieben, damit nichts verdeckt wird
+    this.popups.classList.toggle('mid', !!r || !!st.events?.coop);
+    if (r) {
+      this.app.rushEnd = performance.now() + r.leftMs;
+      if (this.rushKey !== r.id + r.leftMs) { this.rushKey = r.id + r.leftMs; clear(this.rushEl); this.rushEl.append(h('div.rt', 'RUSH EVENT'), h('div.rn', `${r.icon} ${r.name}`), h('div.rd', r.desc), this.rushTimer = h('div.rc', '00:30')); }
+    }
   }
 
   // Laufendes Co-op-Event (optional): Name, Aufgabe, Fortschritt, Restzeit
@@ -299,6 +323,12 @@ export class UI {
     const left = Math.max(0, Math.ceil(((this.app.makkaLuckEnd || 0) - performance.now()) / 1000));
     const ltxt = left > 0 && this.app.world?.kind === 'floor' ? `🍹 MAKKA LUCK – ${left}s` : '';
     if (this.luckEl.textContent !== ltxt) { this.luckEl.textContent = ltxt; this.luckEl.classList.toggle('hidden', !ltxt); }
+    if (this.rushTimer && !this.rushEl.classList.contains('hidden')) {
+      const left = Math.max(0, Math.ceil(((this.app.rushEnd || 0) - performance.now()) / 1000));
+      const t = `00:${String(Math.min(30, left)).padStart(2, '0')}`;
+      if (this.rushTimer.textContent !== t) { this.rushTimer.textContent = t; this.rushTimer.classList.toggle('low', left <= 5); }
+      if (left <= 0) this.rushEl.classList.add('hidden');
+    }
     if (this.eventTimer && !this.eventEl.classList.contains('hidden')) {
       const left = Math.max(0, Math.ceil(((this.app.coopEnd || 0) - performance.now()) / 1000));
       const t = ` · ⏱ ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
@@ -384,7 +414,7 @@ export class UI {
   pumpPopups() {
     while (this.popupQueue.length && this.popups.children.length < 3) {
       const { kind, title, sub, ms } = this.popupQueue.shift();
-      const icon = { challenge: '🏅', floor: '🔓', item: '🎁', achievement: '🏆', reward: '🍆', money: '💰', jackpot: '💎', event: '⚡' }[kind] || '✨';
+      const icon = { challenge: '🏅', floor: '🔓', item: '🎁', achievement: '🏆', reward: '🍆', money: '💰', jackpot: '💎', event: '⚡', record: '🏆', rush: '🔥', modifier: '🎲' }[kind] || '✨';
       const el = h('div.popup', { class: kind }, h('span.pi', icon), h('div.pt', h('div.ptt', title), sub ? h('div.pts', sub) : null));
       this.popups.append(el);
       if (kind === 'reward' || kind === 'challenge') sfx.shop(); else if (kind === 'achievement' || kind === 'floor') sfx.ding();

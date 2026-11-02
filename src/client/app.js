@@ -10,8 +10,9 @@ import { CasinoWorld } from './world/casino.js';
 import { FinalWorld } from './world/final.js';
 import { WSTransport, LocalTransport } from './net.js';
 import { NpcController } from './npcs.js';
-import { unlockedEmotes, EXTRA_EMOTES, wornLucky, freeCosmetics, hasSecret } from './progress.js';
+import { unlockedEmotes, EXTRA_EMOTES, wornLucky, freeCosmetics, hasSecret, checkRecord, fmtRecord, RECORDS } from './progress.js';
 import { LOBBY_SEATS } from '../shared/npcs.js';
+import { scaledLimits } from '../shared/dynamics.js';
 import * as Save from './save.js';
 import { initAudio, sfx, sfxAt, playJackpotMusic, setMusic, setAmbience, setDuck, setVolumes, setDizzyAudio, setShishaSounds, clearShishaSounds, updateListener, shishaDraw, shishaExhale } from './audio.js';
 import { bindSfx } from './tables/common.js';
@@ -350,6 +351,7 @@ export class App {
     // Run-Fortschritt kommt immer exakt vom Server (kein Zusammenführen mit alten Runs); gespeichert wird er vom Gruppenersteller
     if (st.hostId === this.me) s.run = { id: st.run.id, pot: st.pot, finalUnlocked: st.run.finalUnlocked, startedAt: st.run.startedAt, unlocked: c.unlocked, completed: [...c.completed] };
     if (st.pot > s.stats.highestPot) s.stats.highestPot = st.pot;
+    if (st.scene === 'floor') this.record('bestPot', st.pot);
     const meP = st.players.find(p => p.id === this.me);
     if (meP && Number.isFinite(meP.makka)) s.makka = meP.makka;
     if (st.pot >= 1e6) this.achieve('millionaire');
@@ -358,6 +360,13 @@ export class App {
     this.syncAvatars();
     // Tische
     if (this.world.kind === 'floor' && st.session) {
+      // Einsatzgrenzen mit Floor Modifier / High-Roller-Rush (gleiche Rechnung wie auf dem Server)
+      const modId = st.dyn?.modifier?.id, rushId = st.dyn?.rush?.id;
+      for (const v of Object.values(this.world.views || {})) {
+        v.baseLimits ||= v.limits;
+        const lim = scaledLimits(v.baseLimits, modId, rushId);
+        if (lim !== v.limits) { v.limits = lim; if (v.bet) { v.bet.limits = lim; v.bet.set(v.bet.value); } }
+      }
       for (const [id, ts] of Object.entries(st.session.tables)) this.world.views[id]?.setState(ts);
       const me = this.mePlayer;
       if (me?.seat && !this.player.seated) { this.stopSpectate(); this.enterSeat(me.seat); }
@@ -538,6 +547,7 @@ export class App {
       case 'target': {
         if (ev.firstTime) this.bumpStat('floorsCompleted', 1);
         if (ev.final) this.achieve('game_complete');
+        if (ev.final && this.state?.run?.startedAt) this.record('fastestRun', (Date.now() - this.state.run.startedAt) / 1000);
         sfx.bigWin();
         this.world.particles?.confetti(this.player.pos.clone().setY(2.5), 160, 6);
         // Statt sofort weiterzuspielen öffnet sich die Stockwerk-Bilanz (Event „balance“ folgt direkt)
@@ -545,12 +555,29 @@ export class App {
         break;
       }
       case 'coop': this.onCoop(ev); break;
-      case 'balance':
+      case 'modifier':
+        if (ev.phase === 'start') setTimeout(() => { this.ui.popup('modifier', `FLOOR MODIFIER: ${ev.icon} ${ev.name}`, ev.desc, 6000); sfx.ding(); }, 2600);
+        else { this.ui.popup('modifier', `ENTHÜLLT: ${ev.icon} ${ev.name}`, ev.desc, 5000); sfx.drumroll?.(); }
+        break;
+      case 'rush':
+        if (ev.phase === 'start') { this.ui.popup('rush', `🔥 ${ev.name} – 30 SEKUNDEN!`, ev.desc, 4000); sfx.jackpot?.(); this.stats('rushes'); }
+        else { this.ui.toast('RUSH VORBEI', 'info', 2200); }
+        break;
+      case 'streak': this.onStreak(ev, mine); break;
+      case 'balance': {
+        const me = ev.ledger?.players?.[this.me];
+        if (me) {
+          const net = me.balance - me.start;
+          if (net > 0) this.record('floorNetBest', net); else if (net < 0) this.record('floorNetWorst', -net);
+          const top = Math.max(me.start, ...ev.ledger.points.filter(p => p.pid === this.me).map(p => p.bal));
+          this.record('bestBalance', top);
+        }
         this.lastBalance = ev;
         this.input.exitLock();
         if (this.player.seated) this.ui.closeTablePanel();
         setTimeout(() => { if (this.lastBalance === ev && this.state?.scene === 'floor') this.ui.openBalance(ev); }, 900);
         break;
+      }
       case 'prestige':
         setTimeout(() => { this.ui.popup('event', `PRESTIGE ${ev.level} ERREICHT`, `Neuer Run: alle Ziele ×${ev.scale.toFixed(1)} – deine Kosmetik, 🍆 und Rekorde bleiben`, 6000); this.checkUnlocks(); }, 2500);
         break;
@@ -671,6 +698,12 @@ export class App {
       if (ev.net < 0) { st.lossStreak = (st.lossStreak || 0) + 1; st.bestLossStreak = Math.max(st.bestLossStreak || 0, st.lossStreak); if (st.lossStreak >= 5) this.achieve('unlucky'); }
       else if (ev.net > 0) st.lossStreak = 0;
       if (ev.net >= 10000) this.achieve('high_roller');
+      if (ev.net > 0) {
+        this.record('bestWin', ev.net);
+        const per = { blackjack: 'bj', roulette: 'roulette', slots: 'slots', highslots: 'slots', plinko: 'plinko', mines: 'mines', tower: 'tower' }[ev.game];
+        if (per) this.record(per, ev.net);
+        if (ev.game === 'crash' && ev.multiplier) this.record('crashMult', ev.multiplier);
+      } else if (ev.net < 0) this.record('worstLoss', -ev.net);
       if (ev.game === 'blackjack' && ev.net > 0 && (st.blackjackWins || 0) + 1 >= 25) this.achieve('bj_master');
       if (['slots', 'highslots', 'roulette', 'wheel'].includes(ev.game)) st.spins++; else st.hands++;
       if (ev.net > 0) {
@@ -696,6 +729,10 @@ export class App {
 
   onReward(m) {
     Save.addDildos(m.dildos);
+    // 🍆 pro Run (für den Rekord „Meiste 🍆 in einem Run“)
+    const rid = this.state?.run?.id;
+    if (rid) { if (this.save.runDildos?.id !== rid) this.save.runDildos = { id: rid, n: 0 }; this.save.runDildos.n += m.dildos; this.record('runDildos', this.save.runDildos.n); }
+    if (m.kind === 'rush') this.ui.popup('reward', `🍆 DILDO RUSH +${m.dildos}`, 'Glück gehabt!', 2600);
     // Glücks-Kosmetik: winzige Chance auf +1 🍆 (Casino Crown: +1 auf Challenges) – nur 🍆, nie Geld oder Chancen
     const lucky = wornLucky(this.save.appearance);
     if (lucky.length) {
@@ -744,6 +781,53 @@ export class App {
     }
     this.ui.renderEmotes();
     Save.save();
+  }
+
+  // ───────────────────────── Streaks & persönliche Rekorde ─────────────────────────
+  stats(key, v = 1) { this.save.stats[key] = (this.save.stats[key] || 0) + v; Save.save(); }
+
+  onStreak(ev, mine) {
+    if (!mine) {
+      if (ev.hot && ev.n >= 5) this.ui.feed(`🔥 <b>${esc(ev.name)}</b> ist ${ev.n >= 10 ? 'UNSTOPPABLE' : 'ON FIRE'} (${ev.n} Siege in Folge)!`, 'item');
+      return;
+    }
+    if (ev.hot) {
+      if (ev.n >= 5) { this.ui.popup('rush', ev.n >= 10 ? `UNSTOPPABLE 🔥🔥 ×${ev.n}` : `ON FIRE 🔥 ×${ev.n}`, `${ev.n} Siege in Folge`, 3200); sfx.cheer?.(); }
+      if (ev.n >= 5) this.achieve('hot5');
+      if (ev.n >= 10) this.achieve('hot10');
+      if (ev.n >= 20) this.achieve('hot20');
+      this.record('winStreak', ev.n);
+    } else {
+      if (ev.n >= 5) this.achieve('loss5');
+      if (ev.n >= 10) this.achieve('loss10');
+      if (ev.n >= 15) this.achieve('loss15');
+      this.record('lossStreak', ev.n);
+    }
+  }
+
+  // Rekord prüfen; Popup nur, wenn es schon einen alten Rekord gab (und höchstens alle 45 s pro Rekord)
+  record(key, value) {
+    const r = checkRecord(key, value);
+    if (!r || r.old === undefined) return;
+    if (RECORDS[key].fmt === 'count' && r.value < 5) return; // kleine Serien sind kein Popup wert
+    this.recordShown ||= {};
+    if (performance.now() - (this.recordShown[key] || -1e9) < 45000) return;
+    this.recordShown[key] = performance.now();
+    this.ui.popup('record', '🏆 NEUER PERSÖNLICHER REKORD', `${RECORDS[key].name}: ${fmtRecord(key, r.old)} → ${fmtRecord(key, r.value)}`, 4500);
+  }
+
+  // Flammen über Spielern mit Hot Streak ≥ 5 (für alle sichtbar)
+  updateFlames(dt) {
+    this.flameT = (this.flameT || 0) - dt;
+    if (this.flameT > 0 || !this.state || this.world.kind !== 'floor' || !this.world.particles) return;
+    this.flameT = 0.12;
+    for (const p of this.state.players) {
+      if ((p.hot || 0) < 5) continue;
+      const pos = p.id === this.me ? (this.world.mode === 'first' ? null : this.player.pos) : this.avatars.get(p.id)?.root.position;
+      if (!pos) continue;
+      const big = p.hot >= 10;
+      for (let i = 0; i < (big ? 3 : 2); i++) this.world.particles.emit({ pos: pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.4, 1.7 + Math.random() * 0.2, (Math.random() - 0.5) * 0.4)), vel: [0, 0.6 + Math.random() * 0.4, 0], life: 0.6, size: big ? 0.16 : 0.11, grow: -0.1, opacity: 0.9, color: Math.random() < 0.5 ? '#ff7a1a' : '#ffd60a', additive: true });
+    }
   }
 
   // ───────────────────────── Events (Co-op & High Roller) ─────────────────────────
@@ -1171,6 +1255,7 @@ export class App {
     }
     for (const a of this.avatars.values()) a.update(dt);
     this.world.npcCtl?.update(dt, this.engine.camera);
+    this.updateFlames(dt);
     // Spielzeit (alle 10 s gespeichert)
     if (this.state) { this.playAcc = (this.playAcc || 0) + dt; if (this.playAcc >= 10) { this.save.stats.playtime = (this.save.stats.playtime || 0) + this.playAcc; this.playAcc = 0; Save.save(); } }
     this.hands.group.visible = this.world.mode === 'first' && !this.cinematic && !this.ballCam;

@@ -21,7 +21,7 @@ export const VARIANTS = {
   normal: {
     strip: buildStrip([8, 7, 3, 2, 1, 1, 1, 3]),
     // Auszahlung in Vielfachen des Gesamteinsatzes
-    pay3: { [C]: 1.4, [L]: 1.8, [B]: 2.5, [R]: 4, [S]: 6, [D]: 12, [K]: 250 },
+    pay3: { [C]: 1.4, [L]: 1.7, [B]: 2.3, [R]: 3.6, [S]: 5.5, [D]: 11, [K]: 250 },
   },
   // High-Limit: etwas seltener, dafür grössere Treffer
   high: {
@@ -74,10 +74,11 @@ export function winTier(net, stake, jackpot = false) {
   return 'small';
 }
 
-export function spin(variantName, totalBet, lineCount = 5, floor = 1, boost = false) {
+export function spin(variantName, totalBet, lineCount = 5, floor = 1, boost = false, forceJackpot = false) {
   const v = VARIANTS[variantName];
   const n = v.strip.length;
-  const stops = [randInt(n), randInt(n), randInt(n)];
+  // JACKPOT NIGHT / JACKPOT RUSH: sehr selten werden die Walzen direkt auf die Krone gestellt
+  const stops = forceJackpot ? [0, 1, 2].map(() => v.strip.indexOf(K)) : [randInt(n), randInt(n), randInt(n)];
   const grid = stops.map(s => [v.strip[(s - 1 + n) % n], v.strip[s], v.strip[(s + 1) % n]]); // grid[reel][row]
   const wins = [];
   let jackpot = false;
@@ -113,6 +114,7 @@ export const slotsGame = (variant) => ({
     const floor = ctx.floor || 1;
     const boost = !!ctx.makka; // MAKKA-LUCK beim Start des Spins
     let r = spin(variant, bet, lines, floor, boost);
+    if (!r.jackpot && ctx.jackpotChance && rand() < ctx.jackpotChance) r = spin(variant, bet, lines, floor, boost, true);
     let lucky = false;
     // Ayri-Glück: ein verlorener Spin wird manchmal (häufiger nach Pechsträhnen) neu gedreht
     if (r.payout < bet && ctx.lucky?.()) {

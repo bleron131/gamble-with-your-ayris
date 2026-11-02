@@ -9,6 +9,7 @@ import {
 import { rand } from './rng.js';
 import { NpcDirector, LOBBY_SEATS, SEAT_REACH } from './npcs.js';
 import { EventDirector, HIGH_ROLLERS } from './events.js';
+import { FloorDynamics, MODIFIERS } from './dynamics.js';
 import { challengesFor, isChallengeId, legacyChallengeIds, newTracker, trackResult, progress as challengeProgress } from './challenges.js';
 import { slotsGame, winTier } from './games/slots.js';
 import { rouletteGame } from './games/roulette.js';
@@ -79,7 +80,9 @@ export class Room {
     this.npcs = new NpcDirector(this);
     this.npcs.reset('lobby');
     this.events = new EventDirector(this);
-    this.npcTimer = setInterval(() => { this.npcs.tick(); this.events.tick(); }, 1000);
+    this.dyn = new FloorDynamics(this);
+    this.streakKeys = new Set(); // Streak-Belohnungen: einmal pro Spieler(name), Run, Stockwerk und Stufe
+    this.npcTimer = setInterval(() => { this.npcs.tick(); this.events.tick(); this.dyn.tick(); }, 1000);
   }
 
   // Prestige-Stufe (permanent im Fortschritt des Gruppenerstellers)
@@ -98,6 +101,7 @@ export class Room {
       inventory: {}, loadout: [], used: {}, armed: {}, shishaRounds: 0, lossStreak: 0,
       makka: Math.max(0, Math.min(MAKKA_MAX, Math.floor(+profile.makka) || 0)), cocktails: 0, smokeAt: 0,
       hrWon: new Set((Array.isArray(profile.hrWon) ? profile.hrWon : []).filter(k => HIGH_ROLLERS[k])),
+      hot: 0, cold: 0,
       seat: null, lseat: null, pose: { p: [0, 0, 0], r: 0, a: 'idle' }, poseDirty: true,
       joinedAt: Date.now(),
     };
@@ -183,7 +187,7 @@ export class Room {
   snapshot() {
     const players = [...this.players.values()].map(p => ({
       id: p.id, name: p.name, appearance: p.appearance, seat: p.seat, loadout: p.loadout,
-      inventory: p.inventory, used: p.used, armed: p.armed, shishaRounds: p.shishaRounds, pose: p.pose, makka: p.makka, lseat: p.lseat,
+      inventory: p.inventory, used: p.used, armed: p.armed, shishaRounds: p.shishaRounds, pose: p.pose, makka: p.makka, lseat: p.lseat, hot: p.hot,
     }));
     let session = null;
     if (this.session) {
@@ -197,6 +201,7 @@ export class Room {
       scene: this.scene, floor: this.floor, session, vote: this.vote && { ...this.vote },
       npcs: this.npcs.snapshot(),
       events: this.events.snapshot(),
+      dyn: this.dyn.snapshot(),
     };
   }
 
@@ -367,6 +372,7 @@ export class Room {
     this.events.reset(scene);
     this.npcs.reset(scene, this.floor);
     this.event({ kind: 'scene', scene, floor: this.floor, ...extra });
+    this.dyn.reset(scene);
     this.markDirty();
   }
 
@@ -555,6 +561,11 @@ export class Room {
       floorRewards[p.id] = FLOOR_REWARDS[n - 1];
       p.conn.send({ t: 'reward', dildos: FLOOR_REWARDS[n - 1], reason: `Stockwerk ${n} geschafft!`, floor: n });
     }
+    // RISK NIGHT: zusätzliche 🍆 für alle beim Abschluss (einmal pro Stockwerk-Besuch)
+    if (this.dyn.mod?.extraDildos && !s.riskPaid) {
+      s.riskPaid = true;
+      for (const p of this.players.values()) p.conn.send({ t: 'reward', dildos: this.dyn.mod.extraDildos, reason: `${MODIFIERS.risk.name}: Bonus für den Abschluss`, kind: 'event' });
+    }
     // Automatische Bilanz für alle (Geldverlauf, Einsätze, Gewinne/Verluste pro Spieler)
     if (s.ledger) this.lastBalance = { floor: n, name: f.name, target: f.target, pot: this.pot, rewards: floorRewards, reward: FLOOR_REWARDS[n - 1], ledger: s.ledger, last: n === FLOORS.length };
     const tr = s.tracker;
@@ -693,6 +704,9 @@ export class Room {
     const rollBefore = JSON.stringify(t.state.spinId ?? t.state.dealId ?? t.state.rollId);
     // MAKKA-LUCK gilt für die ganze Runde, wenn sie gestartet wird, solange der Boost läuft (auch wenn er währenddessen abläuft)
     if (this.makkaActive()) t.roundMods = { ...(t.roundMods || {}), makka: true };
+    // Rush-Regel: zählt für Runden, die während des Rushs starten (Abrechnung bis 15 s nach Rush-Ende)
+    const rushMods = this.dyn.roundMods(t.type);
+    if (rushMods) t.roundMods = { ...(t.roundMods || {}), rush: rushMods };
     game.start(this.makeCtx(p.id, t), t, payload);
     const started = JSON.stringify(t.state.spinId ?? t.state.dealId ?? t.state.rollId) !== rollBefore;
     if (!started && t.roundMods?.makka && !t.busy) delete t.roundMods.makka;
@@ -735,7 +749,8 @@ export class Room {
     const room = this;
     const f = floorDef(this.floor, this.prestige);
     return {
-      limits: f.limits[table.type],
+      limits: this.dyn.limits(f.limits[table.type], table.type),
+      get jackpotChance() { return room.dyn.jackpotChance(table.type, table.roundMods); },
       floor: this.floor,
       pid,
       playerName: this.players.get(pid)?.name,
@@ -769,7 +784,7 @@ export class Room {
       lucky() {
         const p = room.players.get(pid);
         if (!p) return false;
-        const base = luckChance(p.lossStreak);
+        const base = Math.min(0.9, luckChance(p.lossStreak) + room.dyn.luckBonus(table.type, table.roundMods));
         const bonus = table.roundMods?.makka ? MAKKA_LUCK_BONUS : 0;
         return rand() < base + (1 - base) * bonus;
       },
@@ -815,6 +830,8 @@ export class Room {
         this.event({ kind: 'item', pid, name: p.name, item: 'insurance', msg: `VERSICHERUNG zahlt ${fmtMoney(back)}` });
       }
     }
+    // Floor Modifier & Rush (nur auf den Gewinnanteil)
+    if (stake > 0) { const adj = this.dyn.adjustPayout(table.type, stake, payout, mods); payout = adj.payout; effects.push(...adj.effects); }
     payout = Math.floor(payout);
     this.pot += payout;
     const extra = Math.min(extraLoss, this.pot);
@@ -828,6 +845,7 @@ export class Room {
     if (net < 0 && stake > 0 && r.replay) table.lastRound[pid] = { game: table.type, replay: r.replay, loss: -net };
     else table.lastRound[pid] = null;
     if (p && stake > 0) p.lossStreak = net < 0 ? p.lossStreak + 1 : net > 0 ? 0 : p.lossStreak;
+    if (p && stake > 0) this.trackStreak(p, net);
     if (this.pot > this.campaign.highestPot) this.campaign.highestPot = this.pot;
     const bigWin = net > 0 && (net >= stake * 8 || net >= f.target * 0.1);
     this.event({
@@ -840,10 +858,30 @@ export class Room {
     const tr = this.session?.tracker;
     if (tr && p) trackResult(tr, { pid, game: table.type, stake, net, blackjacks: r.blackjacks, straight: r.straight, tieWin: r.tieWin, pointHit: r.pointHit, pokerCat: r.pokerCat, makka: !!mods.makka, tier: GAMES[table.type].walkUp ? tier : null, target: f.target });
     if (p && stake > 0) this.events.onResult({ game: table.type, stake, net });
+    if (stake > 0) {
+      this.dyn.reveal();
+      if (p && this.dyn.dildoRoll(pid, mods)) p.conn.send({ t: 'reward', dildos: 1, reason: 'DILDO RUSH', kind: 'rush' });
+    }
     this.markDirty();
     this.checkTarget();
     this.checkChallenges();
     this.checkBankrupt();
+  }
+
+  // ───────────────────────── Hot/Loss-Streaks (pro Spieler) ─────────────────────────
+  // Streaks sind vor allem Prestige & Statistik. Kleine 🍆 bei 5 und 10 Siegen in Folge – einmal pro Spieler,
+  // Run, Stockwerk und Stufe (auch nach Reconnect nicht doppelt).
+  trackStreak(p, net) {
+    if (net > 0) { p.hot++; p.cold = 0; } else if (net < 0) { p.cold++; p.hot = 0; } else return;
+    const n = net > 0 ? p.hot : p.cold;
+    if ([2, 3, 5, 10, 15, 20].includes(n)) this.event({ kind: 'streak', pid: p.id, name: p.name, hot: net > 0, n });
+    if (net > 0 && (n === 5 || n === 10)) {
+      const key = `${p.name}|${this.run.id}|${this.floor}|${n}`;
+      if (!this.streakKeys.has(key)) {
+        this.streakKeys.add(key);
+        p.conn.send({ t: 'reward', dildos: n === 5 ? 1 : 2, reason: n === 5 ? 'ON FIRE – 5 Siege in Folge' : 'UNSTOPPABLE – 10 Siege in Folge', kind: 'streak' });
+      }
+    }
   }
 
   // ───────────────────────── Challenges (optional, blockieren nie) ─────────────────────────

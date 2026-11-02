@@ -537,3 +537,26 @@ button.homebtn .hi { font-size: 16px; }
 .bactions { position: sticky; bottom: -20px; padding: 10px 0 4px; background: linear-gradient(transparent, rgba(14, 7, 26, .95) 30%); }
 button.mini { font-size: 11px; padding: 2px 8px; margin-left: 8px; border-radius: 10px; }
 .popups.low { top: auto; bottom: calc(80px + var(--sb, 0px)); }
+
+/* ── Oben mittig: MAKKA LUCK, Rush, Co-op ── */
+.topcenter { position: absolute; left: 50%; top: calc(14px + var(--st)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; z-index: 2; }
+.topcenter > .makkaluck, .topcenter > .eventbar { position: static; transform: none; }
+.rushbar { min-width: 260px; padding: 8px 18px 10px; border-radius: 16px; text-align: center; background: linear-gradient(135deg, rgba(255, 90, 0, .9), rgba(200, 0, 90, .9)); border: 2px solid #ffd60a; box-shadow: 0 0 26px rgba(255, 120, 0, .6); animation: popin .5s cubic-bezier(.2, 1.6, .4, 1), luckglow 1.2s ease-in-out infinite; }
+.rushbar .rt { font-family: var(--title); font-size: 12px; letter-spacing: 3px; color: #ffe9a0; }
+.rushbar .rn { font-family: var(--title); font-size: 20px; color: #fff; text-shadow: 0 0 10px rgba(0, 0, 0, .4); }
+.rushbar .rd { font-size: 12px; font-weight: 800; color: #fff3d0; }
+.rushbar .rc { font-family: var(--title); font-size: 30px; color: #fff; letter-spacing: 2px; }
+.rushbar .rc.low { color: #ffd60a; animation: flash .5s infinite; }
+.dynchips:empty { display: none; }
+.dynchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.dchip { font-size: 11px; font-weight: 900; padding: 3px 9px; border-radius: 12px; background: rgba(255, 255, 255, .08); border: 1px solid var(--line); letter-spacing: .5px; }
+.dchip.mod { border-color: #c084ff; color: #e6d0ff; }
+.dchip.hot { border-color: #ff9f43; color: #ffd0a0; }
+.dchip.hot.x5 { background: rgba(255, 110, 0, .25); color: #fff; box-shadow: 0 0 10px rgba(255, 110, 0, .5); }
+.dchip.hot.x10 { background: linear-gradient(90deg, rgba(255, 60, 0, .5), rgba(255, 200, 0, .5)); color: #fff; box-shadow: 0 0 14px rgba(255, 150, 0, .8); animation: luckglow 1s infinite; }
+.popup.record { border-color: #ffd700; box-shadow: 0 0 28px rgba(255, 215, 0, .6), 0 6px 20px rgba(0, 0, 0, .5); }
+.popup.record .ptt { color: #ffd700; }
+.popup.rush { border-color: #ff7a1a; box-shadow: 0 0 28px rgba(255, 120, 0, .6), 0 6px 20px rgba(0, 0, 0, .5); }
+@media (max-height: 500px) { .rushbar { padding: 4px 12px 6px; min-width: 200px; } .rushbar .rd { display: none; } .rushbar .rc { font-size: 22px; } .topcenter { top: calc(6px + var(--st)); gap: 4px; } }
+.popups.mid:not(.low) { top: calc(190px + var(--st, 0px)); }
+@media (max-height: 500px) { .popups.mid:not(.low) { top: calc(120px + var(--st, 0px)); } }

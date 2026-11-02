@@ -5,7 +5,7 @@ import { FLOORS, floorDef, ITEMS, LOADOUT_SLOTS, GAME_NAMES, GAME_ICONS, ACHIEVE
 import { OPTIONS } from '../character.js';
 import * as Save from '../save.js';
 import { challengesFor } from '../../shared/challenges.js';
-import { cosmeticLock, EXTRA_EMOTES, favoriteGame, secretCount, SECRET_TOTAL } from '../progress.js';
+import { cosmeticLock, EXTRA_EMOTES, favoriteGame, secretCount, SECRET_TOTAL, RECORDS, fmtRecord } from '../progress.js';
 import { enterFullscreen } from '../fullscreen.js';
 import { TIER_NAMES } from '../engine.js';
 import { sfx } from '../audio.js';
@@ -333,6 +333,11 @@ export function openStats(ui) {
         app.state?.scene === 'lobby' ? h('div.actions', h('button.danger', { onclick: () => { ui.closeModal(); app.send({ t: 'vote.start', type: 'newrun' }); } }, `Neuen Run starten (${fmtMoney(START_CAPITAL)})`)) : null,
       ];
     },
+    rec: () => [
+      h('h3', '🏆 PERSÖNLICHE REKORDE'),
+      h('div.sgrid', ...Object.entries(RECORDS).map(([k, d]) => row(d.name, fmtRecord(k, (s.records || {})[k])))),
+      h('div.subtle.small', 'Rekorde werden dauerhaft gespeichert. Wird einer gebrochen, erscheint „NEUER PERSÖNLICHER REKORD“.'),
+    ],
     ach: () => [
       h('h3', `Achievements (${Object.keys(s.achievements).length}/${Object.keys(ACHIEVEMENTS).length})`),
       h('div.achs', Object.entries(ACHIEVEMENTS).map(([k, a]) => {
@@ -344,7 +349,7 @@ export function openStats(ui) {
   };
   const render = () => {
     clear(tabs);
-    for (const [k, l] of [['stats', 'Statistiken'], ['group', 'Gruppe & Runs'], ['ach', 'Achievements']]) tabs.append(h('button', { class: k === cur ? 'sel' : '', onclick: () => { cur = k; render(); } }, l));
+    for (const [k, l] of [['stats', 'Statistiken'], ['rec', 'Rekorde'], ['group', 'Gruppe & Runs'], ['ach', 'Achievements']]) tabs.append(h('button', { class: k === cur ? 'sel' : '', onclick: () => { cur = k; render(); } }, l));
     clear(tab);
     tab.append(...renders[cur]().filter(Boolean));
   };

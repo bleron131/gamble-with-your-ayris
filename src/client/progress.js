@@ -47,3 +47,49 @@ export function favoriteGame(stats) {
   for (const [k, v] of Object.entries(g)) if (!best || v > g[best]) best = k;
   return best;
 }
+
+// ───────────────────────── Persönliche Rekorde (dauerhaft, pro Spieler) ─────────────────────────
+// fmt: 'money' | 'mult' | 'count' | 'time' (Sekunden, kleiner ist besser) | 'dildos'
+export const RECORDS = {
+  bestWin: { name: 'Höchster Einzelgewinn', fmt: 'money' },
+  worstLoss: { name: 'Grösster Einzelverlust', fmt: 'money' },
+  bestBalance: { name: 'Höchster eigener Geldstand (Bilanz)', fmt: 'money' },
+  bestPot: { name: 'Grösster Team-Pot', fmt: 'money' },
+  winStreak: { name: 'Längste Gewinnserie', fmt: 'count' },
+  lossStreak: { name: 'Längste Verlustserie', fmt: 'count' },
+  crashMult: { name: 'Höchster erfolgreicher Crash-Multiplikator', fmt: 'mult' },
+  bj: { name: 'Grösster Blackjack-Gewinn', fmt: 'money' },
+  roulette: { name: 'Grösster Roulette-Gewinn', fmt: 'money' },
+  slots: { name: 'Grösster Slot-Gewinn', fmt: 'money' },
+  plinko: { name: 'Grösster Plinko-Gewinn', fmt: 'money' },
+  mines: { name: 'Grösster Mines-Gewinn', fmt: 'money' },
+  tower: { name: 'Grösster Dragon-Tower-Gewinn', fmt: 'money' },
+  runDildos: { name: 'Meiste 🍆 in einem Run', fmt: 'dildos' },
+  fastestRun: { name: 'Schnellster Abschluss aller 15 Stockwerke', fmt: 'time', lower: true },
+  floorNetBest: { name: 'Grösster Nettogewinn auf einem Stockwerk', fmt: 'money' },
+  floorNetWorst: { name: 'Grösster Nettoverlust auf einem Stockwerk', fmt: 'money' },
+};
+
+export function fmtRecord(key, v) {
+  const f = RECORDS[key]?.fmt;
+  if (v === undefined || v === null) return '—';
+  if (f === 'mult') return `${(+v).toFixed(2)}×`;
+  if (f === 'count') return String(v);
+  if (f === 'dildos') return `${v} 🍆`;
+  if (f === 'time') { const s = Math.round(v); return `${Math.floor(s / 3600)}:${String(Math.floor(s % 3600 / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; }
+  return '$' + Math.floor(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+}
+
+// Neuen Wert prüfen; gibt { old, value } zurück, wenn ein Rekord gebrochen wurde (sonst null)
+export function checkRecord(key, value) {
+  const def = RECORDS[key];
+  if (!def || !Number.isFinite(value) || value <= 0) return null;
+  const s = Save.get();
+  s.records ||= {};
+  const old = s.records[key];
+  const better = old === undefined || (def.lower ? value < old : value > old);
+  if (!better) return null;
+  s.records[key] = value;
+  Save.save();
+  return { old, value };
+}

@@ -24,7 +24,7 @@ export const OPTIONS = {
   glasses: [['none', 'Keine'], ['round', 'Rund'], ['shades', 'Sonnenbrille'], ['monocle', 'Monokel'], ['star', 'Sternbrille'], ['heart', 'Herzbrille'], ['golden', 'Golden Glasses']],
   jewelry: [['none', 'Keiner'], ['chain', 'Silberkette'], ['goldchain', 'Goldkette'], ['earrings', 'Ohrringe'], ['watch', 'Uhr'], ['diamond', 'Diamant-Kette'], ['luckychain', 'Lucky Chain'], ['prestigestar', 'Prestige-Stern']],
   mask: [['none', 'Keine'], ['domino', 'Augenmaske'], ['venetian', 'Venezianische Maske'], ['bandit', 'Banditen-Tuch']],
-  accessory: [['none', 'Keins'], ['rose', 'Rose'], ['cocktail', 'Cocktail'], ['dice', 'Glückswürfel'], ['moneybag', 'Geldsack'], ['trophy', 'Pokal']],
+  accessory: [['none', 'Keins'], ['rose', 'Rose'], ['cocktail', 'Cocktail'], ['dice', 'Glückswürfel'], ['moneybag', 'Geldsack'], ['trophy', 'Pokal'], ['torch', 'Feuerfackel']],
 };
 
 export function defaultAppearance() {
@@ -423,6 +423,7 @@ export class Character {
       case 'cocktail': { const cone = mesh(geo('cone2', () => new THREE.ConeGeometry(0.08, 0.1, 16, 1, true)), new THREE.MeshStandardMaterial({ color: '#ff8fcf', transparent: true, opacity: 0.7, side: THREE.DoubleSide }), 0, 0.12, 0); cone.rotation.x = Math.PI; g.add(cone); } g.add(mesh(cyl(0.008, 0.008, 0.1), mat('#ddd'), 0, 0.03, 0)); break;
       case 'dice': g.add(mesh(box(0.09, 0.09, 0.09), mat('#d61f2c'), 0, 0.02, 0.03)); break;
       case 'moneybag': g.add(mesh(sphere(0.11), mat('#c9a66b', { rough: 0.9 }), 0, -0.08, 0)); g.add(mesh(cyl(0.03, 0.05, 0.05), mat('#c9a66b'), 0, 0.03, 0)); break;
+      case 'torch': { g.add(mesh(cyl(0.018, 0.022, 0.26), mat('#5a3418'), 0, 0.05, 0)); const fl = mesh(geo('flame', () => new THREE.ConeGeometry(0.05, 0.14, 10)), mat('#ff7a1a', { extra: { emissive: '#ff5a00', emissiveIntensity: 2 } }), 0, 0.24, 0); g.add(fl); g.add(mesh(sphere(0.035), mat('#ffd60a', { extra: { emissive: '#ffb000', emissiveIntensity: 2 } }), 0, 0.2, 0)); break; }
       case 'trophy': { const gm = mat('#ffcf40', { metal: 0.9, rough: 0.2 }); g.add(mesh(cyl(0.07, 0.03, 0.12), gm, 0, 0.1, 0)); g.add(mesh(cyl(0.02, 0.02, 0.06), gm, 0, 0.02, 0)); g.add(mesh(cyl(0.05, 0.05, 0.02), gm, 0, -0.01, 0)); break; }
     }
     this.armR.add(g);
