@@ -72,7 +72,7 @@ export class EventDirector {
     const ids = Object.keys(COOP_EVENTS);
     id ||= ids[Math.floor(rand() * ids.length)];
     const def = COOP_EVENTS[id];
-    const f = floorDef(this.floor);
+    const f = floorDef(this.floor, this.room.prestige);
     const goal = id === 'rush' ? Math.max(100, Math.round(f.target * 0.2)) : id === 'streak' ? 5 : 3;
     this.coop = { id, goal, prog: 0, games: [], endsAt: Date.now() + def.sec * 1000, done: false };
     this.room.event({ kind: 'coop', phase: 'start', id, name: def.name, desc: def.desc({ money: goal }), goal, sec: def.sec });

@@ -242,7 +242,8 @@ export class NpcController {
       c.update(dt);
     }
     const cam = camera.position;
-    const far = this.app.engine?.mobile ? 24 : 38;
+    const mobile = !!this.app.engine?.mobile;
+    const far = mobile ? 24 : 38;
     for (const n of this.npcs.values()) {
       const c = n.char, root = c.root;
       // Laufen
@@ -275,6 +276,17 @@ export class NpcController {
       const dist = root.position.distanceTo(cam);
       root.visible = dist < far;
       if (!root.visible) continue;
+      // Detail-LOD auf dem Handy: Augen, Mund, Accessoire nur aus der Nähe
+      const lod = this.app.engine?.q?.lod || 0;
+      const det = !lod || dist < lod * 1.2;
+      if (n.det !== det) { n.det = det; for (const o of root.userData.details || []) o.visible = det; }
+      // Schatten-LOD: nur nahe NPCs werfen Schatten (Handy: keine) – spart den halben Zeichenaufwand pro Figur
+      const shadow = !mobile && dist < 11;
+      if (n.shadow !== shadow) {
+        n.shadow = shadow;
+        n.casters ||= []; if (!n.casters.length) root.traverse(o => { if (o.isMesh && o.castShadow) n.casters.push(o); });
+        for (const m of n.casters) m.castShadow = shadow;
+      }
       n.acc += dt;
       const every = dist < 14 ? 1 : dist < 24 ? 2 : 4;
       if (this.frame % every === 0) { c.update(n.acc); n.acc = 0; }

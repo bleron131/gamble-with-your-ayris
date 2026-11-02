@@ -112,6 +112,7 @@ export class World {
   dispose() {
     for (const p of this.particles.list) p.s.material.dispose();
     this.particles.list = [];
+    this.particles.dispose();
     const mats = new Set();
     this.scene.traverse(o => {
       if (typeof o.getRenderTarget === 'function') o.getRenderTarget()?.dispose(); // Spiegel (Reflector)
@@ -130,27 +131,55 @@ export class World {
 }
 
 // Einfaches Sprite-Partikelsystem (Shisha-Rauch, Konfetti, Explosionen)
+const _dir = new THREE.Vector3();
+
 export class Particles {
   static density = 1;
   static max = 600; // Obergrenze gleichzeitiger Partikel (auf Handys kleiner)
   constructor(scene) {
     this.scene = scene;
     this.list = [];
-    this.smokeMat = new THREE.SpriteMaterial({ map: smokeTexture(), transparent: true, depthWrite: false, opacity: 0.5 });
+    this.poolC = [];
+    this.poolS = [];
   }
+  // Kamera (von der App gesetzt): Partikel weit weg oder hinter der Kamera werden gar nicht erst erzeugt
+  static camera = null;
+  static range = 45;
   emit(opts) {
     // Weniger Partikel auf niedrigen Grafikstufen (Konfetti/Rauch bleiben sichtbar, nur dünner)
     if (Particles.density < 1 && Math.random() > Particles.density) return;
     if (this.list.length >= Particles.max) return;
+    const cam = Particles.camera;
+    if (cam && opts.pos) {
+      const dx = opts.pos.x - cam.position.x, dy = opts.pos.y - cam.position.y, dz = opts.pos.z - cam.position.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 > Particles.range * Particles.range) return;
+      // hinter der Kamera (mit etwas Spielraum für Partikel, die ins Bild fliegen)
+      if (d2 > 16) { cam.getWorldDirection(_dir); if (dx * _dir.x + dy * _dir.y + dz * _dir.z < -2) return; }
+    }
     this.spawn(opts);
   }
+  // Sprites und Materialien werden wiederverwendet (Pool) statt für jedes Partikel neu erzeugt und entsorgt
   spawn({ pos, vel = [0, 0.3, 0], life = 3, size = 0.3, grow = 0.4, color = '#ffffff', opacity = 0.45, gravity = 0, type = 'smoke', spin = 0, additive = false }) {
-    const mat = type === 'confetti'
-      ? new THREE.SpriteMaterial({ map: confettiTexture(), color, transparent: true, depthWrite: false })
-      : new THREE.SpriteMaterial({ map: smokeTexture(), color, transparent: true, depthWrite: false, opacity, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending });
-    const s = new THREE.Sprite(mat);
+    const pool = type === 'confetti' ? this.poolC : this.poolS;
+    let s = pool.pop();
+    if (!s) {
+      const mat = type === 'confetti'
+        ? new THREE.SpriteMaterial({ map: confettiTexture(), transparent: true, depthWrite: false })
+        : new THREE.SpriteMaterial({ map: smokeTexture(), transparent: true, depthWrite: false });
+      s = new THREE.Sprite(mat);
+    }
+    const m = s.material;
+    m.color.set(color);
+    m.rotation = 0;
+    if (type !== 'confetti') {
+      m.opacity = opacity;
+      const blend = additive ? THREE.AdditiveBlending : THREE.NormalBlending;
+      if (m.blending !== blend) { m.blending = blend; m.needsUpdate = true; }
+    } else m.opacity = 1;
     s.position.copy(pos);
     s.scale.setScalar(size);
+    s.visible = true;
     this.scene.add(s);
     this.list.push({ s, vel: new THREE.Vector3(...vel), life, max: life, size, grow, gravity, opacity, type, spin });
   }
@@ -158,7 +187,13 @@ export class Particles {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i];
       p.life -= dt;
-      if (p.life <= 0) { this.scene.remove(p.s); p.s.material.dispose(); this.list.splice(i, 1); continue; }
+      if (p.life <= 0) {
+        this.scene.remove(p.s);
+        const pool = p.type === 'confetti' ? this.poolC : this.poolS;
+        if (pool.length < 300) pool.push(p.s); else p.s.material.dispose();
+        this.list[i] = this.list[this.list.length - 1]; this.list.pop();
+        continue;
+      }
       p.vel.y -= p.gravity * dt;
       if (p.type === 'confetti') { p.vel.x *= 0.99; p.vel.z *= 0.99; p.vel.y = Math.max(p.vel.y, -1.2); }
       p.s.position.addScaledVector(p.vel, dt);
@@ -166,6 +201,10 @@ export class Particles {
       if (p.type === 'confetti') { p.s.material.rotation += p.spin * dt; p.s.scale.set(p.size, p.size * Math.abs(Math.sin(p.life * 6)) + 0.01, 1); }
       else { p.s.scale.setScalar(p.size + p.grow * k); p.s.material.opacity = p.opacity * (1 - k) * Math.min(1, k * 6); }
     }
+  }
+  dispose() {
+    for (const s of [...this.poolC, ...this.poolS]) s.material.dispose();
+    this.poolC = []; this.poolS = [];
   }
   confetti(center, count = 120, spread = 3) {
     const cols = ['#ff3cac', '#ffd97a', '#2bd9fe', '#7cff6b', '#ff6b35', '#b388ff'];

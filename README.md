@@ -198,6 +198,10 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   Kugel laufen synchron mit. E oder ESC beendet das Zuschauen.
 - **Jackpots**: Ein Slot-Jackpot ist für alle auf dem Stockwerk ein Ereignis – Lichter wechseln in den Farben des
   Stockwerks, Goldfontäne, Feuerwerk unter der Decke, kurze Jackpot-Musik, grosse Anzeige und jubelnde NPCs.
+- **Prestige**: Nach dem Finale (Take oder Double) beginnt der nächste Run auf einer höheren Prestige-Stufe
+  (`★ PRESTIGE 1` …, bis 10): alle Ziele und damit Min/Max-Einsätze steigen um 50 % pro Stufe, das Startkapital bleibt.
+  Permanenter Fortschritt (🍆, Kosmetik, Achievements, Statistiken, Rekorde) bleibt erhalten; Prestige 1/2/3 schalten
+  Prestige-Krone, Prestige-Stern und Prestige-Mantel frei.
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Challenges und Achievements – jeweils nur
   einmal pro Spieler, also kein Farming.
 - **MAKKA an der Bar**: Nur bei Kemal an der Bar der Shishabar gibt es die pinke Ayri-Limonade für genau 1 🍆.
@@ -235,6 +239,14 @@ dazu AYRI-Multiplikatoren bis ×38 und ein Kronen-Jackpot, der mit jedem Stockwe
 mit dem Stockwerk, damit die 15 Ziele bis $500'000'000 realistisch erreichbar sind. Das **Ayri-Glück** würfelt einen verlorenen Ausgang gelegentlich neu – nach mehreren Niederlagen
 in Folge häufiger –, damit lange Pechsträhnen selten werden (`luckChance` in `config.js`).
 `npm run rtp` zeigt Quoten und Tischlimits, `node scripts/balance.js` simuliert alle Spiele (Auszahlung, Gewinnquote, längste Pechsträhne).
+
+## Performance
+
+- Statische Geometrie wird zusammengefasst (Static Batching), Materialien und Texturen werden geteilt und beim Raumwechsel freigegeben.
+- NPCs: Animation naher Figuren jedes Frame, fernere nur jedes 2./4. Frame, sehr ferne ausgeblendet; Schatten nur für
+  NPCs in der Nähe (auf dem Handy keine).
+- Partikel kommen aus einem Pool (keine Neuerzeugung pro Partikel) und werden weit weg oder hinter der Kamera gar nicht erst erzeugt.
+- Netzwerk: Positionen 15×/s, NPC-Änderungen als eigene kleine Nachricht statt kompletter Spielzustände.
 
 ## Architektur
 

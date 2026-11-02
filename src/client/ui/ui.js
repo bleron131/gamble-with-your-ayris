@@ -154,7 +154,7 @@ export class UI {
             h('button.mlink', { onclick: () => { this.app.input.exitLock(); this.openEditor(true); } }, '🎨 Charakter'),
           ),
           this.menuErr,
-          h('div.progressline', `Aktueller Run: ${(s.run.completed || []).length}/15 Stockwerke · 🍆 ${s.dildos} · Team-Pot ${fmtMoney(s.run.pot)}`),
+          h('div.progressline', `${s.campaign.prestige ? `★ Prestige ${s.campaign.prestige} · ` : ''}Aktueller Run: ${(s.run.completed || []).length}/15 Stockwerke · 🍆 ${s.dildos} · Team-Pot ${fmtMoney(s.run.pot)}`),
           serverHost().remote ? h('div.disclaimer', `Multiplayer läuft über ${serverHost().host}. Nach längerer Pause braucht der Server bis zu 1 Minute zum Aufwachen.`) : null,
           h('div.disclaimer', 'Nur virtuelle Spielwährung. Kein echtes Geld, keine Echtgeld-Käufe.'),
         ),
@@ -182,12 +182,12 @@ export class UI {
     if (!st) return;
     this.setPot(st.pot);
     if (st.scene === 'floor') {
-      const f = floorDef(st.floor);
+      const f = floorDef(st.floor, this.app.prestige);
       this.targetEl.innerHTML = `TARGET <b>${fmtMoney(f.target)}</b>${st.session?.targetReached ? ' <span class="ok">✓</span>' : ''}`;
       this.progress.style.display = '';
       this.progress.firstChild.style.width = Math.min(100, st.pot / f.target * 100) + '%';
       this.progress.classList.toggle('done', !!st.session?.targetReached);
-      this.levelEl.innerHTML = `LEVEL <b>${st.floor}</b> · ${esc(f.name)}`;
+      this.levelEl.innerHTML = `LEVEL <b>${st.floor}</b> · ${esc(f.name)}${this.app.prestige ? ` · <span class="gold">★ P${this.app.prestige}</span>` : ''}`;
       this.renderChallenges(st);
       this.renderEvent(st);
     } else {
@@ -195,7 +195,7 @@ export class UI {
       clear(this.chEl);
       this.targetEl.innerHTML = st.scene === 'final' ? '<span class="gold">DIE FINALE ENTSCHEIDUNG</span>' : `Stockwerke: <b>${st.campaign.completed.length}/15</b> · freigeschaltet bis <b>${st.campaign.unlocked}</b>`;
       this.progress.style.display = 'none';
-      this.levelEl.innerHTML = st.scene === 'final' ? '???' : 'SHISHABAR';
+      this.levelEl.innerHTML = st.scene === 'final' ? '???' : `SHISHABAR${this.app.prestige ? ` · <span class="gold">★ PRESTIGE ${this.app.prestige}</span>` : ''}`;
     }
     clear(this.groupEl);
     const code = st.code === 'SOLO' ? 'SOLO' : st.code;
@@ -489,7 +489,7 @@ export class UI {
   }
 
   targetReached(ev) {
-    const f = floorDef(ev.floor);
+    const f = floorDef(ev.floor, this.app.prestige);
     this.app.input.exitLock();
     const box = h('div.targetbox',
       h('div.tt', 'TARGET REACHED!'),

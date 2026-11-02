@@ -3,7 +3,7 @@
 // beginnt. Einsätze werden synchron gegen den Team-Pot geprüft und abgebucht – zwei gleichzeitige
 // Wetten auf denselben Betrag können daher nie beide akzeptiert werden (kein Geld-Duplizieren).
 import {
-  START_CAPITAL, FLOORS, floorDef, floorTables, ITEMS, RETRY_GAMES_HAT,
+  START_CAPITAL, FLOORS, floorDef, floorTables, PRESTIGE_MAX, prestigeScale, ITEMS, RETRY_GAMES_HAT,
   FLOOR_REWARDS, LOADOUT_SLOTS, MAX_PLAYERS, fmtMoney, GAME_NAMES, luckChance, slotSteps, MAKKA_BAR, MAKKA_MAX, MAKKA_LUCK_MS, MAKKA_LUCK_BONUS,
 } from './config.js';
 import { rand } from './rng.js';
@@ -39,7 +39,7 @@ const VOTE_TIMEOUT = 25000;
 // unlocked/completed gehören zum AKTUELLEN Run (werden bei einem neuen Run zurückgesetzt);
 // alles andere ist permanenter Fortschritt (Rekorde, je abgeschlossene Stockwerke für Kosmetik).
 export function defaultCampaign() {
-  return { unlocked: 1, completed: [], everCompleted: [], gameComplete: false, highestPot: START_CAPITAL, bestWinnings: 0, bestDouble: 0, finishedAt: null, runs: 0 };
+  return { unlocked: 1, completed: [], everCompleted: [], prestige: 0, gameComplete: false, highestPot: START_CAPITAL, bestWinnings: 0, bestDouble: 0, finishedAt: null, runs: 0 };
 }
 
 export function makeRunId() {
@@ -79,6 +79,9 @@ export class Room {
     this.events = new EventDirector(this);
     this.npcTimer = setInterval(() => { this.npcs.tick(); this.events.tick(); }, 1000);
   }
+
+  // Prestige-Stufe (permanent im Fortschritt des Gruppenerstellers)
+  get prestige() { return this.campaign.prestige || 0; }
 
   // ───────────────────────── Verbindungen ─────────────────────────
   join(conn, profile = {}) {
@@ -140,6 +143,7 @@ export class Room {
   destroy() {
     clearInterval(this.moveTimer);
     clearInterval(this.npcTimer);
+    clearTimeout(this.npcTimerPending);
     for (const t of this.timers) clearTimeout(t);
     this.timers.clear();
   }
@@ -159,6 +163,12 @@ export class Room {
     if (this.dirty) return;
     this.dirty = true;
     setTimeout(() => { this.dirty = false; this.broadcast({ t: 'state', state: this.snapshot() }); }, 25);
+  }
+
+  // NPC-Änderungen als kleine eigene Nachricht (statt jedes Mal den ganzen Spielzustand zu senden)
+  npcsDirty() {
+    if (this.npcTimerPending) return;
+    this.npcTimerPending = setTimeout(() => { this.npcTimerPending = null; this.broadcast({ t: 'npcs', npcs: this.npcs.snapshot() }); }, 40);
   }
 
   flushMoves() {
@@ -301,7 +311,7 @@ export class Room {
         if (this.scene !== 'lobby') return 'Nur aus der Shishabar möglich';
         if (!(n >= 1 && n <= FLOORS.length)) return 'Ungültiges Stockwerk';
         if (n > this.campaign.unlocked) return 'Stockwerk noch gesperrt';
-        if (this.pot < floorDef(n).minBet) return `Zu wenig Geld: Mindesteinsatz auf Stock ${n} ist ${fmtMoney(floorDef(n).minBet)}`;
+        if (this.pot < floorDef(n, this.prestige).minBet) return `Zu wenig Geld: Mindesteinsatz auf Stock ${n} ist ${fmtMoney(floorDef(n, this.prestige).minBet)}`;
         return null;
       }
       case 'return':
@@ -371,7 +381,7 @@ export class Room {
       game.setup?.(t);
       // Jeder Automat startet mit eigenem Einsatz (verschiedene Stufen je Gerät)
       if (game.walkUp) {
-        const steps = slotSteps(n, def.type);
+        const steps = slotSteps(n, def.type, this.prestige);
         t.state.bet = steps[Math.min(steps.length - 1, Math.floor(steps.length * 0.3) + def.index)];
       }
       tables[def.id] = t;
@@ -448,7 +458,7 @@ export class Room {
 
   leaveFloor(reason) {
     const n = this.floor;
-    const f = floorDef(n);
+    const f = floorDef(n, this.prestige);
     const tr = this.session?.tracker;
     if (reason === 'return' && tr && !this.session.ending) {
       tr.flags.leaveFrac = this.pot / f.target;
@@ -466,7 +476,7 @@ export class Room {
     const s = this.session;
     if (!s || s.targetReached) return;
     const n = this.floor;
-    const f = floorDef(n);
+    const f = floorDef(n, this.prestige);
     if (this.pot < f.target) return;
     s.targetReached = true;
     const firstTime = !this.campaign.completed.includes(n);
@@ -496,7 +506,7 @@ export class Room {
     const s = this.session;
     if (this.scene !== 'floor' || !s || s.ending) return;
     if (Object.values(s.tables).some(t => t.busy)) return;
-    const f = floorDef(this.floor);
+    const f = floorDef(this.floor, this.prestige);
     if (this.pot >= f.minBet) return;
     // Mafia Briefcase eines Spielers rettet die Gruppe
     for (const p of this.players.values()) {
@@ -578,7 +588,7 @@ export class Room {
     const t = this.getTable(p, id);
     if (!t || !GAMES[t.type].walkUp) return;
     if (!this.slotLock(p, t)) return;
-    const steps = slotSteps(this.floor, t.type);
+    const steps = slotSteps(this.floor, t.type, this.prestige);
     let i = steps.indexOf(t.state.bet);
     if (i < 0) i = steps.findIndex(v => v >= t.state.bet);
     i = Math.max(0, Math.min(steps.length - 1, i + (dir > 0 ? 1 : -1)));
@@ -656,7 +666,7 @@ export class Room {
 
   makeCtx(pid, table) {
     const room = this;
-    const f = floorDef(this.floor);
+    const f = floorDef(this.floor, this.prestige);
     return {
       limits: f.limits[table.type],
       floor: this.floor,
@@ -743,7 +753,7 @@ export class Room {
     const extra = Math.min(extraLoss, this.pot);
     this.pot -= extra;
     const net = payout - extra - stake;
-    const f = floorDef(this.floor);
+    const f = floorDef(this.floor, this.prestige);
     table.roundMods = null;
     table.busy = !!r.keepBusy;
     if (GAMES[table.type].walkUp) { table.occupant = null; table.holder = { pid, until: Date.now() + SLOT_HOLD_MS }; }
@@ -770,7 +780,7 @@ export class Room {
 
   // ───────────────────────── Challenges (optional, blockieren nie) ─────────────────────────
   challengeCtx() {
-    return { pot: this.pot, target: floorDef(this.floor).target, players: [...this.players.keys()] };
+    return { pot: this.pot, target: floorDef(this.floor, this.prestige).target, players: [...this.players.keys()] };
   }
 
   challengeStatus() {
@@ -887,6 +897,10 @@ export class Room {
 
   endFinal() {
     this.finalBusy = false;
+    // Finale geschafft → neuer Run auf der nächsten Prestige-Stufe (permanenter Fortschritt bleibt)
+    const before = this.prestige;
+    this.campaign.prestige = Math.min(PRESTIGE_MAX, before + 1);
+    if (this.campaign.prestige > before) this.event({ kind: 'prestige', level: this.campaign.prestige, scale: prestigeScale(this.campaign.prestige) });
     this.newRun('final');
     this.changeScene('lobby', { from: 'final' });
   }

@@ -17,6 +17,7 @@ export function cosmeticLock(key) {
   if (u.challenges && (s.challenges || []).length >= u.challenges) return null;
   if (u.secrets && (s.secrets || []).length >= u.secrets) return null;
   if (u.event && (s.events || []).includes(u.event)) return null;
+  if (u.prestige && (s.campaign.prestige || 0) >= u.prestige) return null;
   if (u.shop && (s.cosmetics || []).includes(key)) return null;
   return u.label;
 }

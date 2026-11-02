@@ -105,3 +105,20 @@ test('High Roller erscheint erst ab Stock 3 und geht nach Ablauf wieder', () => 
   assert.ok(conns[0].events('hr').some(e => e.phase === 'leave'));
   teardown(room);
 });
+
+test('Prestige: Finale geschafft → neuer Run auf Prestige 1 mit höheren Zielen, permanenter Fortschritt bleibt', async () => {
+  const { prestigeScale } = await import('../src/shared/config.js');
+  const { room, conns } = setup(1, [{ campaign: { everCompleted: [1, 2, 3], gameComplete: true } }]);
+  room.pot = 600_000_000;
+  room.endFinal();
+  assert.equal(room.campaign.prestige, 1);
+  assert.equal(room.pot, 7500);
+  assert.equal(room.campaign.unlocked, 1);
+  assert.deepEqual(room.campaign.everCompleted, [1, 2, 3]);
+  assert.ok(conns[0].events('prestige').some(e => e.level === 1));
+  assert.equal(floorDef(1, 1).target, floorDef(1).target * prestigeScale(1));
+  room.enterFloor(1);
+  assert.equal(room.challengeCtx().target, 15000);
+  assert.ok(room.session.tables['slots-0'].state.bet >= floorDef(1, 1).limits.slots.min);
+  teardown(room);
+});

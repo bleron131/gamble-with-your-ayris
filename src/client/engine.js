@@ -102,6 +102,8 @@ export class Engine {
     this.camera.updateProjectionMatrix();
     Particles.density = this.q.particles;
     Particles.max = this.q.maxParticles;
+    Particles.camera = this.camera;
+    Particles.range = this.mobile ? 30 : 45;
     if (this.msaa !== this.q.msaa || !this.composer) this.setupComposer(this.q.msaa);
     this.renderPass.scene = this.scene;
     this.resize();

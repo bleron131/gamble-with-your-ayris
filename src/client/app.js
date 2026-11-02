@@ -59,6 +59,7 @@ export class App {
 
   get pot() { return this.state?.pot ?? 0; }
   playerName(id) { return this.state?.players.find(p => p.id === id)?.name || '?'; }
+  get prestige() { return this.state?.campaign?.prestige || 0; }
   get mePlayer() { return this.state?.players.find(p => p.id === this.me); }
   distanceTo(v) { return this.player.pos.distanceTo(new THREE.Vector3(v.x, 0, v.z)); }
 
@@ -298,6 +299,7 @@ export class App {
         }
         break;
       case 'event': this.onEvent(m.ev); break;
+      case 'npcs': if (this.state) { this.state.npcs = m.npcs; this.world?.npcCtl?.sync(m.npcs); } break;
       case 'error':
         this.ui.toast(m.msg, 'error');
         sfx.error();
@@ -343,6 +345,7 @@ export class App {
       gameComplete: s.campaign.gameComplete || c.gameComplete,
       finishedAt: s.campaign.finishedAt || c.finishedAt,
       runs: Math.max(s.campaign.runs || 0, c.runs || 0),
+      prestige: Math.max(s.campaign.prestige || 0, c.prestige || 0),
     };
     // Run-Fortschritt kommt immer exakt vom Server (kein Zusammenführen mit alten Runs); gespeichert wird er vom Gruppenersteller
     if (st.hostId === this.me) s.run = { id: st.run.id, pot: st.pot, finalUnlocked: st.run.finalUnlocked, startedAt: st.run.startedAt, unlocked: c.unlocked, completed: [...c.completed] };
@@ -403,7 +406,7 @@ export class App {
     this.selfChar.root.visible = this.world.mode === 'third';
     for (const a of this.avatars.values()) this.world.scene.add(a.root);
     // Musik & Atmosphäre
-    if (scene === 'floor') { setMusic('casino', floorDef(floor).tier, this.world.style?.music); setAmbience('casino'); }
+    if (scene === 'floor') { setMusic('casino', floorDef(floor, this.prestige).tier, this.world.style?.music); setAmbience('casino'); }
     else if (scene === 'final') { setMusic('final'); setAmbience(null); }
     else { setMusic('lounge'); setAmbience('lounge'); }
     // Räumliche Shisha-Geräusche nur in der Shishabar
@@ -491,7 +494,7 @@ export class App {
   async requestReturn() {
     if (!this.state?.session) return;
     if (!this.state.session.targetReached) {
-      const f = floorDef(this.state.floor);
+      const f = floorDef(this.state.floor, this.prestige);
       const ok = await this.ui.confirm(`Ziel (${fmtMoney(f.target)}) noch nicht erreicht. Trotzdem mit ${fmtMoney(this.pot)} zur Shishabar zurück?`);
       if (!ok) return;
     }
@@ -515,7 +518,7 @@ export class App {
       case 'scene': {
         const label = ev.scene === 'floor' ? `STOCK ${ev.floor}` : ev.scene === 'final' ? '???' : 'SHISHABAR';
         if (ev.scene === 'lobby' && ev.reason === 'return') this.ui.feed(`Zurück in der Shishabar mit ${fmtMoney(ev.pot)}`);
-        this.ui.elevatorTransition(label, () => this.loadWorld(ev.scene, ev.floor), ev.scene === 'floor' ? floorDef(ev.floor) : null);
+        this.ui.elevatorTransition(label, () => this.loadWorld(ev.scene, ev.floor), ev.scene === 'floor' ? floorDef(ev.floor, this.prestige) : null);
         if (ev.scene === 'floor') this.visitFloor(ev.floor);
         break;
       }
@@ -538,10 +541,13 @@ export class App {
         sfx.bigWin();
         this.world.particles?.confetti(this.player.pos.clone().setY(2.5), 160, 6);
         this.ui.targetReached(ev);
-        if (ev.newFloor) this.ui.popup('floor', `STOCKWERK ${ev.newFloor} FREIGESCHALTET`, floorDef(ev.newFloor).name);
+        if (ev.newFloor) this.ui.popup('floor', `STOCKWERK ${ev.newFloor} FREIGESCHALTET`, floorDef(ev.newFloor, this.prestige).name);
         break;
       }
       case 'coop': this.onCoop(ev); break;
+      case 'prestige':
+        setTimeout(() => { this.ui.popup('event', `PRESTIGE ${ev.level} ERREICHT`, `Neuer Run: alle Ziele ×${ev.scale.toFixed(1)} – deine Kosmetik, 🍆 und Rekorde bleiben`, 6000); this.checkUnlocks(); }, 2500);
+        break;
       case 'hr': this.onHighRoller(ev, mine); break;
       case 'challenge': {
         this.ui.feed(`🏅 Challenge geschafft: <b>${esc(ev.text)}</b>`, 'good');

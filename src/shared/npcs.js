@@ -137,7 +137,7 @@ export class NpcDirector {
       n.react = 'yield'; n.rn++;
       changed = true;
     }
-    if (changed) this.room.markDirty();
+    if (changed) this.room.npcsDirty();
     return changed;
   }
 
@@ -170,7 +170,7 @@ export class NpcDirector {
         changed = true;
       }
     }
-    if (changed) this.room.markDirty();
+    if (changed) this.room.npcsDirty();
   }
 
   snapshot() {

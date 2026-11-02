@@ -35,7 +35,7 @@ export class CasinoWorld extends World {
     this.mode = 'first';
     this.kind = 'floor';
     this.n = n;
-    this.def = floorDef(n);
+    this.def = floorDef(n, app.prestige || 0);
     this.tier = this.def.tier;
     // Jedes Stockwerk hat einen eigenen Stil (Architektur, Licht, Deko, Musik, NPCs)
     this.style = floorStyle(n);

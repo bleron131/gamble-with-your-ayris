@@ -1,7 +1,7 @@
 // Dialoge: Aufzug (Levelauswahl + Ausrüstung), AYRI SHOP, Charaktereditor, Statistiken, Einstellungen.
 import * as THREE from 'three';
 import { h, clear } from './dom.js';
-import { FLOORS, ITEMS, LOADOUT_SLOTS, GAME_NAMES, GAME_ICONS, ACHIEVEMENTS, COSMETIC_UNLOCKS, LUCKY_COSMETICS, fmtMoney, START_CAPITAL } from '../../shared/config.js';
+import { FLOORS, floorDef, ITEMS, LOADOUT_SLOTS, GAME_NAMES, GAME_ICONS, ACHIEVEMENTS, COSMETIC_UNLOCKS, LUCKY_COSMETICS, fmtMoney, START_CAPITAL } from '../../shared/config.js';
 import { OPTIONS } from '../character.js';
 import * as Save from '../save.js';
 import { challengesFor } from '../../shared/challenges.js';
@@ -17,7 +17,8 @@ export function openElevator(ui) {
   const camp = st.campaign;
   const grid = h('div.floors');
   const mine = new Set(s.challenges || []);
-  for (const f of FLOORS) {
+  for (const base of FLOORS) {
+    const f = floorDef(base.n, app.prestige);
     const chs = challengesFor(f.n);
     const done = camp.completed.includes(f.n);
     const unlocked = f.n <= camp.unlocked;
@@ -45,7 +46,7 @@ export function openElevator(ui) {
       h('div.fn', '???'), h('div.fname', 'Ganz nach oben'), h('div.fstatus', 'Kein Level 16.')));
   }
   ui.openModal(h('div.elevator',
-    h('h2', '🛗 AUFZUG'),
+    h('h2', `🛗 AUFZUG${app.prestige ? ` · ★ PRESTIGE ${app.prestige}` : ''}`),
     h('div.subtle', `Team-Pot: ${fmtMoney(st.pot)} – wird auf jedes Stockwerk mitgenommen. Alle freigeschalteten Stockwerke können jederzeit erneut besucht werden.`),
     grid,
     h('div.subtle.small', `🏅 Challenges sind optional und geben einmalig Bonus-🍆 – freigeschaltet wird nur über das Ziel. Erledigt: ${mine.size}/${FLOORS.reduce((a, f) => a + challengesFor(f.n).length, 0)} (Maus über ein Stockwerk für Details).`),

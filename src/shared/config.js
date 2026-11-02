@@ -83,8 +83,16 @@ const FLOOR_DEFS = [
   { target: 500_000_000, name: 'FINAL CASINO FLOOR', tier: 5 },
 ].map((d, i) => ({ ...d, games: gamesForFloor(i + 1) }));
 
-export const FLOORS = FLOOR_DEFS.map((d, i) => {
+// Prestige: Nach dem Finale beginnt ein neuer Run auf höherer Prestige-Stufe – Ziele (und damit Min/Max-Einsätze)
+// steigen um 50 % pro Stufe. Das Startkapital bleibt gleich, also wird jede Stufe etwas anspruchsvoller.
+export const PRESTIGE_MAX = 10;
+export const prestigeScale = p => 1 + 0.5 * Math.max(0, Math.min(PRESTIGE_MAX, Math.floor(p) || 0));
+
+function makeFloor(d, i, scale = 1) {
   const n = i + 1;
+  // Ziel auf zwei signifikante Stellen runden (15'000, 37'500 → 38'000 …)
+  const raw = d.target * scale, p10 = Math.pow(10, Math.max(0, Math.floor(Math.log10(raw)) - 1));
+  d = { ...d, target: Math.round(raw / p10) * p10 };
   const limits = {};
   for (const g of d.games) {
     limits[g] = {
@@ -97,13 +105,20 @@ export const FLOORS = FLOOR_DEFS.map((d, i) => {
   if (limits.baccarat) limits.baccarat.tieMax = niceRound(d.target * 0.03);
   if (limits.craps) limits.craps.propMax = niceRound(d.target * 0.04);
   return { n, ...d, limits, minBet: Math.min(...Object.values(limits).map(l => l.min)) };
-});
+}
 
-export function floorDef(n) { return FLOORS[n - 1]; }
+export const FLOORS = FLOOR_DEFS.map((d, i) => makeFloor(d, i));
+const prestigeCache = new Map();
+export function floorDef(n, prestige = 0) {
+  if (!prestige) return FLOORS[n - 1];
+  const key = `${n}:${prestige}`;
+  if (!prestigeCache.has(key)) prestigeCache.set(key, makeFloor(FLOOR_DEFS[n - 1], n - 1, prestigeScale(prestige)));
+  return prestigeCache.get(key);
+}
 
 // Einsatzstufen der Spielautomaten (1 – 2.5 – 5 – 10 …) zwischen Minimum und Maximum des Stockwerks
-export function slotSteps(n, type = 'slots') {
-  const l = floorDef(n).limits[type];
+export function slotSteps(n, type = 'slots', prestige = 0) {
+  const l = floorDef(n, prestige).limits[type];
   if (!l) return [];
   const steps = [];
   for (let e = 0; e < 12; e++) for (const m of [1, 2.5, 5]) {
@@ -241,6 +256,9 @@ export const COSMETIC_UNLOCKS = {
   'emote:bow': { challenges: 5, label: '5 Challenges abschliessen' },
   'emote:dab': { achievement: 'tourist', label: 'Achievement CASINO TOURIST' },
   'emote:money': { shop: 20, label: 'Im AYRI SHOP für 20 🍆' },
+  'hat:prestigecrown': { prestige: 1, label: 'Prestige 1 erreichen (Finale schaffen)' },
+  'jewelry:prestigestar': { prestige: 2, label: 'Prestige 2 erreichen' },
+  'jacket:prestige': { prestige: 3, label: 'Prestige 3 erreichen' },
 };
 
 // Glücks-Kosmetik: nur winzige Boni (kein spürbarer Spielvorteil, kein Einfluss auf Pot oder Gewinnchancen)
