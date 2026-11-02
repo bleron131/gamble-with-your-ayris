@@ -6,6 +6,7 @@ import { fmtMoney, fmtShort, floorDef, ITEMS, RETRY_GAMES_HAT, FLOORS } from '..
 import { sfx, initAudio } from '../audio.js';
 import * as Save from '../save.js';
 import { CHALLENGE_BY_ID } from '../../shared/challenges.js';
+import { unlockedEmotes } from '../progress.js';
 import { openElevator, openShop, openEditor, openStats, openSettings, renderScoreboard, openBar } from './modals.js';
 
 export class UI {
@@ -57,9 +58,9 @@ export class UI {
     this.hud.append(this.tableWrap);
     this.helpEl = h('div.controlshelp.hidden');
     this.hud.append(this.helpEl);
-    this.emoteBar = h('div.emotebar.hidden', ...[['cheer', '🙌'], ['dance', '💃'], ['sad', '😢'], ['facepalm', '🤦'], ['point', '👉']].map(([e, ico]) =>
-      h('button.icon', { onclick: () => { this.app.emote(e); this.emoteBar.classList.add('hidden'); } }, ico)));
+    this.emoteBar = h('div.emotebar.hidden');
     this.hud.append(this.emoteBar);
+    this.renderEmotes();
     this.scoreEl = h('div.scoreboard.hidden');
     this.hud.append(this.scoreEl);
     r.append(this.hud);
@@ -198,6 +199,12 @@ export class UI {
     for (const p of st.players) this.groupEl.append(h('div.pl', { class: p.id === app.me ? 'me' : '' }, (p.id === st.hostId ? '★ ' : '• ') + p.name + (p.seat ? ' 🎲' : '')));
     this.renderItems();
     if (this.tableView) this.tableView.refreshPanel();
+  }
+
+  // Emote-Leiste: Grund-Emotes + freigeschaltete (Verbeugen, Dab, Geld werfen)
+  renderEmotes() {
+    clear(this.emoteBar);
+    for (const [e, ico, label] of unlockedEmotes()) this.emoteBar.append(h('button.icon', { title: label, onclick: () => { this.app.emote(e); this.emoteBar.classList.add('hidden'); } }, ico));
   }
 
   // Steuerungshilfe: erscheint beim ersten Start und blendet sich nach 12 Sekunden selbst aus

@@ -161,9 +161,14 @@ export class NpcController {
   }
 
   spawn(d) {
-    const char = new Character(npcLook(this.world.npcKind?.() || 'casual', d.s));
+    // Seltener NPC (Geheimnis): Mr. Goldfinger im goldenen Anzug – für alle Spieler derselbe (aus dem Seed)
+    const rare = d.s % 23 === 0;
+    const look = npcLook(this.world.npcKind?.() || 'casual', d.s);
+    if (rare) Object.assign(look, { jacket: 'gold', pants: 'gold', shoes: 'goldsneakers', hat: 'tophat', glasses: 'golden', jewelry: 'goldchain', accessory: 'moneybag' });
+    const char = new Character(look);
+    if (rare) char.setName('Mr. Goldfinger', '#ffd700');
     char.t = (d.s % 100) / 10; // nicht alle im Gleichschritt
-    const n = { id: d.id, char, spot: null, rn: d.rn, path: [], pose: 'stand', target: null, react: null, reactT: 0, acc: 0, sitK: 0 };
+    const n = { id: d.id, rare, char, spot: null, rn: d.rn, path: [], pose: 'stand', target: null, react: null, reactT: 0, acc: 0, sitK: 0 };
     this.world.scene.add(char.root);
     this.npcs.set(d.id, n);
     // Neu im Raum: direkt am Platz (nicht durch den Raum laufen)
@@ -278,6 +283,13 @@ export class NpcController {
       c.root.position.set(sp.x, 0, sp.z);
       c.setAnim(sp.anim || 'idle');
     }
+  }
+
+  // Ist Mr. Goldfinger in Reichweite (und das Geheimnis noch nicht gefunden)?
+  rareNear(pos) {
+    if (this.app.hasSecret('rare_npc')) return false;
+    for (const n of this.npcs.values()) if (n.rare && Math.hypot(n.char.root.position.x - pos.x, n.char.root.position.z - pos.z) < 1.4) return true;
+    return false;
   }
 
   dispose() {

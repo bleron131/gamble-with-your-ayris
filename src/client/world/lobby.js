@@ -157,6 +157,7 @@ export class LobbyWorld extends World {
       }
     }
     this.buildSeats();
+    this.buildSecret();
     let smokeT = 0;
     this.updaters.push((dt, t) => {
       smokeT -= dt;
@@ -171,6 +172,23 @@ export class LobbyWorld extends World {
         this.particles.emit({ pos: p, vel: [(Math.random() - 0.5) * 0.15, 0.35, (Math.random() - 0.5) * 0.15], life: 4, size: 0.25, grow: 1.2, opacity: 0.25, color: '#e8e0ff' });
       }
     });
+  }
+
+  // Geheimnis: ein kleiner goldener Dildo, versteckt hinter dem Ende der Bar (nicht markiert, nur aus der Nähe „???“)
+  buildSecret() {
+    if (this.app.hasSecret?.('lobby_dildo')) return;
+    const g = new THREE.Group();
+    const gold = new THREE.MeshStandardMaterial({ color: '#ffcf40', metalness: 0.95, roughness: 0.15, emissive: '#5a4010', emissiveIntensity: 0.6 });
+    g.add(new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.12, 6, 10), gold));
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), gold); tip.position.y = 0.08; g.add(tip);
+    g.position.set(-W / 2 + 2.5, 0.08, -2 + 3.7);
+    g.rotation.z = Math.PI / 2.4;
+    g.userData.noBake = true;
+    this.scene.add(g);
+    this.updaters.push((dt, t) => { g.rotation.y = t * 0.8; });
+    this.addInteract({ pos: new THREE.Vector3(g.position.x + 0.6, 0, g.position.z), radius: 0.9, verb: '???', label: '???',
+      enabled: () => !this.app.hasSecret('lobby_dildo'),
+      action: () => { if (this.app.findSecret('lobby_dildo')) g.visible = false; } });
   }
 
   // Sitzplätze (Sofas & Barhocker): [E] Hinsetzen – belegt wird serverseitig, NPCs machen Spielern Platz

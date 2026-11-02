@@ -188,7 +188,13 @@ export const ITEMS = {
 export const RETRY_GAMES_HAT = ['slots', 'highslots', 'roulette', 'wheel', 'craps'];
 
 export const ACHIEVEMENTS = {
-  first_win: { name: 'Anfängerglück', desc: 'Erste gewonnene Runde', reward: 2 },
+  first_win: { name: 'FIRST WIN', desc: 'Erste gewonnene Runde', reward: 2 },
+  bj_master: { name: 'BLACKJACK MASTER', desc: '25 Blackjack-Runden gewonnen', reward: 8 },
+  high_roller: { name: 'HIGH ROLLER', desc: 'Mindestens $10\'000 in einer einzigen Runde gewonnen', reward: 5 },
+  unlucky: { name: 'UNLUCKY BASTARD', desc: '5 Runden in Folge verloren', reward: 3 },
+  tourist: { name: 'CASINO TOURIST', desc: '5 verschiedene Stockwerke besucht', reward: 4 },
+  top_floor: { name: 'TOP FLOOR', desc: 'Stock 15 betreten', reward: 10 },
+  secret_hunter: { name: 'SECRET HUNTER', desc: 'Alle 5 Geheimnisse gefunden', reward: 15 },
   big_bet: { name: 'All-in-Mentalität', desc: 'Mindestens 50% des Team-Pots in einer Runde gesetzt', reward: 4 },
   jackpot: { name: 'JACKPOT!', desc: 'Drei Kronen am Slot', reward: 10 },
   straight_up: { name: 'Volltreffer', desc: 'Einzelzahl beim Roulette getroffen', reward: 5 },
@@ -197,7 +203,7 @@ export const ACHIEVEMENTS = {
   craps_point: { name: 'Point Maker', desc: 'Point beim Craps getroffen', reward: 3 },
   poker_flush: { name: 'Flush Royale', desc: 'Flush oder besser beim Hold\'em', reward: 5 },
   wheel50: { name: 'Rad des Schicksals', desc: '50× auf dem Glücksrad', reward: 10 },
-  millionaire: { name: 'Millionäre', desc: 'Team-Pot ≥ $1\'000\'000', reward: 5 },
+  millionaire: { name: 'MILLIONAIRE', desc: 'Team-Pot ≥ $1\'000\'000', reward: 5 },
   hundred_m: { name: 'Hundert Mio.', desc: 'Team-Pot ≥ $100\'000\'000', reward: 15 },
   mafia: { name: 'Schlafen bei den Fischen', desc: 'Von der Mafia erwischt', reward: 3 },
   item5: { name: 'Gadget-Fan', desc: '5 Spezialgegenstände benutzt', reward: 3 },
@@ -216,6 +222,45 @@ export const COSMETIC_UNLOCKS = {
   'jacket:gold': { floor: 13, label: 'Stock 13 abschliessen' },
   'accessory:moneybag': { floor: 8, label: 'Stock 8 abschliessen' },
   'accessory:trophy': { achievement: 'double_win', label: 'Double or Loss gewinnen' },
+  // Prompt 8: Challenges, Achievements, Stockwerke, Geheimnisse, High-Roller-Events und AYRI SHOP
+  'hat:party': { challenges: 3, label: '3 Challenges abschliessen' },
+  'top:casino': { floor: 3, label: 'Stock 3 abschliessen' },
+  'jacket:tux': { floor: 9, label: 'Stock 9 abschliessen' },
+  'jacket:velvet': { challenges: 20, label: '20 Challenges abschliessen' },
+  'mask:domino': { challenges: 10, label: '10 Challenges abschliessen' },
+  'mask:bandit': { achievement: 'mafia', label: 'Von der Mafia erwischt werden' },
+  'mask:venetian': { secrets: 2, label: '2 Geheimnisse finden' },
+  'glasses:heart': { achievement: 'first_win', label: 'Achievement FIRST WIN' },
+  'pants:gold': { achievement: 'millionaire', label: 'Achievement MILLIONAIRE' },
+  'shoes:goldsneakers': { achievement: 'bj_master', label: 'Achievement BLACKJACK MASTER' },
+  'hat:diamondhat': { achievement: 'high_roller', label: 'Achievement HIGH ROLLER (oder High-Roller-Event gewinnen)', event: 'highroller' },
+  'hat:casinocrown': { achievement: 'top_floor', label: 'Achievement TOP FLOOR' },
+  'hat:luckyhat': { shop: 25, label: 'Im AYRI SHOP für 25 🍆' },
+  'glasses:golden': { shop: 40, label: 'Im AYRI SHOP für 40 🍆' },
+  'jewelry:luckychain': { shop: 30, label: 'Im AYRI SHOP für 30 🍆' },
+  'emote:bow': { challenges: 5, label: '5 Challenges abschliessen' },
+  'emote:dab': { achievement: 'tourist', label: 'Achievement CASINO TOURIST' },
+  'emote:money': { shop: 20, label: 'Im AYRI SHOP für 20 🍆' },
+};
+
+// Glücks-Kosmetik: nur winzige Boni (kein spürbarer Spielvorteil, kein Einfluss auf Pot oder Gewinnchancen)
+//   bonus: Chance auf +1 🍆 zusätzlich bei einer 🍆-Belohnung · sparkle: Glitzern bei eigenen Gewinnen ·
+//   challenge: +1 🍆 auf Challenge-Belohnungen
+export const LUCKY_COSMETICS = {
+  'hat:luckyhat': { name: 'Lucky Hat 🍀', bonus: 0.05, sparkle: '#7cff6b' },
+  'glasses:golden': { name: 'Golden Glasses', bonus: 0.05, sparkle: '#ffd700' },
+  'jewelry:luckychain': { name: 'Lucky Chain', bonus: 0.05, sparkle: '#7cff6b' },
+  'hat:diamondhat': { name: 'Diamond Hat', bonus: 0.08, sparkle: '#9be7ff' },
+  'hat:casinocrown': { name: 'Casino Crown', bonus: 0.08, sparkle: '#ffd700', challenge: 1 },
+};
+
+// Geheimnisse & Easter Eggs (nicht alle sind markiert) – einmalig pro Spieler
+export const SECRETS = {
+  lobby_dildo: { name: 'Goldener Dildo hinter der Bar', reward: 3 },
+  code_ayri: { name: 'Geheimcode', reward: 2 },
+  rare_npc: { name: 'Mr. Goldfinger getroffen', reward: 3 },
+  club_book: { name: 'Das geheime Buch im Millionaires Club', reward: 3 },
+  sky_star: { name: 'Der Ayri-Stern (Teleskop)', reward: 3 },
 };
 
 export function fmtMoney(v) {

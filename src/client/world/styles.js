@@ -291,7 +291,18 @@ export const PROPS = {
     g.add(mesh(new THREE.BoxGeometry(1.8, 2.4, 0.4), M.std('#3a2210', 0.6), 0, 1.2, 0));
     const cols = ['#7a1230', '#1d3557', '#2a5a3a', '#c9a050', '#4a2a5a'];
     for (let r = 0; r < 4; r++) for (let i = 0; i < 9; i++) g.add(mesh(new THREE.BoxGeometry(0.15, 0.4 + (i * 7 % 3) * 0.05, 0.3), M.std(cols[(i + r) % 5], 0.7), -0.72 + i * 0.18, 0.35 + r * 0.55, 0.06));
-    onWall(w, g, 1.9, 0) && w.addCircle(g.position.x, g.position.z, 0.5);
+    if (!onWall(w, g, 1.9, 0)) return;
+    w.addCircle(g.position.x, g.position.z, 0.5);
+    // Geheimnis (nur im ersten Regal): ein rotes Buch steht etwas vor – E zieht daran
+    if (w.secretShelf || w.n !== 7) return;
+    w.secretShelf = true;
+    const book = mesh(new THREE.BoxGeometry(0.15, 0.45, 0.3), M.std('#b3122e', 0.5), 0.54, 1.47, 0.14);
+    book.userData.noBake = true;
+    g.add(book);
+    const fwd = new THREE.Vector3(Math.sin(g.rotation.y), 0, Math.cos(g.rotation.y));
+    const pos = g.position.clone().addScaledVector(fwd, 0.9);
+    w.addInteract({ pos, radius: 0.9, verb: '???', label: '???', enabled: () => !w.app.hasSecret('club_book'),
+      action: () => { book.rotation.x = -0.5; book.position.z = 0.22; w.app.findSecret('club_book'); } });
   },
   fireplace(w) {
     const g = new THREE.Group();
@@ -422,7 +433,10 @@ export const PROPS = {
     const tube = mesh(new THREE.CylinderGeometry(0.07, 0.1, 1.1, 14), br, 0, 1.35, 0.1);
     tube.rotation.x = -1.1;
     g.add(tube);
-    place(w, g, 0.5);
+    if (!place(w, g, 0.5)) return;
+    const fwd = new THREE.Vector3(Math.sin(g.rotation.y), 0, Math.cos(g.rotation.y));
+    w.addInteract({ pos: g.position.clone().addScaledVector(fwd, -0.7), radius: 1, verb: 'SCHAUEN', label: 'Durch das Teleskop schauen',
+      action: () => { if (!w.app.findSecret('sky_star')) w.app.ui.toast('✨ Der Ayri-Stern funkelt dir zu.', 'info'); } });
   },
   lounge(w) { const s = sofa('#c0c8d8', 2.2); place(w, s, 1.2); },
   goldBars(w) {

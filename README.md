@@ -172,6 +172,21 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   Startbildschirm; im Casino, am Tisch, während eines Spins oder in einer Gruppe fragt ein Dialog „Zurück zur Startseite?“.
   Vorher wird sofort gespeichert; in einer Gruppe verlässt nur dieser Spieler die Sitzung (Sitze werden frei, der Server
   bestimmt bei Bedarf einen neuen Gruppenleiter).
+- **Achievements**: u. a. FIRST WIN, BLACKJACK MASTER (25 Blackjack-Siege), HIGH ROLLER (≥ $10'000 in einer Runde),
+  MILLIONAIRE, UNLUCKY BASTARD (5 Niederlagen in Folge), CASINO TOURIST (5 Stockwerke besucht), TOP FLOOR und
+  SECRET HUNTER (alle Geheimnisse) – mit 🍆 und teils Kosmetik als Belohnung, zu sehen unter 📊 → Achievements.
+- **Statistiken**: Spielzeit, höchster Pot, grösster Gewinn/Verlust, gesamt gewonnen/verloren, Runden, Blackjack-Runden,
+  -Siege und -Siegquote, Roulette-Runden, Slot-Spins, Jackpots, besuchte Stockwerke, Challenges, Geheimnisse,
+  verdiente/ausgegebene 🍆, Lieblingsspiel, längste Pechsträhne.
+- **Kosmetik**: neue Hüte (Partyhut, Lucky Hat 🍀, Diamond Hat, Casino Crown), Brillen (Herzbrille, Golden Glasses),
+  Lucky Chain, Smoking, Samt-Sakko, Casino-Weste, Goldhose, Gold-Sneaker, Masken (Augenmaske, Venezianisch, Banditen-Tuch)
+  und Emotes (Verbeugen, Dab, Geld werfen – Tasten 6–8). Freigeschaltet über Challenges, Achievements, Stockwerke,
+  Geheimnisse, High-Roller-Events und den AYRI SHOP; neue Teile melden sich mit `NEUES ITEM`.
+- **Glücks-Kosmetik** (Lucky Hat, Golden Glasses, Lucky Chain, Diamond Hat, Casino Crown): nur winzige Boni – eine kleine
+  Chance auf +1 🍆 bei Belohnungen, Glitzern bei Gewinnen (für alle sichtbar), die Casino Crown gibt +1 🍆 auf Challenges.
+  Kein Einfluss auf Team-Pot oder Gewinnchancen.
+- **Geheimnisse & Easter Eggs**: Fünf versteckte Dinge – nicht alle sind markiert (Tipp: Shishabar, ein seltener Gast
+  in Gold, eine Bibliothek, ein Teleskop und ein Wort, das man tippen kann).
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Challenges und Achievements – jeweils nur
   einmal pro Spieler, also kein Farming.
 - **MAKKA an der Bar**: Nur bei Kemal an der Bar der Shishabar gibt es die pinke Ayri-Limonade für genau 1 🍆.

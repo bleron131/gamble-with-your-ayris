@@ -14,6 +14,8 @@ export function defaultStats() {
     hands: 0, spins: 0, rounds: 0, roundsWon: 0, floorsCompleted: 0, floorsFailed: 0, mafiaVisits: 0,
     doubleAttempts: 0, doubleWins: 0, doubleLosses: 0, highestPot: START_CAPITAL,
     dildosEarned: 0, dildosSpent: 0, itemsUsed: 0, takes: 0, makkas: 0,
+    // Prompt 8: Spielzeit (Sekunden), Runden je Spiel, besuchte Stockwerke, Challenges, Pechsträhnen
+    playtime: 0, games: {}, floorsVisited: [], challengesDone: 0, lossStreak: 0, bestLossStreak: 0, highestPotRun: 0,
   };
 }
 
@@ -28,6 +30,10 @@ function defaults() {
     rewardedFloors: [],
     challengeFloors: [], // alt (vor den neuen Challenges)
     challenges: [], // erledigte Challenge-IDs (permanent, pro Spieler)
+    cosmetics: [], // im AYRI SHOP gekaufte Kosmetik (z. B. 'hat:luckyhat')
+    secrets: [], // gefundene Geheimnisse
+    events: [], // gewonnene Events (z. B. 'highroller')
+    titles: [], // erspielte Titel
     campaign: defaultCampaign(),
     // Aktueller Run (wird bei einer Niederlage komplett ersetzt); campaign enthält nur permanente Rekorde
     run: { id: null, pot: START_CAPITAL, finalUnlocked: false, startedAt: Date.now(), unlocked: 1, completed: [] },

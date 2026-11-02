@@ -11,18 +11,19 @@ export const OPTIONS = {
   eyeColor: ['#3a2a1a', '#2c6bd6', '#2e8b57', '#777', '#9b2fbf'],
   brows: [['normal', 'Normal'], ['thick', 'Buschig'], ['angry', 'Böse'], ['raised', 'Erstaunt'], ['uni', 'Monobraue'], ['none', 'Keine']],
   beard: [['none', 'Keiner'], ['stubble', 'Dreitage'], ['full', 'Vollbart'], ['goatee', 'Ziegenbart'], ['mustache', 'Schnauzer'], ['chinstrap', 'Kinnbart']],
-  top: [['tshirt', 'T-Shirt'], ['hoodie', 'Hoodie'], ['tank', 'Tanktop'], ['shirt', 'Hemd'], ['polo', 'Polo']],
+  top: [['tshirt', 'T-Shirt'], ['hoodie', 'Hoodie'], ['tank', 'Tanktop'], ['shirt', 'Hemd'], ['polo', 'Polo'], ['casino', 'Casino-Weste']],
   topColor: ['#e63946', '#ffffff', '#1d3557', '#2a9d8f', '#f4a261', '#111111', '#9b5de5', '#ffd60a', '#f15bb5', '#06d6a0'],
-  pants: [['jeans', 'Jeans'], ['shorts', 'Shorts'], ['suit', 'Anzughose'], ['jogger', 'Jogger']],
+  pants: [['jeans', 'Jeans'], ['shorts', 'Shorts'], ['suit', 'Anzughose'], ['jogger', 'Jogger'], ['gold', 'Goldhose']],
   pantsColor: ['#2b4c7e', '#111111', '#6b4f2a', '#888888', '#e8e2d0', '#7a1230', '#1d6b3a'],
-  shoes: [['sneakers', 'Sneaker'], ['boots', 'Stiefel'], ['sandals', 'Sandalen'], ['loafers', 'Lackschuhe']],
+  shoes: [['sneakers', 'Sneaker'], ['boots', 'Stiefel'], ['sandals', 'Sandalen'], ['loafers', 'Lackschuhe'], ['goldsneakers', 'Gold-Sneaker']],
   shoesColor: ['#ffffff', '#111111', '#7a4a21', '#e63946', '#ffd700'],
-  jacket: [['none', 'Keine'], ['leather', 'Lederjacke'], ['blazer', 'Blazer'], ['track', 'Trainingsjacke'], ['gold', 'Goldjacke']],
+  jacket: [['none', 'Keine'], ['leather', 'Lederjacke'], ['blazer', 'Blazer'], ['track', 'Trainingsjacke'], ['gold', 'Goldjacke'], ['tux', 'Smoking'], ['velvet', 'Samt-Sakko']],
   jacketColor: ['#1a1a1a', '#7a1230', '#1d3557', '#f2f2f2', '#2a9d8f', '#6b4f2a'],
-  hat: [['none', 'Keine'], ['cap', 'Cap'], ['beanie', 'Mütze'], ['fedora', 'Fedora'], ['fez', 'Fes'], ['cowboy', 'Cowboyhut'], ['tophat', 'Zylinder'], ['crown', 'Krone']],
+  hat: [['none', 'Keine'], ['cap', 'Cap'], ['beanie', 'Mütze'], ['fedora', 'Fedora'], ['fez', 'Fes'], ['cowboy', 'Cowboyhut'], ['tophat', 'Zylinder'], ['crown', 'Krone'], ['party', 'Partyhut'], ['luckyhat', 'Lucky Hat 🍀'], ['diamondhat', 'Diamond Hat'], ['casinocrown', 'Casino Crown']],
   hatColor: ['#1a1a1a', '#e63946', '#1d3557', '#f2f2f2', '#c98c3a', '#9b5de5'],
-  glasses: [['none', 'Keine'], ['round', 'Rund'], ['shades', 'Sonnenbrille'], ['monocle', 'Monokel'], ['star', 'Sternbrille']],
-  jewelry: [['none', 'Keiner'], ['chain', 'Silberkette'], ['goldchain', 'Goldkette'], ['earrings', 'Ohrringe'], ['watch', 'Uhr'], ['diamond', 'Diamant-Kette']],
+  glasses: [['none', 'Keine'], ['round', 'Rund'], ['shades', 'Sonnenbrille'], ['monocle', 'Monokel'], ['star', 'Sternbrille'], ['heart', 'Herzbrille'], ['golden', 'Golden Glasses']],
+  jewelry: [['none', 'Keiner'], ['chain', 'Silberkette'], ['goldchain', 'Goldkette'], ['earrings', 'Ohrringe'], ['watch', 'Uhr'], ['diamond', 'Diamant-Kette'], ['luckychain', 'Lucky Chain']],
+  mask: [['none', 'Keine'], ['domino', 'Augenmaske'], ['venetian', 'Venezianische Maske'], ['bandit', 'Banditen-Tuch']],
   accessory: [['none', 'Keins'], ['rose', 'Rose'], ['cocktail', 'Cocktail'], ['dice', 'Glückswürfel'], ['moneybag', 'Geldsack'], ['trophy', 'Pokal']],
 };
 
@@ -32,7 +33,7 @@ export function defaultAppearance() {
     skin: r(OPTIONS.skin.slice(0, 6)), hair: r(['short', 'spiky', 'curly', 'quiff', 'afro']), hairColor: r(OPTIONS.hairColor.slice(0, 6)),
     eyes: 'round', eyeColor: '#3a2a1a', brows: 'normal', beard: r(['none', 'none', 'stubble', 'mustache']),
     top: 'tshirt', topColor: r(OPTIONS.topColor), pants: 'jeans', pantsColor: '#2b4c7e', shoes: 'sneakers', shoesColor: '#ffffff',
-    jacket: 'none', jacketColor: '#1a1a1a', hat: 'none', hatColor: '#1a1a1a', glasses: 'none', jewelry: 'none', accessory: 'none',
+    jacket: 'none', jacketColor: '#1a1a1a', hat: 'none', hatColor: '#1a1a1a', glasses: 'none', jewelry: 'none', accessory: 'none', mask: 'none',
   };
 }
 
@@ -97,8 +98,8 @@ export class Character {
     const B = this.body;
     const skin = mat(a.skin, { rough: 0.55 });
     const top = mat(a.topColor);
-    const pants = mat(a.pantsColor, { rough: 0.8 });
-    const shoe = mat(a.shoesColor, { rough: a.shoes === 'loafers' ? 0.2 : 0.7 });
+    const pants = a.pants === 'gold' ? mat('#d4af37', { metal: 0.85, rough: 0.25 }) : mat(a.pantsColor, { rough: 0.8 });
+    const shoe = a.shoes === 'goldsneakers' ? mat('#ffcf40', { metal: 0.85, rough: 0.2 }) : mat(a.shoesColor, { rough: a.shoes === 'loafers' ? 0.2 : 0.7 });
     const dark = mat('#141014');
     const white = mat('#ffffff', { rough: 0.2 });
     this.skinMat = skin;
@@ -114,7 +115,7 @@ export class Character {
       s.scale.set(1, a.shoes === 'boots' ? 0.85 : 0.6, 1.45);
       leg.add(s);
       if (a.shoes === 'boots') leg.add(mesh(cyl(0.078, 0.08, 0.12), shoe, 0, -0.2, 0));
-      if (a.shoes === 'sneakers') { const sole = mesh(box(0.15, 0.03, 0.24), white, 0, -0.31, 0.035); leg.add(sole); }
+      if (a.shoes === 'sneakers' || a.shoes === 'goldsneakers') { const sole = mesh(box(0.15, 0.03, 0.24), white, 0, -0.31, 0.035); leg.add(sole); }
       B.add(leg);
     }
     // Hüfte
@@ -128,14 +129,21 @@ export class Character {
       const hood = mesh(torus(0.15, 0.05, Math.PI * 2), top, 0, 0.74, -0.06); hood.rotation.x = Math.PI / 2.4; B.add(hood);
       const pocket = mesh(box(0.2, 0.08, 0.02), mat(new THREE.Color(a.topColor).multiplyScalar(0.8)), 0, 0.45, 0.17); B.add(pocket);
     }
-    if (a.top === 'shirt' || a.top === 'polo') {
-      const collar = mesh(torus(0.11, 0.03, Math.PI * 2), a.top === 'shirt' ? white : top, 0, 0.73, 0.0); collar.rotation.x = Math.PI / 2; B.add(collar);
-      for (let i = 0; i < (a.top === 'shirt' ? 3 : 2); i++) B.add(mesh(sphere(0.015, 8, 6), white, 0, 0.66 - i * 0.07, 0.175));
+    if (a.top === 'shirt' || a.top === 'polo' || a.top === 'casino') {
+      const collar = mesh(torus(0.11, 0.03, Math.PI * 2), a.top === 'polo' ? top : white, 0, 0.73, 0.0); collar.rotation.x = Math.PI / 2; B.add(collar);
+      for (let i = 0; i < (a.top === 'polo' ? 2 : 3); i++) B.add(mesh(sphere(0.015, 8, 6), white, 0, 0.66 - i * 0.07, 0.175));
+    }
+    if (a.top === 'casino') {
+      // Croupier-Weste über dem Hemd mit goldenen Knöpfen und Fliege
+      const vm = mat('#7a1230', { rough: 0.6 });
+      for (const side of [-1, 1]) { const v = mesh(capsule(0.195, 0.14), vm, side * 0.075, 0.51, 0.005); v.scale.set(0.55, 0.95, 0.93); B.add(v); }
+      for (let i = 0; i < 3; i++) B.add(mesh(sphere(0.016, 8, 6), mat('#ffcf40', { metal: 0.9, rough: 0.2 }), 0, 0.56 - i * 0.07, 0.18));
+      B.add(mesh(box(0.12, 0.05, 0.03), mat('#111'), 0, 0.72, 0.17));
     }
     // Jacke
     if (a.jacket !== 'none') {
-      const jc = a.jacket === 'gold' ? '#d4af37' : a.jacketColor;
-      const jm = mat(jc, { rough: a.jacket === 'leather' ? 0.35 : a.jacket === 'gold' ? 0.25 : 0.7, metal: a.jacket === 'gold' ? 0.8 : 0 });
+      const jc = a.jacket === 'gold' ? '#d4af37' : a.jacket === 'tux' ? '#0d0d10' : a.jacket === 'velvet' ? '#5a1a7a' : a.jacketColor;
+      const jm = mat(jc, { rough: a.jacket === 'leather' ? 0.35 : a.jacket === 'gold' ? 0.25 : a.jacket === 'velvet' ? 0.95 : 0.7, metal: a.jacket === 'gold' ? 0.8 : 0 });
       for (const side of [-1, 1]) {
         const half = mesh(capsule(0.2, 0.15), jm, side * 0.06, 0.53, -0.01);
         half.scale.set(0.62, 1.02, 0.95);
@@ -143,6 +151,13 @@ export class Character {
         const lapel = mesh(box(0.05, 0.2, 0.02), jm, side * 0.07, 0.6, 0.17); lapel.rotation.z = side * 0.3; B.add(lapel);
       }
       if (a.jacket === 'track') for (const side of [-1, 1]) B.add(mesh(box(0.02, 0.3, 0.02), white, side * 0.13, 0.55, 0.15));
+      if (a.jacket === 'tux') {
+        // Smoking: weisse Hemdbrust, Satin-Revers, Fliege
+        B.add(mesh(box(0.1, 0.22, 0.02), white, 0, 0.6, 0.175));
+        for (const side of [-1, 1]) { const sl = mesh(box(0.045, 0.2, 0.021), mat('#2a2a30', { rough: 0.25 }), side * 0.075, 0.61, 0.178); sl.rotation.z = side * 0.3; B.add(sl); }
+        for (const side of [-1, 1]) { const bw = mesh(geo('bow', () => new THREE.ConeGeometry(0.04, 0.07, 4)), mat('#111'), side * 0.035, 0.72, 0.18); bw.rotation.z = side * Math.PI / 2; B.add(bw); }
+      }
+      if (a.jacket === 'velvet') B.add(mesh(sphere(0.03, 10, 8), mat('#ffcf40', { metal: 0.9, rough: 0.2 }), -0.1, 0.62, 0.17));
       this.jacketMat = jm;
     }
     // Arme
@@ -237,6 +252,13 @@ export class Character {
       if (a.jewelry === 'diamond') B.add(mesh(new THREE.OctahedronGeometry(0.05), mat('#9be7ff', { metal: 0.3, rough: 0.05, extra: { emissive: '#4ac', emissiveIntensity: 0.4 } }), 0, 0.6, 0.2));
       else B.add(mesh(sphere(0.035), cm, 0, 0.6, 0.19));
     }
+    if (a.jewelry === 'luckychain') {
+      const cm = mat('#ffcf40', { metal: 0.95, rough: 0.2 });
+      const ch = mesh(torus(0.15, 0.018, Math.PI * 2), cm, 0, 0.71, 0.05); ch.rotation.x = Math.PI / 2.3; B.add(ch);
+      const clover = mat('#7cff6b', { rough: 0.4, extra: { emissive: '#2a8a2a', emissiveIntensity: 0.5 } });
+      for (let i = 0; i < 4; i++) { const a2 = i / 4 * Math.PI * 2 + Math.PI / 4; B.add(mesh(sphere(0.028, 10, 8), clover, Math.cos(a2) * 0.028, 0.6 + Math.sin(a2) * 0.028, 0.2)); }
+    }
+    this.buildMask(H, a);
     if (a.jewelry === 'earrings') for (const s of [-1, 1]) H.add(mesh(torus(0.03, 0.008, Math.PI * 2), mat('#ffcf40', { metal: 0.9, rough: 0.2 }), s * 0.37, -0.1, 0.02));
     // Accessoire (in der rechten Hand)
     this.buildAccessory(a);
@@ -278,10 +300,69 @@ export class Character {
       case 'fez': H.add(mesh(cyl(0.2, 0.25, 0.28), mat('#b3122e'), 0, y + 0.08, 0)); H.add(mesh(capsule(0.012, 0.18), mat('#111'), 0.12, y + 0.05, 0.1)); break;
       case 'cowboy': { const br = mesh(cyl(0.65, 0.65, 0.03), hm, 0, y, 0); br.scale.set(1, 1, 0.8); H.add(br); H.add(mesh(cyl(0.25, 0.3, 0.28), hm, 0, y + 0.14, 0)); break; }
       case 'tophat': H.add(mesh(cyl(0.45, 0.45, 0.03), mat('#111'), 0, y, 0)); H.add(mesh(cyl(0.27, 0.27, 0.45), mat('#111'), 0, y + 0.23, 0)); H.add(mesh(cyl(0.275, 0.275, 0.07), mat('#7a1230'), 0, y + 0.06, 0)); break;
+      case 'party': {
+        const pc = mesh(geo('party', () => new THREE.ConeGeometry(0.2, 0.45, 20)), mat(a.hatColor === '#1a1a1a' ? '#ff4fa3' : a.hatColor, { rough: 0.6 }), 0.05, y + 0.2, 0);
+        pc.rotation.z = -0.15; H.add(pc);
+        H.add(mesh(sphere(0.06), mat('#ffd60a'), 0.085, y + 0.44, 0));
+        for (let i = 0; i < 3; i++) H.add(mesh(torus(0.16 - i * 0.045, 0.012, Math.PI * 2), mat(['#2bd9fe', '#7cff6b', '#ffd60a'][i]), 0.05 + i * 0.012, y + 0.06 + i * 0.11, 0).rotateX(Math.PI / 2));
+        break;
+      }
+      case 'luckyhat': {
+        // Grüner Zylinder mit Kleeblatt
+        const gm = mat('#1d8a3a', { rough: 0.6 });
+        H.add(mesh(cyl(0.45, 0.45, 0.03), gm, 0, y, 0)); H.add(mesh(cyl(0.27, 0.27, 0.42), gm, 0, y + 0.22, 0));
+        H.add(mesh(cyl(0.275, 0.275, 0.07), mat('#ffd60a', { metal: 0.6, rough: 0.3 }), 0, y + 0.06, 0));
+        const clover = mat('#7cff6b', { rough: 0.4, extra: { emissive: '#2a8a2a', emissiveIntensity: 0.4 } });
+        for (let i = 0; i < 4; i++) { const a2 = i / 4 * Math.PI * 2 + Math.PI / 4; H.add(mesh(sphere(0.035, 10, 8), clover, Math.cos(a2) * 0.035, y + 0.25 + Math.sin(a2) * 0.035, 0.28)); }
+        break;
+      }
+      case 'diamondhat': {
+        const dm = mat('#e8f6ff', { metal: 0.4, rough: 0.08, extra: { emissive: '#4ac', emissiveIntensity: 0.25 } });
+        H.add(mesh(cyl(0.45, 0.45, 0.03), mat('#111'), 0, y, 0)); H.add(mesh(cyl(0.27, 0.27, 0.42), mat('#111'), 0, y + 0.22, 0));
+        for (let i = 0; i < 10; i++) { const a2 = i / 10 * Math.PI * 2; H.add(mesh(geo('dgem', () => new THREE.OctahedronGeometry(0.035)), dm, Math.cos(a2) * 0.28, y + 0.08, Math.sin(a2) * 0.28)); }
+        H.add(mesh(geo('dgem2', () => new THREE.OctahedronGeometry(0.07)), dm, 0, y + 0.5, 0));
+        break;
+      }
+      case 'casinocrown': {
+        const gm = mat('#ffcf40', { metal: 0.95, rough: 0.15 });
+        H.add(mesh(cyl(0.28, 0.27, 0.16, 24), gm, 0, y + 0.08, 0));
+        for (let i = 0; i < 6; i++) {
+          const a2 = i / 6 * Math.PI * 2;
+          H.add(mesh(geo('ccr', () => new THREE.ConeGeometry(0.06, 0.2, 6)), gm, Math.cos(a2) * 0.25, y + 0.25, Math.sin(a2) * 0.25));
+          // Casino-Chips als Edelsteine
+          const chip = mesh(cyl(0.035, 0.035, 0.015, 14), mat(['#e63946', '#2a9df4', '#1d1d1d'][i % 3], { rough: 0.3 }), Math.cos(a2) * 0.282, y + 0.08, Math.sin(a2) * 0.282);
+          chip.rotation.set(Math.PI / 2, Math.PI / 2 - a2, 0, 'YXZ'); H.add(chip);
+        }
+        H.add(mesh(sphere(0.05), mat('#e63946', { rough: 0.1, extra: { emissive: '#600', emissiveIntensity: 0.5 } }), 0, y + 0.38, 0));
+        break;
+      }
       case 'crown': {
         H.add(mesh(cyl(0.26, 0.26, 0.12, 24), hm, 0, y + 0.06, 0));
         for (let i = 0; i < 8; i++) { const a2 = i / 8 * Math.PI * 2; H.add(mesh(geo('crc', () => new THREE.ConeGeometry(0.05, 0.14, 6)), hm, Math.cos(a2) * 0.24, y + 0.18, Math.sin(a2) * 0.24)); }
         H.add(mesh(sphere(0.04), mat('#e63946', { rough: 0.1 }), 0, y + 0.06, 0.26));
+        break;
+      }
+    }
+  }
+
+  buildMask(H, a) {
+    switch (a.mask) {
+      case 'domino': {
+        // Augen schauen durch (Maske liegt knapp über der Haut, die Augen stehen vor)
+        H.add(mesh(new THREE.SphereGeometry(0.36, 24, 8, Math.PI * 0.3, Math.PI * 0.4, Math.PI * 0.38, Math.PI * 0.14), mat('#111', { rough: 0.4 })));
+        break;
+      }
+      case 'venetian': {
+        const gm = mat('#ffcf40', { metal: 0.9, rough: 0.2 });
+        const m = mesh(new THREE.SphereGeometry(0.36, 24, 10, Math.PI * 0.25, Math.PI * 0.5, Math.PI * 0.3, Math.PI * 0.22), gm);
+        H.add(m);
+        for (let i = 0; i < 3; i++) { const f = mesh(capsule(0.025, 0.25), mat(['#9b5de5', '#ff4fa3', '#2bd9fe'][i]), 0.24 + i * 0.03, 0.33 + i * 0.03, 0.12); f.rotation.z = -0.6 + i * 0.25; H.add(f); }
+        break;
+      }
+      case 'bandit': {
+        const m = mesh(new THREE.SphereGeometry(0.385, 24, 10, Math.PI * 0.15, Math.PI * 0.7, Math.PI * 0.55, Math.PI * 0.3), mat('#b3122e', { rough: 0.9 }));
+        H.add(m);
+        for (let i = 0; i < 5; i++) H.add(mesh(sphere(0.018, 6, 4), mat('#fff'), -0.2 + i * 0.1, -0.18 - Math.abs(i - 2) * 0.02, 0.31));
         break;
       }
     }
@@ -293,6 +374,23 @@ export class Character {
       case 'round': for (const s of [-1, 1]) H.add(mesh(torus(0.085, 0.012, Math.PI * 2), fm, s * 0.13, 0.07, 0.36)); H.add(mesh(box(0.08, 0.012, 0.012), fm, 0, 0.08, 0.37)); break;
       case 'shades': { const lens = new THREE.MeshStandardMaterial({ color: '#111', roughness: 0.05, metalness: 0.6 }); for (const s of [-1, 1]) { const l = mesh(box(0.17, 0.11, 0.02), lens, s * 0.13, 0.07, 0.37); H.add(l); } H.add(mesh(box(0.42, 0.025, 0.02), fm, 0, 0.12, 0.37)); break; }
       case 'monocle': H.add(mesh(torus(0.09, 0.012, Math.PI * 2), mat('#d4af37', { metal: 0.9, rough: 0.2 }), 0.13, 0.07, 0.37)); break;
+      case 'heart': {
+        const hm2 = mat('#ff2e63', { rough: 0.3, extra: { emissive: '#ff2e63', emissiveIntensity: 0.25 } });
+        // Herz je Glas: zwei Kugeln + nach unten zeigender Kegel
+        for (const s2 of [-1, 1]) {
+          for (const dx of [-0.032, 0.032]) H.add(mesh(sphere(0.045, 12, 10), hm2, s2 * 0.13 + dx, 0.09, 0.36));
+          const c = mesh(geo('hcone', () => new THREE.ConeGeometry(0.068, 0.09, 12)), hm2, s2 * 0.13, 0.035, 0.36); c.rotation.x = Math.PI; H.add(c);
+        }
+        H.add(mesh(box(0.08, 0.012, 0.012), hm2, 0, 0.08, 0.38));
+        break;
+      }
+      case 'golden': {
+        const gm = mat('#ffcf40', { metal: 0.95, rough: 0.15 });
+        const lens = new THREE.MeshStandardMaterial({ color: '#5a3a00', roughness: 0.05, metalness: 0.7, transparent: true, opacity: 0.85 });
+        for (const s2 of [-1, 1]) { H.add(mesh(box(0.17, 0.1, 0.015), lens, s2 * 0.13, 0.07, 0.37)); H.add(mesh(torus(0.09, 0.012, Math.PI * 2), gm, s2 * 0.13, 0.07, 0.375)); }
+        H.add(mesh(box(0.08, 0.014, 0.014), gm, 0, 0.09, 0.38));
+        break;
+      }
       case 'star': {
         const sm = mat('#ff4fa3', { rough: 0.3, extra: { emissive: '#ff4fa3', emissiveIntensity: 0.3 } });
         for (const s of [-1, 1]) { const st = mesh(geo('star', () => starGeometry()), sm, s * 0.14, 0.07, 0.37); H.add(st); }
@@ -367,6 +465,9 @@ export class Character {
     L.rotation.x = legSwing; R.rotation.x = -legSwing;
     this.body.position.y = bob;
     this.body.rotation.z = sway;
+    // Verbeugen: nach vorne neigen, kurz halten, wieder aufrichten
+    const bk = t % 2.6;
+    this.body.rotation.x = this.anim === 'bow' ? 0.7 * (bk < 0.4 ? bk / 0.4 : bk < 1.8 ? 1 : Math.max(0, 1 - (bk - 1.8) / 0.5)) : 0;
     if (this.anim === 'jump') { L.rotation.x = -0.75; R.rotation.x = 0.35; }
     if (this.anim === 'cheer' || this.anim === 'dance' || this.anim === 'jump') {
       this.armL.rotation.set(0, 0, -armUp);
@@ -378,6 +479,16 @@ export class Character {
       const k = Math.sin(t * 6) * 0.5;
       this.armR.rotation.set(-1.1 + k * 0.4, 0, 0.3);
       this.armL.rotation.set(-0.9 - k * 0.3, 0, -0.3);
+    } else if (this.anim === 'dab') {
+      this.armL.rotation.set(-0.4, 0, -2.3);
+      this.armR.rotation.set(-1.6, 0.9, 1.9);
+    } else if (this.anim === 'bow') {
+      this.armR.rotation.set(-0.9, 0, 0.6);
+      this.armL.rotation.set(0.3, 0, -0.25);
+    } else if (this.anim === 'money') {
+      const k = Math.sin(t * 9);
+      this.armR.rotation.set(-1.8 - k * 0.6, 0, 0.4);
+      this.armL.rotation.set(-1.8 + k * 0.6, 0, -0.4);
     } else if (this.anim === 'point') {
       this.armR.rotation.set(-1.5, 0, 0.1);
       this.armL.rotation.set(0, 0, -0.18);
@@ -385,7 +496,7 @@ export class Character {
       this.armL.rotation.set(-armSwing, 0, -0.18);
       this.armR.rotation.set(armSwing, 0, 0.18);
     }
-    this.head.rotation.x = headTilt;
+    this.head.rotation.x = this.anim === 'dab' ? 0.55 : headTilt;
     this.head.rotation.z = 0;
     // Flasche halten / trinken
     if (fx.includes('d') || fx.includes('c')) {

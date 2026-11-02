@@ -1,10 +1,11 @@
 // Dialoge: Aufzug (Levelauswahl + Ausrüstung), AYRI SHOP, Charaktereditor, Statistiken, Einstellungen.
 import * as THREE from 'three';
 import { h, clear } from './dom.js';
-import { FLOORS, ITEMS, LOADOUT_SLOTS, GAME_NAMES, GAME_ICONS, ACHIEVEMENTS, COSMETIC_UNLOCKS, fmtMoney, START_CAPITAL } from '../../shared/config.js';
+import { FLOORS, ITEMS, LOADOUT_SLOTS, GAME_NAMES, GAME_ICONS, ACHIEVEMENTS, COSMETIC_UNLOCKS, LUCKY_COSMETICS, fmtMoney, START_CAPITAL } from '../../shared/config.js';
 import { OPTIONS } from '../character.js';
 import * as Save from '../save.js';
 import { challengesFor } from '../../shared/challenges.js';
+import { cosmeticLock, EXTRA_EMOTES, favoriteGame, secretCount, SECRET_TOTAL } from '../progress.js';
 import { enterFullscreen } from '../fullscreen.js';
 import { TIER_NAMES } from '../engine.js';
 import { sfx } from '../audio.js';
@@ -149,6 +150,38 @@ export function openShop(ui) {
     }
     wrap.append(grid);
     wrap.append(h('div.subtle.small', 'Gekaufte Items landen im Inventar. Im Aufzug wählst du vor jedem Stockwerk aus, welche du mitnimmst (max. 4).'));
+    // Kosmetik & Emotes: rein optisch; Glücks-Kosmetik gibt nur winzige 🍆-Boni
+    wrap.append(h('h3', '✨ Kosmetik & Emotes'));
+    const cg = h('div.shopgrid');
+    for (const [key, u] of Object.entries(COSMETIC_UNLOCKS).filter(([, u]) => u.shop)) {
+      const [cat, val] = key.split(':');
+      const owned = (s.cosmetics || []).includes(key);
+      const name = cat === 'emote' ? (EXTRA_EMOTES.find(e => e[0] === val)?.[2] || val) : (OPTIONS[cat]?.find(o => o[0] === val)?.[1] || val);
+      const icon = cat === 'emote' ? EXTRA_EMOTES.find(e => e[0] === val)?.[1] : { hat: '🎩', glasses: '🕶️', jewelry: '📿' }[cat] || '✨';
+      const lucky = LUCKY_COSMETICS[key];
+      const can = !owned && s.dildos >= u.shop;
+      cg.append(h('div.shopitem', { class: owned ? 'owned' : '' },
+        h('div.sico', icon), h('div.sname', name),
+        h('div.susage', cat === 'emote' ? 'EMOTE' : lucky ? 'GLÜCKS-KOSMETIK' : 'KOSMETIK'),
+        h('div.sdesc', lucky ? `Winziger Bonus: ${Math.round(lucky.bonus * 100)}% Chance auf +1 🍆 bei Belohnungen, Glitzern bei Gewinnen${lucky.challenge ? ', +1 🍆 auf Challenges' : ''}.` : cat === 'emote' ? 'Neues Emote für die Emote-Leiste (Taste 6–8).' : 'Rein optisch.'),
+        h('div.sowned', owned ? '✓ Im Besitz – im Spiegel ausrüsten' : ''),
+        h('button.primary', {
+          disabled: !can,
+          onclick: () => {
+            if (!can) return;
+            s.dildos -= u.shop;
+            s.stats.dildosSpent += u.shop;
+            s.cosmetics = [...(s.cosmetics || []), key];
+            Save.save();
+            sfx.shop();
+            ui.popup('item', 'NEUES ITEM', `${name} freigeschaltet`);
+            ui.refreshHud();
+            ui.renderEmotes?.();
+            render();
+          },
+        }, owned ? 'Besitzt du' : `${u.shop} 🍆`)));
+    }
+    wrap.append(cg);
   };
   render();
   ui.openModal(wrap, 'wide');
@@ -159,17 +192,10 @@ const CATS = [
   ['skin', 'Hautfarbe', 'color'], ['hair', 'Haare'], ['hairColor', 'Haarfarbe', 'color'], ['eyes', 'Augen'], ['eyeColor', 'Augenfarbe', 'color'],
   ['brows', 'Augenbrauen'], ['beard', 'Bart'], ['top', 'Oberteil'], ['topColor', 'Oberteil-Farbe', 'color'], ['jacket', 'Jacke'],
   ['jacketColor', 'Jackenfarbe', 'color'], ['pants', 'Hose'], ['pantsColor', 'Hosenfarbe', 'color'], ['shoes', 'Schuhe'], ['shoesColor', 'Schuhfarbe', 'color'],
-  ['hat', 'Kopfbedeckung'], ['hatColor', 'Hutfarbe', 'color'], ['glasses', 'Brille'], ['jewelry', 'Schmuck'], ['accessory', 'Accessoire'],
+  ['hat', 'Kopfbedeckung'], ['hatColor', 'Hutfarbe', 'color'], ['glasses', 'Brille'], ['mask', 'Maske'], ['jewelry', 'Schmuck'], ['accessory', 'Accessoire'],
 ];
 
-function isLocked(cat, val) {
-  const u = COSMETIC_UNLOCKS[`${cat}:${val}`];
-  if (!u) return null;
-  const s = Save.get();
-  if (u.floor && ((s.campaign.everCompleted || []).includes(u.floor) || (s.run.completed || []).includes(u.floor))) return null;
-  if (u.achievement && s.achievements[u.achievement]) return null;
-  return u.label;
-}
+function isLocked(cat, val) { return cosmeticLock(`${cat}:${val}`); }
 
 export function openEditor(ui, fromMenu) {
   const app = ui.app, s = Save.get();
@@ -259,8 +285,23 @@ export function openStats(ui) {
   let cur = 'stats';
   const row = (k, v) => h('div.srow', h('span', k), h('b', v));
   const renders = {
-    stats: () => [
-      h('h3', 'Deine Statistiken'),
+    stats: () => {
+      const g = st.games || {};
+      const bjRounds = g.blackjack || 0;
+      const fav = favoriteGame(st);
+      const hrs = Math.floor((st.playtime || 0) / 3600), mins = Math.floor((st.playtime || 0) % 3600 / 60);
+      return [
+      h('h3', 'Überblick'),
+      h('div.sgrid',
+        row('Spielzeit', `${hrs} h ${mins} min`), row('Höchster Team-Pot', fmtMoney(st.highestPot)), row('Grösster Gewinn', fmtMoney(st.biggestWin)),
+        row('Grösster Verlust', fmtMoney(st.biggestLoss)), row('Gesamt gewonnen', fmtMoney(st.won)), row('Gesamt verloren', fmtMoney(st.lost)),
+        row('Gespielte Runden', st.rounds), row('Blackjack-Runden', bjRounds), row('Blackjack-Siege', st.blackjackWins),
+        row('Blackjack-Siegquote', bjRounds ? `${Math.round(st.blackjackWins / bjRounds * 100)}%` : '—'), row('Roulette-Runden', g.roulette || 0), row('Slot-Spins', (g.slots || 0) + (g.highslots || 0)),
+        row('Jackpots', st.slotJackpots), row('Besuchte Stockwerke', `${(st.floorsVisited || []).length}/15`), row('Abgeschlossene Challenges', `${(s.challenges || []).length}`),
+        row('Gefundene Geheimnisse', `${secretCount()}/${SECRET_TOTAL}`), row('Verdiente Dildos', `🍆 ${st.dildosEarned}`), row('Ausgegebene Dildos', `🍆 ${st.dildosSpent}`),
+        row('Lieblingsspiel', fav ? `${GAME_ICONS[fav]} ${GAME_NAMES[fav]}` : '—'), row('Längste Pechsträhne', st.bestLossStreak || 0), row('Titel', (s.titles || []).join(', ') || '—'),
+      ),
+      h('h3', 'Details'),
       h('div.sgrid',
         row('Gesamteinsätze', fmtMoney(st.wagered)), row('Gesamtgewinne', fmtMoney(st.won)), row('Gesamtverluste', fmtMoney(st.lost)),
         row('Grösster Einzelgewinn', fmtMoney(st.biggestWin)), row('Grösster Einzelverlust', fmtMoney(st.biggestLoss)), row('Höchster Team-Pot', fmtMoney(st.highestPot)),
@@ -269,9 +310,10 @@ export function openStats(ui) {
         row('Baccarat-Gewinne', st.baccaratWins), row('Craps-Gewinne', st.crapsWins), row('Poker-Gewinne', st.pokerWins), row('Glücksrad-Gewinne', st.wheelWins),
         row('Erfolgreiche Level', st.floorsCompleted), row('Fehlgeschlagene Level', st.floorsFailed), row('Mafia-Besuche', st.mafiaVisits),
         row('Double-or-Loss-Versuche', st.doubleAttempts), row('Erfolgreiche Doubles', st.doubleWins), row('Verlorene Doubles', st.doubleLosses),
-        row('Gesammelte Dildos', `🍆 ${st.dildosEarned}`), row('Ausgegebene Dildos', `🍆 ${st.dildosSpent}`), row('Items benutzt', st.itemsUsed),
+        row('Items benutzt', st.itemsUsed),
       ),
-    ],
+    ];
+    },
     group: () => {
       const c = app.state?.campaign || s.campaign;
       return [
@@ -292,8 +334,11 @@ export function openStats(ui) {
     },
     ach: () => [
       h('h3', `Achievements (${Object.keys(s.achievements).length}/${Object.keys(ACHIEVEMENTS).length})`),
-      h('div.achs', Object.entries(ACHIEVEMENTS).map(([k, a]) => h('div.ach', { class: s.achievements[k] ? 'on' : '' },
-        h('div.an', (s.achievements[k] ? '🏆 ' : '🔒 ') + a.name), h('div.ad', a.desc), h('div.ar', `+${a.reward} 🍆`)))),
+      h('div.achs', Object.entries(ACHIEVEMENTS).map(([k, a]) => {
+        const cos = Object.entries(COSMETIC_UNLOCKS).filter(([, u]) => u.achievement === k).map(([key]) => { const [cat, val] = key.split(':'); return cat === 'emote' ? `Emote ${EXTRA_EMOTES.find(e => e[0] === val)?.[2] || val}` : OPTIONS[cat]?.find(o => o[0] === val)?.[1] || val; });
+        return h('div.ach', { class: s.achievements[k] ? 'on' : '' },
+          h('div.an', (s.achievements[k] ? '🏆 ' : '🔒 ') + a.name), h('div.ad', a.desc), h('div.ar', `+${a.reward} 🍆${cos.length ? ' · 🎁 ' + cos.join(', ') : ''}`));
+      })),
     ],
   };
   const render = () => {

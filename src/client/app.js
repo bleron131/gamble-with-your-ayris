@@ -4,19 +4,20 @@ import { Engine } from './engine.js';
 import { Input } from './input.js';
 import { LocalPlayer } from './player.js';
 import { TouchControls } from './touch.js';
-import { Character, FPHands, makkaBottle } from './character.js';
+import { Character, FPHands, makkaBottle, OPTIONS as CHAR_OPTIONS } from './character.js';
 import { LobbyWorld } from './world/lobby.js';
 import { CasinoWorld } from './world/casino.js';
 import { FinalWorld } from './world/final.js';
 import { WSTransport, LocalTransport } from './net.js';
 import { NpcController } from './npcs.js';
+import { unlockedEmotes, EXTRA_EMOTES, wornLucky, freeCosmetics, hasSecret } from './progress.js';
 import { LOBBY_SEATS } from '../shared/npcs.js';
 import * as Save from './save.js';
 import { initAudio, sfx, sfxAt, setMusic, setAmbience, setDuck, setVolumes, setDizzyAudio, setShishaSounds, clearShishaSounds, updateListener, shishaDraw, shishaExhale } from './audio.js';
 import { bindSfx } from './tables/common.js';
 import { UI } from './ui/ui.js';
 import { esc } from './ui/dom.js';
-import { floorDef, fmtMoney, ITEMS, GAME_NAMES, ACHIEVEMENTS, FLOORS } from '../shared/config.js';
+import { floorDef, fmtMoney, ITEMS, GAME_NAMES, ACHIEVEMENTS, FLOORS, SECRETS, COSMETIC_UNLOCKS } from '../shared/config.js';
 
 export class App {
   constructor() {
@@ -254,6 +255,7 @@ export class App {
       out.push({ label: 'AUFSTEHEN', cls: 'main', run: () => this.standUp() });
       return out;
     }
+    if (this.world?.npcCtl?.rareNear(this.player.pos)) out.push({ label: '???', cls: 'main', run: () => this.meetGoldfinger() });
     const it = this.world?.nearestInteract(this.player.pos);
     if (it?.table?.walkUp) {
       const v = it.table, busy = !!v.state?.busy, id = v.def.id;
@@ -281,6 +283,7 @@ export class App {
         this.loadWorld(m.state.scene, m.state.floor);
         this.syncLoadout();
         this.onState(m.state);
+        this.checkUnlocks();
         if (m.code !== 'SOLO') this.ui.toast(`Gruppe ${m.code} – teile den Code mit deinen Freunden!`, 'info', 6000);
         break;
       case 'state': this.onState(m.state); break;
@@ -493,6 +496,7 @@ export class App {
         const label = ev.scene === 'floor' ? `STOCK ${ev.floor}` : ev.scene === 'final' ? '???' : 'SHISHABAR';
         if (ev.scene === 'lobby' && ev.reason === 'return') this.ui.feed(`Zurück in der Shishabar mit ${fmtMoney(ev.pot)}`);
         this.ui.elevatorTransition(label, () => this.loadWorld(ev.scene, ev.floor), ev.scene === 'floor' ? floorDef(ev.floor) : null);
+        if (ev.scene === 'floor') this.visitFloor(ev.floor);
         break;
       }
       case 'bet': {
@@ -551,7 +555,7 @@ export class App {
       case 'smoke': this.onSmoke(ev, mine); break;
       case 'emote': {
         const a = this.avatars.get(ev.pid);
-        if (a) { a.setAnim(ev.e); a.emoteUntil = performance.now() + 2600; }
+        if (a) { a.setAnim(ev.e); a.emoteUntil = performance.now() + 2600; if (ev.e === 'money') this.moneyRain(a.root.position); }
         break;
       }
       case 'join': if (!mine) { this.ui.toast(`${ev.name} ist der Gruppe beigetreten`, 'info'); sfx.ding(); } break;
@@ -611,9 +615,16 @@ export class App {
     } else if (mine || near) {
       if (ev.net > 0) sfx.win(); else if (ev.net < 0 && mine) sfx.lose();
     }
+    if (ev.net > 0 && (ev.stake > 0)) this.luckySparkle(ev.pid);
     if (mine && (ev.stake > 0 || ev.payout > 0)) {
       const st = this.save.stats;
       st.rounds++;
+      st.games ||= {};
+      st.games[ev.game] = (st.games[ev.game] || 0) + 1;
+      if (ev.net < 0) { st.lossStreak = (st.lossStreak || 0) + 1; st.bestLossStreak = Math.max(st.bestLossStreak || 0, st.lossStreak); if (st.lossStreak >= 5) this.achieve('unlucky'); }
+      else if (ev.net > 0) st.lossStreak = 0;
+      if (ev.net >= 10000) this.achieve('high_roller');
+      if (ev.game === 'blackjack' && ev.net > 0 && (st.blackjackWins || 0) + 1 >= 25) this.achieve('bj_master');
       if (['slots', 'highslots', 'roulette', 'wheel'].includes(ev.game)) st.spins++; else st.hands++;
       if (ev.net > 0) {
         st.won += ev.net; st.roundsWon++;
@@ -638,6 +649,14 @@ export class App {
 
   onReward(m) {
     Save.addDildos(m.dildos);
+    // Glücks-Kosmetik: winzige Chance auf +1 🍆 (Casino Crown: +1 auf Challenges) – nur 🍆, nie Geld oder Chancen
+    const lucky = wornLucky(this.save.appearance);
+    if (lucky.length) {
+      let extra = 0;
+      if (Math.random() < lucky.reduce((a, l) => a + l.bonus, 0)) extra++;
+      if (m.kind === 'challenge') extra += lucky.reduce((a, l) => a + (l.challenge || 0), 0);
+      if (extra) { Save.addDildos(extra); setTimeout(() => this.ui.popup('reward', `🍀 GLÜCKS-BONUS +${extra} 🍆`, lucky.map(l => l.name).join(' · ')), 900); }
+    }
     if (m.floor && !this.save.rewardedFloors.includes(m.floor)) this.save.rewardedFloors.push(m.floor);
     if (m.challenge && !this.save.challenges.includes(m.challenge)) this.save.challenges.push(m.challenge);
     Save.save();
@@ -646,6 +665,7 @@ export class App {
     else if (m.floor) this.ui.popup('floor', `STOCK ${m.floor} GESCHAFFT +${m.dildos} 🍆`, m.reason);
     else this.ui.reward(m.dildos, m.reason);
     this.ui.refreshHud();
+    this.checkUnlocks();
   }
 
   achieve(id) {
@@ -653,6 +673,77 @@ export class App {
       const a = ACHIEVEMENTS[id];
       this.ui.reward(a.reward, `ACHIEVEMENT: ${a.name} – ${a.desc}`, true);
       this.ui.refreshHud();
+      this.checkUnlocks();
+    }
+  }
+
+  // Neu freigeschaltete Kosmetik/Emotes melden („NEUES ITEM“)
+  checkUnlocks() {
+    const s = this.save;
+    const free = freeCosmetics();
+    if (!s.seenUnlocks) { s.seenUnlocks = free; Save.save(); return; }
+    for (const key of free) {
+      if (s.seenUnlocks.includes(key) || COSMETIC_UNLOCKS[key].shop) continue;
+      s.seenUnlocks.push(key);
+      const [cat, val] = key.split(':');
+      const name = cat === 'emote' ? `Emote: ${EXTRA_EMOTES.find(e => e[0] === val)?.[2] || val}` : (CHAR_OPTIONS[cat]?.find(o => o[0] === val)?.[1] || val);
+      setTimeout(() => this.ui.popup('item', 'NEUES ITEM', `${name} – ${cat === 'emote' ? 'Taste 6–8 / 😀' : 'im Spiegel ausrüsten'}`), 1200);
+    }
+    this.ui.renderEmotes();
+    Save.save();
+  }
+
+  // ───────────────────────── Geheimnisse ─────────────────────────
+  findSecret(id) {
+    const s = this.save;
+    s.secrets ||= [];
+    if (s.secrets.includes(id) || !SECRETS[id]) return false;
+    s.secrets.push(id);
+    const def = SECRETS[id];
+    Save.addDildos(def.reward);
+    sfx.jackpot?.();
+    this.world.particles?.confetti(this.player.pos.clone().setY(2.2), 90, 2);
+    this.ui.popup('item', `GEHEIMNIS GEFUNDEN +${def.reward} 🍆`, `${def.name} (${s.secrets.length}/${Object.keys(SECRETS).length})`);
+    if (s.secrets.length >= Object.keys(SECRETS).length) this.achieve('secret_hunter');
+    this.ui.refreshHud();
+    this.checkUnlocks();
+    Save.save();
+    return true;
+  }
+  hasSecret(id) { return hasSecret(id); }
+  meetGoldfinger() {
+    this.ui.toast('Mr. Goldfinger: „Psst… Glück ist eine Frage des Stils.“', 'info', 4000);
+    this.findSecret('rare_npc');
+  }
+
+  // Besuchte Stockwerke (CASINO TOURIST, TOP FLOOR)
+  visitFloor(n) {
+    const st = this.save.stats;
+    st.floorsVisited ||= [];
+    if (!st.floorsVisited.includes(n)) st.floorsVisited.push(n);
+    if (st.floorsVisited.length >= 5) this.achieve('tourist');
+    if (n === 15) this.achieve('top_floor');
+    Save.save();
+  }
+
+  // Geldregen (Emote „Geld werfen“) – reine Optik
+  moneyRain(pos) {
+    const ps = this.world.particles;
+    if (!ps) return;
+    for (let i = 0; i < 26; i++) setTimeout(() => ps.emit({ pos: pos.clone().add(new THREE.Vector3(0, 1.5, 0)), vel: [(Math.random() - 0.5) * 2.2, 1.5 + Math.random() * 2, (Math.random() - 0.5) * 2.2], life: 2.2, size: 0.08, color: i % 3 ? '#4caf50' : '#9be89b', gravity: 2.2, type: 'confetti', spin: (Math.random() - 0.5) * 8 }), i * 60);
+  }
+
+  // Glitzern um Spieler mit Glücks-Kosmetik bei Gewinnen (für alle sichtbar)
+  luckySparkle(pid) {
+    const look = pid === this.me ? this.save.appearance : this.state?.players.find(p => p.id === pid)?.appearance;
+    const lucky = wornLucky(look);
+    if (!lucky.length) return;
+    const root = pid === this.me ? this.player.pos : this.avatars.get(pid)?.root.position;
+    if (!root || !this.world.particles) return;
+    const col = lucky[0].sparkle;
+    for (let i = 0; i < 24; i++) {
+      const a = i / 24 * Math.PI * 2;
+      this.world.particles.emit({ pos: root.clone().add(new THREE.Vector3(Math.cos(a) * 0.45, 1.4 + Math.random() * 0.6, Math.sin(a) * 0.45)), vel: [Math.cos(a) * 0.3, 0.6 + Math.random() * 0.4, Math.sin(a) * 0.3], life: 1.3, size: 0.06, grow: 0, opacity: 1, color: col, gravity: 0, additive: true });
     }
   }
 
@@ -921,6 +1012,8 @@ export class App {
       return;
     }
     if (!this.state) return;
+    // Geheimcode: A-Y-R-I hintereinander tippen
+    if (/^Key[A-Z]$/.test(e.code)) { this.typed = ((this.typed || '') + e.code.slice(3)).slice(-4); if (this.typed === 'AYRI') this.findSecret('code_ayri'); }
     if (this.mafiaLock) return;
     if (e.code === 'KeyC') { this.toggleBallCam(); return; }
     if (this.player.lounge) {
@@ -931,9 +1024,10 @@ export class App {
       if (e.code === 'Tab') { e.preventDefault(); this.ui.toggleScoreboard(true); }
       return;
     }
+    if (e.code === 'KeyE' && this.world.npcCtl?.rareNear(this.player.pos)) { this.meetGoldfinger(); return; }
     if (e.code === 'KeyE') { const it = this.world.nearestInteract(this.player.pos); if (it) { if (!it.table?.walkUp) sfx.click(); it.action(); } }
     if (e.code === 'KeyR' || e.code === 'KeyF') { const v = this.slotNear(); if (v) this.slotBet(v.def.id, e.code === 'KeyR' ? 1 : -1); }
-    const emotes = { Digit1: 'cheer', Digit2: 'dance', Digit3: 'sad', Digit4: 'facepalm', Digit5: 'point' };
+    const emotes = { Digit1: 'cheer', Digit2: 'dance', Digit3: 'sad', Digit4: 'facepalm', Digit5: 'point', Digit6: EXTRA_EMOTES[0][0], Digit7: EXTRA_EMOTES[1][0], Digit8: EXTRA_EMOTES[2][0] };
     if (emotes[e.code]) this.emote(emotes[e.code]);
     if (e.code === 'Tab') { e.preventDefault(); this.ui.toggleScoreboard(true); }
     if (e.code === 'KeyI' && this.world.kind === 'floor') this.ui.focusItems();
@@ -942,8 +1036,10 @@ export class App {
   }
 
   emote(name) {
-    if (!this.state || this.player.seated) return;
+    if (!this.state || this.player.seated || this.player.lounge) return;
+    if (!unlockedEmotes().some(e => e[0] === name)) return;
     this.player.playEmote(name);
+    if (name === 'money') this.moneyRain(this.player.pos);
     this.send({ t: 'emote', e: name });
     if (this.world.mode === 'first' && name === 'cheer') this.hands.play('cheer');
   }
@@ -990,6 +1086,8 @@ export class App {
     }
     for (const a of this.avatars.values()) a.update(dt);
     this.world.npcCtl?.update(dt, this.engine.camera);
+    // Spielzeit (alle 10 s gespeichert)
+    if (this.state) { this.playAcc = (this.playAcc || 0) + dt; if (this.playAcc >= 10) { this.save.stats.playtime = (this.save.stats.playtime || 0) + this.playAcc; this.playAcc = 0; Save.save(); } }
     this.hands.group.visible = this.world.mode === 'first' && !this.cinematic && !this.ballCam;
     this.hands.update(dt, this.player.moving, !!this.player.seated);
     // Interaktionshinweis
@@ -998,6 +1096,7 @@ export class App {
     const touch = this.touch.active;
     const camKey = touch ? '🎥' : 'C';
     if (this.ballCam) this.ui.setHint(`${camKey} – Kamera verlassen`);
+    else if (!this.player.seated && !this.player.lounge && this.world.npcCtl?.rareNear(this.player.pos)) this.ui.setHint(touch ? '' : '[E] ???');
     else if (this.player.lounge) this.ui.setHint(touch ? '' : this.player.lounge.seat.shisha >= 0 ? '[E] Shisha rauchen · [LEERTASTE] Aufstehen' : '[E] / [LEERTASTE] Aufstehen');
     else if (this.state && !this.player.seated && !this.cinematic) {
       const it = this.world.nearestInteract(this.player.pos);
