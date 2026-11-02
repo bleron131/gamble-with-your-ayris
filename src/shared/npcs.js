@@ -34,11 +34,11 @@ export const LOBBY_SEATS = buildSeats();
 export const SEAT_REACH = 2.4; // so nah muss ein Spieler am Sitz sein, um ihn zu nehmen
 
 // ───────────────────────── NPC-Anzahl & Plätze ─────────────────────────
-export const npcCountFor = (scene, floor) => scene === 'lobby' ? 8 : scene === 'floor' ? Math.min(12, 4 + Math.round(floor * 0.55)) : 0;
+export const npcCountFor = (scene, floor) => scene === 'lobby' ? 12 : scene === 'floor' ? Math.min(12, 4 + Math.round(floor * 0.55)) : 0;
 export const FLOOR_SPOTS = { bar: 4, talk: 6, wander: 10 };
 // Stock 1 (Hinterhof) und 2 (Neon Corner) haben keine Bar (siehe client/world/styles.js)
 export const floorHasBar = n => n >= 3;
-export const LOBBY_SPOTS = { talk: 4, wander: 8 };
+export const LOBBY_SPOTS = { talk: 6, wander: 8 };
 
 const pick = arr => arr[Math.floor(rand() * arr.length)];
 const between = (a, b) => a + rand() * (b - a);
@@ -104,7 +104,7 @@ export class NpcDirector {
   assign(npc, now, initial = false) {
     const lobby = this.scene === 'lobby';
     const table = lobby
-      ? [['seat', 0.5, 25, 60], ['talk', 0.25, 12, 30], ['wander', 0.25, 6, 14]]
+      ? [['seat', 0.5, 25, 60], ['talk', 0.32, 14, 32], ['wander', 0.18, 6, 14]]
       : [['slot', 0.34, 15, 40], ['table', 0.18, 20, 45], ['bar', 0.14, 12, 28], ['talk', 0.14, 10, 25], ['watch', 0.08, 8, 16], ['wander', 0.12, 5, 12]];
     let roll = rand();
     let choice = table[table.length - 1];

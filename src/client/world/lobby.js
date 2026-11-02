@@ -125,7 +125,7 @@ export class LobbyWorld extends World {
     ];
     let li = 0;
     this.addInteract({
-      pos: new THREE.Vector3(-W / 2 + 3.6, 0, -2), radius: 1.8, verb: 'BAR / MAKKA', label: 'Bar: MAKKA kaufen (1 🍆) · mit Kemal reden',
+      pos: new THREE.Vector3(-W / 2 + 3.6, 0, -2), radius: 1.8, verb: 'BAR / MAKKA', label: 'Bar benutzen (MAKKA 1 🍆)',
       action: () => {
         tender.setAnim('point');
         setTimeout(() => tender.setAnim('idle'), 1500);
@@ -149,7 +149,7 @@ export class LobbyWorld extends World {
       const si = this.shishas.length;
       this.shishas.push(sh);
       // Rauchbar: von der offenen Seite der Sitzgruppe aus
-      this.addInteract({ pos: new THREE.Vector3(x + 1.25, 0, z), radius: 1.6, verb: 'SHISHA RAUCHEN', label: 'Shisha rauchen', action: () => this.app.smokeShisha(si), enabled: () => !(this.app.player.smokeT > 0) });
+      this.addInteract({ pos: new THREE.Vector3(x + 1.25, 0, z), radius: 1.6, verb: 'SHISHA RAUCHEN', label: 'Shisha benutzen', action: () => this.app.smokeShisha(si), enabled: () => !(this.app.player.smokeT > 0) });
       for (const [dx, dz, ry] of [[0, -1.35, 0], [0, 1.35, Math.PI], [-1.5, 0, Math.PI / 2]]) {
         const so = sofa(col, dx === -1.5 ? 1.6 : 2.4);
         so.position.set(x + dx, 0, z + dz); so.rotation.y = ry; s.add(so);
@@ -190,7 +190,7 @@ export class LobbyWorld extends World {
   npcBounds() { return [-W / 2, W / 2, -D / 2, D / 2]; }
   npcKind() { return 'casual'; }
   npcStandSpots() {
-    if (!this.standSpots) this.standSpots = freeStandSpots(this, this.npcBounds(), 12, 77, LOBBY_SEATS.map(s => ({ x: s.x, z: s.z, r: 1.2 })));
+    if (!this.standSpots) this.standSpots = freeStandSpots(this, this.npcBounds(), 14, 77, LOBBY_SEATS.map(s => ({ x: s.x, z: s.z, r: 1.2 })));
     return this.standSpots;
   }
   npcSpot(spot) { return loungeSpot(this, spot); }
@@ -304,7 +304,7 @@ export class LobbyWorld extends World {
     cols.forEach((c, i) => { const shirt = mesh(new THREE.BoxGeometry(0.05, 0.6, 0.45), M.std(c, 0.9), -0.5 + i * 0.25, 1.35, 0); rack.add(shirt); });
     s.add(rack);
     this.addBox(x + 2.3, z - 0.6, 1.5, 0.5);
-    this.addInteract({ pos: new THREE.Vector3(x, 0, z - 1.4), radius: 2, verb: 'ANPASSEN', label: 'Charakter anpassen (Spiegel)', action: () => this.app.ui.openEditor() });
+    this.addInteract({ pos: new THREE.Vector3(x, 0, z - 1.4), radius: 2, verb: 'ANPASSEN', label: 'Charakter anpassen', action: () => this.app.ui.openEditor() });
   }
 
   buildHall() {
@@ -320,7 +320,7 @@ export class LobbyWorld extends World {
     board.rotation.y = Math.PI;
     s.add(board);
     s.add(mesh(new THREE.BoxGeometry(3.4, 2.2, 0.06), M.gold(), x, 2.2, z));
-    this.addInteract({ pos: new THREE.Vector3(x, 0, z - 1.4), radius: 2, verb: 'ANSEHEN', label: 'Hall of Fame & Statistiken', action: () => this.app.ui.openStats() });
+    this.addInteract({ pos: new THREE.Vector3(x, 0, z - 1.4), radius: 2, verb: 'ANSEHEN', label: 'Hall of Fame ansehen', action: () => this.app.ui.openStats() });
     this.refreshHall();
   }
 
@@ -359,7 +359,7 @@ export class LobbyWorld extends World {
     el.userData.snap(true);
     this.updaters.push(dt => el.userData.update(dt));
     addElevatorColliders(this, 0, -D / 2 + 2);
-    this.addInteract({ pos: new THREE.Vector3(0, 0, -D / 2 + 2.2), radius: 2.2, verb: 'AUFZUG', label: 'Aufzug – Stockwerk wählen', action: () => this.app.ui.openElevator() });
+    this.addInteract({ pos: new THREE.Vector3(0, 0, -D / 2 + 2.2), radius: 2.2, verb: 'AUFZUG', label: 'Aufzug benutzen', action: () => this.app.ui.openElevator() });
     const floorSign = labelPlane(['STOCKWERKE', '1 – 15'], 1.1, 0.55, { size: 60 });
     floorSign.position.set(2.6, 1.9, -D / 2 + 0.06);
     s.add(floorSign);

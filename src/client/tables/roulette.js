@@ -375,6 +375,10 @@ export class RouletteView extends TableView {
     const watching = this.app.ballCam?.view === this;
     const near = this.app.distanceTo(this.group.position) < 8;
     this.showDolly(n);
+    if (ev.stake > 0 && this.app.distanceTo(this.group.position) < 22) {
+      this.floatText(ev.net > 0 ? `+${fmtMoney(ev.net)}` : ev.net < 0 ? `−${fmtMoney(-ev.net)}` : 'PUSH', ev.net > 0 ? '#7cff6b' : ev.net < 0 ? '#ff6b6b' : '#ffd97a', { y: 1.5, scale: ev.tier === 'big' || ev.tier === 'mega' ? 1.5 : 1 });
+      this.dealerReact(ev);
+    }
     if (this.ducked) { this.ducked = false; if (!this.app.highRiskTables.size) setDuck(false); }
     if (near || watching) say(`${n}, ${n === 0 ? 'Zero' : RED.has(n) ? 'Rot' : 'Schwarz'}`);
     if (mine || near || watching) {

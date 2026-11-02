@@ -373,10 +373,10 @@ export class CasinoWorld extends World {
           const ts = v.state;
           if (v.walkUp) {
             if (ts?.busy) return `${GAME_ICONS[def.type]} ${ts.state.spinnerName || 'Jemand'} dreht gerade…`;
-            return `SPIN ${fmtMoney(ts?.state.bet || 0)} · [R] BET + · [F] BET − · oder Knöpfe am Automaten klicken`;
+            return `${GAME_NAMES[def.type]} spielen – SPIN ${fmtMoney(ts?.state.bet || 0)} · R/F Einsatz`;
           }
           const occ = ts?.occupant && ts.occupant !== this.app.me ? this.app.playerName(ts.occupant) : null;
-          return occ ? `${GAME_ICONS[def.type]} ${GAME_NAMES[def.type]} – ${occ} spielt (zuschauen)` : `${GAME_ICONS[def.type]} ${GAME_NAMES[def.type]} spielen (${fmtMoney(v.limits.min)} – ${fmtMoney(v.limits.max)})`;
+          return occ ? `Zuschauen – ${occ} spielt ${GAME_NAMES[def.type]}` : `${GAME_NAMES[def.type]} spielen · ${fmtMoney(v.limits.min)} – ${fmtMoney(v.limits.max)}`;
         },
         action: () => this.app.sitAt(def.id),
       });
@@ -407,7 +407,7 @@ export class CasinoWorld extends World {
     this.elevator = el;
     this.updaters.push(dt => el.userData.update(dt));
     addElevatorColliders(this, 0, this.D / 2 - 2, -1);
-    this.addInteract({ pos: new THREE.Vector3(0, 0, this.D / 2 - 2.2), radius: 2.2, verb: 'AUFZUG', label: 'Aufzug – zurück zur Shishabar', action: () => this.app.requestReturn() });
+    this.addInteract({ pos: new THREE.Vector3(0, 0, this.D / 2 - 2.2), radius: 2.2, verb: 'AUFZUG', label: 'Aufzug benutzen (zurück zur Shishabar)', action: () => this.app.requestReturn() });
   }
 
   buildInfoBoard() {

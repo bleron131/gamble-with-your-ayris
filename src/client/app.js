@@ -83,6 +83,38 @@ export class App {
     this.loadWorld('lobby');
   }
 
+  // ───────────────────────── Zurück zur Startseite ─────────────────────────
+  // Direkt, wenn nichts Wichtiges läuft (Solo in der Shishabar); sonst mit Bestätigung.
+  // Gespeichert wird vorher sofort; im Multiplayer verlässt nur dieser Spieler die Gruppe (Sitze werden frei,
+  // der Server bestimmt bei Bedarf einen neuen Gruppenleiter).
+  async goHome() {
+    if (!this.state) return;
+    if (this.mafiaLock) { this.ui.toast('Gerade nicht möglich – die Mafia ist da!', 'warn'); return; }
+    const st = this.state;
+    const mySpin = Object.values(st.session?.tables || {}).some(t => t.busy && (t.occupant === this.me || t.state?.spinner === this.me));
+    const critical = st.scene !== 'lobby' || !!this.player.seated || mySpin || this.mode !== 'solo' || st.players.length > 1 || !!st.vote;
+    if (critical) {
+      const ok = await this.ui.confirmDialog({
+        title: 'Zurück zur Startseite?',
+        text: 'Dein gespeicherter Fortschritt bleibt erhalten. Eine aktuelle Casino-Runde oder Multiplayer-Sitzung wird verlassen.',
+        ok: 'Zur Startseite',
+      });
+      if (!ok || !this.state) return;
+    }
+    this.leaveToMenu();
+  }
+
+  leaveToMenu() {
+    if (this.player.lounge) this.send({ t: 'seat.leave' });
+    if (this.player.seated) { this.send({ t: 'table.leave' }); this.exitSeat(true); }
+    if (this.ballCam) this.exitBallCam();
+    Save.saveNow();
+    this.input.exitLock();
+    this.ui.closeModal();
+    this.disconnect();
+    this.ui.showMenu();
+  }
+
   send(msg) { this.net?.send(msg); }
   tableStart(id, payload) { this.send({ t: 'table.start', id, payload }); }
   tableAction(id, action) { this.send({ t: 'table.action', id, action }); }
@@ -547,6 +579,22 @@ export class App {
       this.ui.feed(`<b>${esc(ev.name)}</b> ${GAME_NAMES[ev.game]}: ${txt} – ${esc(ev.detail || '')}${ev.effects?.length ? ' ' + esc(ev.effects.join(' ')) : ''}`);
     }
     const near = this.distanceTo(this.world.views?.[ev.tableId]?.group.position || this.player.pos) < 8;
+    // Tisch-Inszenierung für alle: schwebender Betrag, Dealer-Reaktion, starke Effekte bei grossen Gewinnen
+    if (view && !view.ownFeedback && (ev.stake > 0 || ev.payout > 0) && this.distanceTo(view.group.position) < 22) {
+      const delay = view.resultDelay || 0;
+      setTimeout(() => {
+        if (this.world.views?.[ev.tableId] !== view) return;
+        if (ev.net !== 0) view.floatText(`${ev.net > 0 ? '+' : '−'}${fmtMoney(Math.abs(ev.net))}`, ev.net > 0 ? '#7cff6b' : '#ff6b6b', { scale: ev.bigWin ? 1.5 : 1 });
+        else view.floatText('PUSH', '#ffd97a');
+        view.dealerReact(ev);
+        if (ev.bigWin && ev.net > 0) {
+          const pos = view.group.position.clone().setY(1.8);
+          this.world.particles?.confetti(pos, ev.net >= ev.stake * 15 ? 220 : 120, 2.5);
+          this.world.flashAt?.(pos, ev.net >= ev.stake * 15 ? 5 : 4);
+          if (mine) this.shake(ev.net >= ev.stake * 15 ? 0.5 : 0.3);
+        }
+      }, delay);
+    }
     if (view?.ownFeedback) {
       // Automaten zeigen Gewinnstufen selbst (Sound, Licht, Münzen, grosse Anzeige)
     } else if (ev.jackpot) {
@@ -554,6 +602,8 @@ export class App {
       sfx.jackpot();
       const v = this.world.views?.[ev.tableId];
       if (v) this.world.particles.confetti(v.group.position.clone().setY(2.2), 200, 3);
+    } else if (ev.blackjacks && ev.net > 0 && (mine || near)) {
+      this.ui.bigText('BLACKJACK!', `${mine ? '' : ev.name + ': '}+${fmtMoney(ev.net)}`, 'jackpot', 3200);
     } else if (ev.bigWin) {
       this.ui.bigText('BIG WIN', `${ev.name}: +${fmtMoney(ev.net)}`, 'win', 3000);
       sfx.bigWin();
@@ -928,6 +978,7 @@ export class App {
     this.updateBallCam(dt);
     if (this.state) this.player.update(dt, this.input, this.world, this.engine.camera);
     else this.menuCamera(t);
+    this.applyShake(dt);
     // Eigener Charakter
     if (this.selfChar) {
       this.selfChar.root.position.copy(this.player.pos);
@@ -955,7 +1006,7 @@ export class App {
       if (this.hoverButton) this.ui.setHint(`Klick: ${this.hoverButton.label()}`);
       else if (rouletteSpin && (!it || this.distanceTo(rouletteSpin.group.position) < 6)) this.ui.setHint(`${camKey} – Kugelkamera`);
       else if (touch) this.ui.setHint(it?.table?.walkUp ? '' : label || '');
-      else this.ui.setHint(it ? `[E] ${label}` : this.world.mode === 'first' && !this.input.locked ? 'Klicken, um die Maus zu fangen · WASD laufen · LEERTASTE springen' : '');
+      else this.ui.setHint(it ? `[E] ${label}` : this.world.mode === 'first' && !this.input.locked && !this.ui.modalOpen ? 'Klicken zum Umschauen' : '');
     } else if (this.player.seated) {
       const v = this.player.seated;
       let lbl = null;
@@ -979,6 +1030,16 @@ export class App {
     this.world.updateLod?.(this.engine.camera, this.engine.q.lod, dt);
     this.ui.tick(dt);
     this.input.endFrame();
+  }
+
+  // Kurzes Kamerawackeln bei grossen eigenen Gewinnen
+  shake(sec = 0.3) { this.shakeT = Math.max(this.shakeT || 0, sec); this.shakeMax = Math.max(sec, 0.01); }
+  applyShake(dt) {
+    if (!(this.shakeT > 0)) return;
+    this.shakeT -= dt;
+    const k = Math.max(0, this.shakeT / this.shakeMax) * 0.05;
+    this.engine.camera.position.x += (Math.random() - 0.5) * k;
+    this.engine.camera.position.y += (Math.random() - 0.5) * k;
   }
 
   mouseNdc() {

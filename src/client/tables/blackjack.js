@@ -1,12 +1,12 @@
 // Blackjack-Tisch mit Dealer, Kartenschuh und animiertem Austeilen.
 import * as THREE from 'three';
-import { TableView, halfMoonTable, makeDealer, cardShoe, stool, chipStack, CardSet, TextSprite } from './common.js';
+import { TableView, halfMoonTable, makeDealer, cardShoe, stool, chipStack, CardSet, TextSprite, ease } from './common.js';
 import { printedFelt } from '../textures.js';
 import { handTotal, cardValue } from '../../shared/games/blackjack.js';
 import { h, clear } from '../ui/dom.js';
 import { BetAmount, actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
-import { say } from '../audio.js';
+import { say, sfx, sfxAt } from '../audio.js';
 
 export class BlackjackView extends TableView {
   constructor(app, def, floor) {
@@ -62,19 +62,77 @@ export class BlackjackView extends TableView {
     this.cards.sync(items);
     this.dealer.setAnim(s.phase === 'player' || s.phase === 'dealer' ? 'deal' : 'idle');
     setTimeout(() => this.dealer.setAnim('idle'), 900);
-    // Chips
-    clear(this.chips);
-    s.hands.forEach((hand, hi) => {
-      const st = chipStack(hand.bet, this.limits.min);
-      st.position.set(this.handX(hi, s.hands.length), 0.86, 0.95);
-      this.chips.add(st);
-    });
+    // Chips: während der Runde liegen sie auf dem Einsatzfeld, am Ende werden sie ausgezahlt bzw. eingesammelt
+    const finished = prev && prev.state.phase !== 'done' && s.phase === 'done';
+    if (s.phase !== 'done') {
+      const fresh = !prev || prev.state.dealId !== s.dealId;
+      clear(this.chips);
+      s.hands.forEach((hand, hi) => {
+        const st = chipStack(hand.bet, this.limits.min);
+        const to = new THREE.Vector3(this.handX(hi, s.hands.length), 0.86, 0.95);
+        this.chips.add(st);
+        if (fresh && prev) {
+          // Einsatz wird vom Spieler aufs Feld geschoben
+          const from = new THREE.Vector3(to.x, 0.95, 1.5);
+          st.position.copy(from);
+          this.anim.add(0.45, k => { st.position.lerpVectors(from, to, ease.outCubic(k)); st.position.y += Math.sin(k * Math.PI) * 0.12; });
+        } else st.position.copy(to);
+      });
+    } else if (finished) this.settleChips(s);
+    if (finished && s.hands.some(hh => hh.result === 'BLACKJACK')) this.blackjackShow();
     this.updateLabels(s);
     if (this.mine && prev && prev.state.phase !== 'done' && s.phase === 'done') {
       const r = s.hands.map(h => h.result);
       say(r.includes('BLACKJACK') ? 'Blackjack!' : handTotal(s.dealer).total > 21 ? 'Dealer bust!' : r.includes('GEWONNEN') ? 'Gewonnen!' : r.every(x => x === 'PUSH') ? 'Push.' : 'Das Haus gewinnt.');
     }
     this.refreshPanel();
+  }
+
+  // Auszahlung: Dealer schiebt Gewinnchips dazu und alles gleitet zum Spieler; Verluste sammelt der Dealer ein
+  settleChips(s) {
+    const dealer = new THREE.Vector3(0, 0.86, -0.42);
+    const player = new THREE.Vector3(0, 0.9, 1.55);
+    const stacks = [...this.chips.children];
+    stacks.forEach((stack, i) => {
+      const hand = s.hands[i];
+      const r = hand?.result;
+      const from = stack.position.clone();
+      const done = obj => () => this.chips.remove(obj);
+      if (r === 'GEWONNEN' || r === 'BLACKJACK') {
+        const pay = chipStack(Math.floor(hand.bet * (r === 'BLACKJACK' ? 1.5 : 1)), this.limits.min);
+        const side = from.clone().add(new THREE.Vector3(0.11, 0, 0.02));
+        pay.position.copy(dealer);
+        this.chips.add(pay);
+        this.anim.add(0.5, k => { pay.position.lerpVectors(dealer, side, ease.outCubic(k)); pay.position.y += Math.sin(k * Math.PI) * 0.14; }, null, 0.35);
+        this.anim.add(0.55, k => { const e = ease.inOutCubic(k); stack.position.lerpVectors(from, player, e); pay.position.lerpVectors(side, player.clone().add(new THREE.Vector3(0.11, 0, 0)), e); }, () => { done(stack)(); done(pay)(); }, 1.3);
+      } else if (r === 'PUSH') {
+        this.anim.add(0.5, k => stack.position.lerpVectors(from, player, ease.inOutCubic(k)), done(stack), 0.6);
+      } else {
+        this.anim.add(0.55, k => { stack.position.lerpVectors(from, dealer, ease.inOutCubic(k)); stack.position.y += Math.sin(k * Math.PI) * 0.06; }, done(stack), 0.5);
+      }
+    });
+  }
+
+  // Blackjack! – goldener Schriftzug über dem Tisch, Goldregen, Licht
+  blackjackShow() {
+    const t = new TextSprite(1.3, 0.33);
+    t.set('★ BLACKJACK! ★', '#ffd700', 'rgba(40,20,0,0.75)');
+    t.sprite.position.set(0, 1.5, 0.2);
+    this.group.add(t.sprite);
+    this.anim.add(2.8, k => {
+      const pop = k < 0.12 ? k / 0.12 * 1.25 : 1 + Math.sin(k * 18) * 0.05;
+      t.sprite.scale.set(1.3 * pop, 0.33 * pop, 1);
+      t.sprite.position.y = 1.5 + k * 0.3;
+      t.sprite.material.opacity = k < 0.8 ? 1 : 1 - (k - 0.8) / 0.2;
+    }, () => { this.group.remove(t.sprite); t.tex.dispose(); t.sprite.material.dispose(); });
+    const w = this.app.world;
+    const pos = this.toWorld(new THREE.Vector3(0, 1.6, 0.3));
+    if (w?.particles) for (let i = 0; i < 90; i++) {
+      w.particles.emit({ pos: pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 1.6, Math.random() * 0.6, (Math.random() - 0.5) * 1.2)), vel: [(Math.random() - 0.5) * 2.4, 1.5 + Math.random() * 2.5, (Math.random() - 0.5) * 2.4], life: 2.5 + Math.random(), size: 0.06, color: i % 3 ? '#ffd700' : '#fff3b0', gravity: 3, type: 'confetti', spin: (Math.random() - 0.5) * 10 });
+    }
+    w?.flashAt?.(pos, 4);
+    const near = this.app.distanceTo(this.group.position) < 12;
+    if (near) sfxAt(this.mine ? 1 : 0.6, () => sfx.bigWin());
   }
 
   updateLabels(s) {

@@ -87,6 +87,12 @@ export function save() {
   }, 200);
 }
 
+// Sofort speichern (z. B. vor dem Verlassen zur Startseite)
+export function saveNow() {
+  clearTimeout(saveTimer);
+  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* ignorieren */ }
+}
+
 export function profile() {
   const s = get();
   return {

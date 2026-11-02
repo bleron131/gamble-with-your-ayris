@@ -335,6 +335,7 @@ export function openSettings(ui) {
     app.touch?.active ? h('div.actions', h('button', { onclick: async () => { sfx.click(); const ok = await enterFullscreen(); if (!ok) ui.toast('Vollbild wird von diesem Browser nicht unterstützt – über „Zum Home-Bildschirm“ startet das Spiel wie eine App.', 'info', 4000); } }, '⛶ VOLLBILD')) : null,
     toggle('bloom', 'Neon-Glow (Bloom)'), toggle('shadows', 'Schatten'),
     h('label.toggle', h('input', { type: 'checkbox', checked: app.perfOn ? true : null, onchange: e => app.togglePerf(e.target.checked) }), 'Performance-Anzeige (Entwickler)'),
+    h('div.actions', h('button', { onclick: () => { sfx.click(); st.helpSeen = false; Save.save(); if (app.state) { ui.closeModal(); ui.showControlsHelp(); } else ui.toast('Die Steuerungshilfe erscheint beim nächsten Spielstart', 'info'); } }, '🎮 Steuerungshilfe erneut anzeigen')),
     h('div.actions',
       app.state ? h('button.danger', { onclick: () => { ui.closeModal(); app.disconnect(); ui.showMenu(); } }, app.mode === 'solo' ? 'Zum Hauptmenü' : 'Gruppe verlassen') : null,
       h('button', { onclick: async () => { if (await ui.confirm('Wirklich ALLE Fortschritte, Dildos und Items löschen?')) { Save.resetAll(); location.reload(); } } }, 'Spielstand zurücksetzen'),

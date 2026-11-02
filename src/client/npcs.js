@@ -205,6 +205,11 @@ export class NpcController {
     n.reactT = r === 'smoke' ? 3.4 : r === 'drink' ? 2.4 : r === 'talk' ? 2.2 : r === 'dance' ? 5 : 2.2;
     if (n.path.length) return; // unterwegs: nur Reaktionen im Stehen/Sitzen zeigen
     const sitting = n.pose === 'sit';
+    // Am Automaten dreht der NPC sichtbar (Ergebnis nur optisch)
+    if ((r === 'win' || r === 'lose') && n.spot?.startsWith('slot:')) {
+      const v = this.world.views?.[n.spot.slice(5)];
+      if (v?.npcPlay) { c.setAnim('point'); v.npcPlay(r === 'win'); setTimeout(() => { if (n.react === r) c.setAnim(r === 'win' ? 'cheer' : 'sad'); }, 1900); n.reactT = 3.8; return; }
+    }
     switch (r) {
       case 'win': if (!sitting) c.setAnim('cheer'); break;
       case 'lose': if (!sitting) c.setAnim(Math.random() < 0.5 ? 'sad' : 'facepalm'); break;

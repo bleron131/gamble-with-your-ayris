@@ -261,6 +261,28 @@ export class TableView {
   }
   interactPos() { return this.toWorld(this.seatLocal.clone().multiplyScalar(1.05)); }
   get mine() { return this.state && this.state.occupant === this.app.me; }
+  // Schwebender Betrag über dem Tisch (+$2'500 grün / −$500 rot), steigt auf und blendet aus – für alle sichtbar
+  floatText(text, color, { y = 1.7, scale = 1, dur = 2.4, z = 0.2 } = {}) {
+    const t = new TextSprite(0.9 * scale, 0.225 * scale);
+    t.set(text, color, 'rgba(10,6,20,0.6)');
+    t.sprite.position.set(0, y, z);
+    this.group.add(t.sprite);
+    this.anim.add(dur, k => {
+      t.sprite.position.y = y + k * 0.75;
+      t.sprite.material.opacity = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
+      const pop = k < 0.1 ? 0.4 + k / 0.1 * 0.8 : Math.max(1, 1.2 - (k - 0.1) * 2);
+      t.sprite.scale.set(0.9 * scale * pop, 0.225 * scale * pop, 1);
+    }, () => { this.group.remove(t.sprite); t.tex.dispose(); t.sprite.material.dispose(); });
+  }
+  // Dealer reagiert auf das Ergebnis des Spielers (Ärger bei Spielergewinn, Zeigen bei Hausgewinn, Jubel bei Blackjack)
+  dealerReact(ev) {
+    const d = this.dealer;
+    if (!d || !(ev.stake > 0)) return;
+    const a = ev.blackjacks ? 'cheer' : ev.net > 0 ? (ev.bigWin ? 'facepalm' : 'sad') : ev.net < 0 ? 'point' : 'idle';
+    d.setAnim(a);
+    clearTimeout(this.dealerT);
+    this.dealerT = setTimeout(() => d.setAnim('idle'), ev.bigWin || ev.blackjacks ? 2600 : 1600);
+  }
   get denoms() { return denominations(this.limits.min, this.limits.max); }
   setState(ts) { this.lastState = this.state; this.state = ts; this.onState(ts, this.lastState); }
   onState() {}

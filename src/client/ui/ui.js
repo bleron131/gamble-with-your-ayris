@@ -25,11 +25,14 @@ export class UI {
     this.levelEl = h('div.level');
     this.progress = h('div.progress', h('div.bar'));
     this.chEl = h('div.chlist');
-    this.hud.append(h('div.panel.potpanel', h('div.lbl', 'TEAM POT'), this.potEl, this.targetEl, this.progress, this.levelEl, this.chEl));
+    this.feedEl = h('div.feed');
+    // Pot-Anzeige und Feed untereinander: der Feed rutscht automatisch nach unten, wenn die Challenge-Liste sichtbar ist
+    this.hud.append(h('div.topleft', h('div.panel.potpanel', h('div.lbl', 'TEAM POT'), this.potEl, this.targetEl, this.progress, this.levelEl, this.chEl), this.feedEl));
     this.dildoEl = h('div.dildos');
     this.groupEl = h('div.group');
     this.hud.append(h('div.topright', this.dildoEl, this.groupEl,
       h('div.btnrow',
+        h('button.homebtn', { title: 'Zurück zur Startseite', 'aria-label': 'Zurück zur Startseite', onclick: () => this.app.goHome() }, h('span.hi', '🏠'), h('span.ht', 'STARTSEITE')),
         // Nur auf Touch-Geräten sichtbar: Ersatz für TAB (Gruppe) und die Emote-Tasten 1–5
         h('button.icon.touchonly', { title: 'Gruppe', onclick: () => this.toggleScoreboard(this.scoreEl.classList.contains('hidden')) }, '👥'),
         h('button.icon.touchonly', { title: 'Emotes', onclick: () => this.toggleEmotes() }, '😀'),
@@ -44,8 +47,6 @@ export class UI {
     this.hud.append(this.luckEl);
     this.perfEl = h('pre.perfmon.hidden');
     r.append(this.perfEl);
-    this.feedEl = h('div.feed');
-    this.hud.append(this.feedEl);
     this.hintEl = h('div.hint');
     this.hud.append(this.hintEl);
     this.crosshair = h('div.crosshair');
@@ -54,8 +55,8 @@ export class UI {
     this.hud.append(this.voteEl);
     this.tableWrap = h('div.tablewrap.hidden');
     this.hud.append(this.tableWrap);
-    this.emoteHelp = h('div.emotehelp', '1 Jubeln · 2 Tanzen · 3 Traurig · 4 Facepalm · 5 Zeigen · TAB Gruppe');
-    this.hud.append(this.emoteHelp);
+    this.helpEl = h('div.controlshelp.hidden');
+    this.hud.append(this.helpEl);
     this.emoteBar = h('div.emotebar.hidden', ...[['cheer', '🙌'], ['dance', '💃'], ['sad', '😢'], ['facepalm', '🤦'], ['point', '👉']].map(([e, ico]) =>
       h('button.icon', { onclick: () => { this.app.emote(e); this.emoteBar.classList.add('hidden'); } }, ico)));
     this.hud.append(this.emoteBar);
@@ -129,39 +130,45 @@ export class UI {
       }
       this.menu.classList.remove('busy');
     };
+    // Reihenfolge nach Wichtigkeit: Logo > Name > Gruppe erstellen > Beitreten > Solo > Einstellungen > Statistiken > Charakter.
+    // Auf niedrigen Bildschirmen (Handy quer) zweispaltig, damit das Logo immer vollständig sichtbar bleibt.
     this.menu.append(
       h('div.menubox',
-        h('div.logo', h('span.l1', 'GAMBLE'), h('span.l2', 'with your'), h('span.l3', 'AYRIS')),
-        h('div.sub', 'Das Co-op-Casino für dich & deine Freunde · 15 Stockwerke · $500\'000\'000'),
-        h('label', 'Name', name),
-        h('div.menubtns',
-          h('button.big.primary', { onclick: () => go('create') }, '👥 Gruppe erstellen'),
-          h('div.joinrow', code, h('button.big', { onclick: () => go('join') }, 'Beitreten')),
-          h('button.big', { onclick: () => go('solo') }, '🎮 Solo spielen'),
+        h('div.mleft',
+          h('div.logo', h('span.l1', 'GAMBLE'), h('span.l2', 'with your'), h('span.l3', 'AYRIS')),
+          h('div.sub', 'Das Co-op-Casino für dich & deine Freunde · 15 Stockwerke · $500\'000\'000'),
+          h('label', 'Name', name),
         ),
-        this.menuErr,
-        serverHost().remote ? h('div.disclaimer', `Multiplayer läuft über ${serverHost().host}. Nach längerer Pause braucht der Server bis zu 1 Minute zum Aufwachen.`) : null,
-        h('div.progressline', `Aktueller Run: ${(s.run.completed || []).length}/15 Stockwerke · 🍆 ${s.dildos} · Team-Pot ${fmtMoney(s.run.pot)}`),
-        h('div.menulinks',
-          h('button.link', { onclick: () => this.openSettings() }, '⚙️ Einstellungen'),
-          h('button.link', { onclick: () => this.openStats() }, '📊 Statistiken'),
-          h('button.link', { onclick: () => { this.app.input.exitLock(); this.openEditor(true); } }, '🎨 Charakter'),
+        h('div.mright',
+          h('div.menubtns',
+            h('button.big.primary', { onclick: () => go('create') }, '👥 Gruppe erstellen'),
+            h('div.joinrow', code, h('button.big', { onclick: () => go('join') }, 'Beitreten')),
+            h('button.big', { onclick: () => go('solo') }, '🎮 Solo spielen'),
+          ),
+          h('div.menulinks',
+            h('button.mlink', { onclick: () => this.openSettings() }, '⚙️ Einstellungen'),
+            h('button.mlink', { onclick: () => this.openStats() }, '📊 Statistiken'),
+            h('button.mlink', { onclick: () => { this.app.input.exitLock(); this.openEditor(true); } }, '🎨 Charakter'),
+          ),
+          this.menuErr,
+          h('div.progressline', `Aktueller Run: ${(s.run.completed || []).length}/15 Stockwerke · 🍆 ${s.dildos} · Team-Pot ${fmtMoney(s.run.pot)}`),
+          serverHost().remote ? h('div.disclaimer', `Multiplayer läuft über ${serverHost().host}. Nach längerer Pause braucht der Server bis zu 1 Minute zum Aufwachen.`) : null,
+          h('div.disclaimer', 'Nur virtuelle Spielwährung. Kein echtes Geld, keine Echtgeld-Käufe.'),
         ),
-        h('div.disclaimer', 'Nur virtuelle Spielwährung. Kein echtes Geld, keine Echtgeld-Käufe.'),
-        h('div.controls', this.app.touch?.active ? 'Joystick links laufen · rechts wischen = Kamera · JUMP springen · Aktions-Buttons rechts' : 'WASD laufen · Maus schauen · E interagieren · ESC Tisch verlassen · Shift rennen'),
       ),
     );
   }
-  hideMenu() { this.menu.classList.add('hidden'); this.hud.classList.remove('hidden'); this.closeModal(); }
+  hideMenu() {
+    this.menu.classList.add('hidden'); this.hud.classList.remove('hidden'); this.closeModal();
+    // Steuerungshilfe nur beim allerersten Spielstart (in den Einstellungen wieder einschaltbar)
+    if (!Save.get().settings.helpSeen) setTimeout(() => this.showControlsHelp(), 600);
+  }
   menuError(msg) { if (this.menuErr) this.menuErr.textContent = msg; this.showMenu(); this.menuErr.textContent = msg; }
 
   // ───────────────────────── HUD ─────────────────────────
   onSceneChange(scene, floor) {
     this.hud.dataset.scene = scene;
     this.crosshair.style.display = scene === 'floor' ? '' : 'none';
-    this.emoteHelp.textContent = scene === 'floor'
-      ? 'Klick = Maus fangen · WASD laufen · LEERTASTE springen · E Tisch/SPIN · R/F Einsatz · C Kugelkamera · 1–5 Emotes · TAB Gruppe'
-      : 'Maus ziehen = Kamera · Mausrad = Zoom · WASD laufen · LEERTASTE springen · E interagieren · 1–5 Emotes · TAB Gruppe';
     this.closeTablePanel();
     this.refreshHud();
   }
@@ -191,6 +198,31 @@ export class UI {
     for (const p of st.players) this.groupEl.append(h('div.pl', { class: p.id === app.me ? 'me' : '' }, (p.id === st.hostId ? '★ ' : '• ') + p.name + (p.seat ? ' 🎲' : '')));
     this.renderItems();
     if (this.tableView) this.tableView.refreshPanel();
+  }
+
+  // Steuerungshilfe: erscheint beim ersten Start und blendet sich nach 12 Sekunden selbst aus
+  showControlsHelp() {
+    const st = Save.get().settings;
+    st.helpSeen = true;
+    Save.save();
+    const touch = this.app.touch?.active;
+    const rows = touch
+      ? [['🕹️', 'Joystick links: laufen'], ['👆', 'Rechts wischen: umschauen'], ['JUMP', 'Springen'], ['▶', 'Aktions-Buttons rechts: interagieren'], ['👥', 'Gruppe']]
+      : [['WASD', 'Laufen (Shift = rennen)'], ['LEERTASTE', 'Springen / Aufstehen'], ['E', 'Interagieren'], ['TAB', 'Gruppe'], ['MAUS', 'Umschauen (im Casino: klicken)']];
+    clear(this.helpEl);
+    this.helpEl.append(
+      h('div.chtitle', '🎮 STEUERUNG', h('button.icon.chclose', { title: 'Schliessen', onclick: () => this.hideControlsHelp() }, '✕')),
+      ...rows.map(([k, t]) => h('div.chrow', h('span.key', k), h('span', t))),
+      h('div.chfoot', 'Jederzeit wieder einschaltbar unter ⚙️ Einstellungen'),
+    );
+    this.helpEl.classList.remove('hidden', 'out');
+    clearTimeout(this.helpTimer);
+    this.helpTimer = setTimeout(() => this.hideControlsHelp(), 12000);
+  }
+  hideControlsHelp() {
+    clearTimeout(this.helpTimer);
+    this.helpEl.classList.add('out');
+    setTimeout(() => this.helpEl.classList.add('hidden'), 500);
   }
 
   // Optionale Challenges des Stockwerks (blockieren nichts – nur Bonus-🍆)
@@ -375,8 +407,22 @@ export class UI {
       this.openModal(h('div.confirm',
         h('div.ct', text),
         h('div.actions',
-          h('button.primary', { onclick: () => { this.closeModal(); res(true); } }, 'Ja'),
+          h('button.primary', { onclick: () => { this.onModalClose = null; this.closeModal(); res(true); } }, 'Ja'),
           h('button', { onclick: () => { this.closeModal(); res(false); } }, 'Abbrechen'))), 'small');
+      this.onModalClose = () => res(false);
+    });
+  }
+
+  // Bestätigungsdialog mit eigenem Titel und Knopftexten
+  confirmDialog({ title, text, ok = 'OK', cancel = 'Abbrechen' }) {
+    return new Promise(res => {
+      this.app.input.exitLock();
+      this.openModal(h('div.confirm',
+        h('h2', title),
+        h('div.ct.small2', text),
+        h('div.actions',
+          h('button', { onclick: () => { this.closeModal(); res(false); } }, cancel),
+          h('button.primary', { onclick: () => { this.onModalClose = null; this.closeModal(); res(true); } }, ok))), 'small');
       this.onModalClose = () => res(false);
     });
   }

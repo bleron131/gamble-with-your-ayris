@@ -39,7 +39,8 @@ export class WSTransport {
   }
   send(msg) { if (this.ws?.readyState === 1) this.ws.send(JSON.stringify(msg)); }
   onMessage(h) { this.handlers.push(h); }
-  close() { this.ws?.close(); }
+  // Absichtliches Verlassen (z. B. Startseite): keine „Verbindung verloren“-Meldung
+  close() { this.handlers = []; this.ws?.close(); }
 }
 
 export class LocalTransport {

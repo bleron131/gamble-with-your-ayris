@@ -158,6 +158,20 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   Animation, die Kamera bleibt frei drehbar. Auf dem Sofa raucht E die Shisha der Sitzgruppe, LEERTASTE steht auf.
   Belegt wird serverseitig: Drücken zwei Spieler gleichzeitig E auf denselben Platz, bekommt ihn nur einer (der andere
   ohne Fehlermeldung, ggf. den Nachbarplatz auf demselben Sofa).
+- **Casino-Inszenierung**: Über jedem Tisch steigt der Betrag auf (`+$2'500` grün, `−$500` rot), Dealer reagieren
+  (ärgern sich bei Spielergewinnen, zeigen auf den Einsatz bei Hausgewinnen, jubeln bei Blackjack). Beim Blackjack
+  schiebt der Spieler die Chips aufs Feld, der Dealer zahlt Gewinnchips dazu und alles gleitet zum Spieler – Verluste
+  sammelt der Dealer ein. Ein **Blackjack** bekommt einen goldenen Schriftzug mit Goldregen und Licht; grosse Gewinne
+  lösen Konfetti, Lichtblitz und ein kurzes Kamerawackeln aus. NPCs an Automaten drehen sichtbar die Walzen (rein optisch).
+- **Feedback-Popups**: animierte, selbst verschwindende Meldungen wie `CHALLENGE ABGESCHLOSSEN +2 🍆`,
+  `STOCKWERK 5 FREIGESCHALTET`, `ACHIEVEMENT FREIGESCHALTET`.
+- **Aufgeräumtes HUD**: Die Steuerungshilfe (WASD, LEERTASTE, E, TAB, Maus bzw. Touch) erscheint nur beim ersten Start
+  und blendet sich nach 12 Sekunden aus (Einstellungen → „Steuerungshilfe erneut anzeigen“). Interaktionshinweise
+  erscheinen nur, wenn etwas möglich ist (`[E] Blackjack spielen`, `[E] Hinsetzen`, `[E] Aufzug benutzen`, `[E] Shisha benutzen`).
+- **🏠 STARTSEITE** (oben rechts, auf schmalen Bildschirmen nur 🏠): Solo in der Shishabar geht es direkt zurück zum
+  Startbildschirm; im Casino, am Tisch, während eines Spins oder in einer Gruppe fragt ein Dialog „Zurück zur Startseite?“.
+  Vorher wird sofort gespeichert; in einer Gruppe verlässt nur dieser Spieler die Sitzung (Sitze werden frei, der Server
+  bestimmt bei Bedarf einen neuen Gruppenleiter).
 - **Dildos 🍆**: Belohnungswährung für den ersten Abschluss jedes Stockwerks, Challenges und Achievements – jeweils nur
   einmal pro Spieler, also kein Farming.
 - **MAKKA an der Bar**: Nur bei Kemal an der Bar der Shishabar gibt es die pinke Ayri-Limonade für genau 1 🍆.

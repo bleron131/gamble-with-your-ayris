@@ -250,6 +250,35 @@ export class SlotView extends TableView {
     else this.setWinDisplay('NO WIN', '#9a9aa8');
   }
 
+  // Ein NPC spielt (rein optisch, kein Geld): Walzen drehen, bei „Gewinn“ kurz Lichter und ein paar Münzen.
+  // Läuft nur, wenn der Automat frei ist – ein echter Spieler unterbricht nichts und wird nie blockiert.
+  npcPlay(win) {
+    if (this.spinning || this.state?.busy) return;
+    this.npcSpinning = true;
+    const vol = this.volume() * 0.45;
+    sfxAt(vol, () => sfx.lever());
+    this.anim.add(0.5, k => { this.lever.rotation.x = Math.sin(k * Math.PI) * 1.1; });
+    const starts = this.reelAngles.slice();
+    [0, 1, 2].forEach(i => {
+      let target = this.angleFor(Math.floor(Math.random() * this.N));
+      while (target < starts[i] + Math.PI * 2 * (3 + i)) target += Math.PI * 2;
+      this.anim.add(1.1 + i * 0.35, k => {
+        if (this.spinning) return; // echter Spin hat übernommen
+        const e = k < 0.7 ? k / 0.7 * 0.85 : 0.85 + ease.outBack((k - 0.7) / 0.3) * 0.15;
+        this.reelAngles[i] = starts[i] + (target - starts[i]) * e;
+        this.reels[i].rotation.x = this.reelAngles[i];
+      }, () => {
+        if (this.spinning) return;
+        sfxAt(vol, () => sfx.reelStop());
+        if (i === 2) {
+          this.npcSpinning = false;
+          if (win) { this.setWinDisplay('WIN!', '#7cff6b'); this.celebrate = { t: 1.6, lv: 2 }; this.coinBurst(this.toWorld(new THREE.Vector3(0, 1.0, 0.4)), 10); sfxAt(vol, () => sfx.smallWin()); }
+          else this.setWinDisplay('NO WIN', '#9a9aa8');
+        }
+      }, 0.1 + i * 0.1);
+    });
+  }
+
   // Ergebnis vom Server (mit Item-Effekten); läuft erst, wenn die Walzen stehen
   onEvent(ev) {
     if (ev.kind !== 'result') return;
