@@ -358,7 +358,7 @@ export class App {
       prestigeReady: st.hostId === this.me ? !!c.prestigeReady : !!s.campaign.prestigeReady,
     };
     // Run-Fortschritt kommt immer exakt vom Server (kein Zusammenführen mit alten Runs); gespeichert wird er vom Gruppenersteller
-    if (st.hostId === this.me) s.run = { id: st.run.id, pot: st.pot, finalUnlocked: st.run.finalUnlocked, startedAt: st.run.startedAt, unlocked: c.unlocked, completed: [...c.completed], stats: st.runStats };
+    if (st.hostId === this.me) s.run = { id: st.run.id, pot: st.pot, finalUnlocked: st.run.finalUnlocked, startedAt: st.run.startedAt, double: st.run.double ? { result: st.run.double.result, before: st.run.double.before } : undefined, unlocked: c.unlocked, completed: [...c.completed], stats: st.runStats };
     if (st.pot > s.stats.highestPot) s.stats.highestPot = st.pot;
     if (st.scene === 'floor') this.record('bestPot', st.pot);
     const meP = st.players.find(p => p.id === this.me);
@@ -527,11 +527,15 @@ export class App {
 
   requestTravel(floor) { this.send({ t: 'vote.start', type: floor === 'final' ? 'final' : 'travel', data: { floor } }); }
   async requestFinal(kind) {
+    // Kein Spam: solange eine Anfrage läuft oder die Entscheidung gefallen ist, passiert nichts
+    if (this.finalPending > performance.now() || this.state?.run?.double || this.state?.vote) return;
+    this.finalPending = performance.now() + 60000;
     const pot = this.pot;
     const text = kind === 'double'
       ? `CURRENT WINNINGS: ${fmtMoney(pot)}\nDOUBLE: ${fmtMoney(pot * 2)}\nLOSE: $0\n\nARE YOU SURE?`
       : `TAKE THE WINNINGS: ${fmtMoney(pot)} sichern und den Run beenden?`;
-    if (!(await this.ui.confirm(text))) return;
+    if (!(await this.ui.confirm(text))) { this.finalPending = 0; return; }
+    this.finalPending = performance.now() + 4000;
     this.send({ t: 'vote.start', type: kind });
   }
 
@@ -1199,7 +1203,8 @@ export class App {
       for (let i = 0; i < 6; i++) setTimeout(() => w.particles.confetti(w.tableTop.clone().add(new THREE.Vector3(0, 2.5, 1)), 160, 7), i * 700);
       this.player.playEmote('cheer', 9);
       for (const a of this.avatars.values()) { a.setAnim('cheer'); a.emoteUntil = performance.now() + 9000; }
-      this.ui.finalScreen('DOUBLE SUCCESSFUL', fmtMoney(ev.amount), 'AYRI JACKPOT!', 'jackpot');
+      this.ui.finalScreen('DOUBLE!', 'GEWINN VERDOPPELT', `Vorher: ${fmtMoney(ev.before)} · Gewinn: ${fmtMoney(ev.amount)}`, 'jackpot double');
+      this.ui.screenFlash?.('#39ff88');
       s.stats.doubleWins++;
       this.achieve('double_win');
       s.history.unshift({ type: 'double-win', amount: ev.amount, date: Date.now() });
@@ -1207,7 +1212,8 @@ export class App {
       sfx.aww(); sfx.lose();
       this.player.playEmote('sad', 9);
       for (const a of this.avatars.values()) { a.setAnim('sad'); a.emoteUntil = performance.now() + 9000; }
-      this.ui.finalScreen('$0', 'YOU SHOULD HAVE TAKEN THE MONEY.', `Verloren: ${fmtMoney(ev.before)}`, 'lose');
+      this.ui.finalScreen('LOSS!', 'ALLES VERLOREN', `Verloren: ${fmtMoney(ev.before)}`, 'lose');
+      this.ui.screenFlash?.('#ff2b3a');
       s.stats.doubleLosses++;
       this.achieve('double_loss');
       s.history.unshift({ type: 'double-loss', amount: ev.before, date: Date.now() });

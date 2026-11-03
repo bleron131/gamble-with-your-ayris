@@ -8,7 +8,7 @@ import { WHEEL_ORDER, RED, spotLabel, insideNumbers, insideSpot } from '../../sh
 import { h, clear } from '../ui/dom.js';
 import { actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
-import { sfx, sfxAt, say, setDuck } from '../audio.js';
+import { sfx, sfxAt, setDuck } from '../audio.js';
 
 const LAYOUT_W = 1.6, LAYOUT_D = 0.64, LAYOUT_X = 0.42;
 const WHEEL_X = -0.95;
@@ -312,7 +312,7 @@ export class RouletteView extends TableView {
     this.pendingResult = null;
     this.spinResult = s.result;
     const audible = () => this.app.distanceTo?.(this.group.position) < 7 || this.app.ballCam?.view === this;
-    if (audible()) { sfx.button(); sfx.rouletteSpin(Tb); setTimeout(() => audible() && say('Rien ne va plus!', 'fr-FR'), 2500); }
+    if (audible()) { sfx.button(); sfx.rouletteSpin(Tb); }
     this.dealer.setAnim('deal');
     setTimeout(() => this.dealer.setAnim('idle'), 1200);
     let lastPocket = -1, lastTick = 0, ducked = false;
@@ -381,7 +381,6 @@ export class RouletteView extends TableView {
       this.dealerReact(ev);
     }
     if (this.ducked) { this.ducked = false; if (!this.app.highRiskTables.size) setDuck(false); }
-    if (near || watching) say(`${n}, ${n === 0 ? 'Zero' : RED.has(n) ? 'Rot' : 'Schwarz'}`);
     if (mine || near || watching) {
       const color = n === 0 ? 'GREEN' : RED.has(n) ? 'RED' : 'BLACK';
       const who = mine ? '' : `${ev.name}: `;

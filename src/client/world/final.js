@@ -175,7 +175,7 @@ export class FinalWorld extends World {
         pos: new THREE.Vector3(x, 0, cz + 2.0), radius: 1.5, verb: key === 'take' ? 'TAKE' : 'DOUBLE',
         label: key === 'take' ? 'TAKE THE WINNINGS drücken' : 'DOUBLE OR LOSS drücken',
         action: () => { this.pressButton(key); this.app.requestFinal(key); },
-        enabled: () => !this.flipping && !!this.app.state?.run?.finalUnlocked,
+        enabled: () => !this.flipping && !!this.app.state?.run?.finalUnlocked && !this.app.state?.run?.double && !this.app.state?.vote,
       });
     }
     this.updaters.push((dt, t) => { for (const b of Object.values(this.buttons)) b.material.emissiveIntensity = 1 + Math.sin(t * 3) * 0.4; });

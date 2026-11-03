@@ -200,40 +200,70 @@ const CATS = [
   ['hat', 'Kopfbedeckung'], ['hatColor', 'Hutfarbe', 'color'], ['glasses', 'Brille'], ['mask', 'Maske'], ['jewelry', 'Schmuck'], ['accessory', 'Accessoire'],
 ];
 
+// Prompt 13: zusammengehörende Optionen in EINER Kategorie (z. B. Frisur + Haarfarbe unter HAARE)
+const GROUPS = [
+  ['body', 'Körper', [['skin', 'Hauptfarbe']]],
+  ['hairg', 'Haare', [['hair', 'Frisur'], ['hairColor', 'Haarfarbe']]],
+  ['face', 'Gesicht', [['eyes', 'Augen'], ['eyeColor', 'Augenfarbe'], ['brows', 'Augenbrauen'], ['beard', 'Bart']]],
+  ['topg', 'Oberteil', [['top', 'Oberteil'], ['topColor', 'Farbe']]],
+  ['jacketg', 'Jacke', [['jacket', 'Jacke'], ['jacketColor', 'Farbe']]],
+  ['pantsg', 'Hose', [['pants', 'Hose'], ['pantsColor', 'Farbe']]],
+  ['shoesg', 'Schuhe', [['shoes', 'Schuhe'], ['shoesColor', 'Farbe']]],
+  ['hatg', 'Kopfbedeckung', [['hat', 'Kopfbedeckung'], ['hatColor', 'Hutfarbe']]],
+  ['acc', 'Accessoires', [['glasses', 'Brille'], ['mask', 'Maske'], ['jewelry', 'Schmuck'], ['accessory', 'Accessoire']]],
+];
+const isColor = key => CATS.find(c => c[0] === key)?.[2] === 'color';
+
 function isLocked(cat, val) { return cosmeticLock(`${cat}:${val}`); }
+
+// Feste Anpassungs-Kamera (unabhängig davon, wo der Spieler vorher stand): Charakter auf einem festen Punkt vor dem
+// Spiegel, Kamera in sicherem Abstand – kein Clipping in Spiegel/Wand. Nur für den eigenen Spieler.
+function customizationView(app) {
+  const w = app.world;
+  const mp = w?.mirrorPose?.();
+  if (mp) {
+    app.player.jump?.reset?.();
+    if (app.player.vel) app.player.vel.set(0, 0, 0);
+    app.player.pos.set(mp.stand.x, 0, mp.stand.z);
+    app.player.yaw = mp.stand.yaw;
+    app.player.camYaw = mp.stand.yaw + Math.PI;
+    return { pos: mp.cam.clone(), look: mp.look.clone() };
+  }
+  // Anderswo (z. B. Penthouse): fester Abstand vor dem Charakter, Charakter links im Bild
+  const p = app.player.pos, yaw = app.player.yaw;
+  const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+  const camRight = new THREE.Vector3(fwd.z, 0, -fwd.x);
+  return { pos: p.clone().addScaledVector(fwd, 2.6).add(new THREE.Vector3(0, 1.3, 0)), look: p.clone().addScaledVector(camRight, 0.55).add(new THREE.Vector3(0, 0.9, 0)) };
+}
 
 export function openEditor(ui, fromMenu) {
   const app = ui.app, s = Save.get();
   const a = s.appearance;
   const char = app.selfChar;
   if (!fromMenu && app.state) {
-    // Kamera vor den Charakter
-    const p = app.player.pos;
-    const yaw = app.player.yaw;
-    const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    const camRight = new THREE.Vector3(fwd.z, 0, -fwd.x);
-    // Charakter links im Bild, Editor rechts
-    app.cinematic = { pos: p.clone().addScaledVector(fwd, 2.2).add(new THREE.Vector3(0, 1.3, 0)), look: p.clone().addScaledVector(camRight, 0.6).add(new THREE.Vector3(0, 0.85, 0)) };
+    const v = customizationView(app);
+    app.cinematic = v;
+    app.player.camPos.copy(v.pos); // sofort an die feste Position (kein Durchfahren von Wänden)
+    app.player.camLook.copy(v.look);
   }
   const nameIn = h('input', { value: s.name, maxlength: 16, oninput: e => { s.name = e.target.value.slice(0, 16); } });
   const body = h('div.editbody');
-  let cat = 'skin';
-  const tabs = h('div.edittabs');
+  let group = 'body';
+  const tabs = h('div.edittabs.groups');
   const renderTabs = () => {
     clear(tabs);
-    for (const [k, label] of CATS) tabs.append(h('button', { class: k === cat ? 'sel' : '', onclick: () => { cat = k; renderTabs(); renderBody(); } }, label));
+    for (const [k, label] of GROUPS) tabs.append(h('button', { class: k === group ? 'sel' : '', onclick: () => { group = k; sfx.click(); renderTabs(); renderBody(); } }, label));
   };
   const apply = () => { char.rebuild(a); Save.save(); };
-  const renderBody = () => {
-    clear(body);
-    const def = CATS.find(c => c[0] === cat);
+  const section = (cat, title) => {
     const opts = OPTIONS[cat];
-    if (def[2] === 'color') {
+    const wrap = h('div.esec', h('div.esect', title));
+    if (isColor(cat)) {
       const row = h('div.swatches');
-      for (const c of opts) row.append(h('button.swatch', { style: { background: c }, class: a[cat] === c ? 'sel' : '', onclick: () => { a[cat] = c; sfx.click(); apply(); renderBody(); } }));
+      for (const c of opts) row.append(h('button.swatch', { style: { background: c }, class: a[cat] === c ? 'sel' : '', title: c, onclick: () => { a[cat] = c; sfx.click(); apply(); renderBody(); } }));
       const custom = h('input', { type: 'color', value: a[cat], oninput: e => { a[cat] = e.target.value; apply(); } });
       row.append(h('label.custom', 'Eigene: ', custom));
-      body.append(row);
+      wrap.append(row);
     } else {
       const row = h('div.optgrid');
       for (const [val, label] of opts) {
@@ -244,9 +274,19 @@ export function openEditor(ui, fromMenu) {
           onclick: () => { if (lock) { ui.toast(`🔒 ${label}: ${lock}`, 'warn'); return; } a[cat] = val; sfx.click(); apply(); renderBody(); },
         }, lock ? `🔒 ${label}` : label));
       }
-      body.append(row);
+      wrap.append(row);
     }
+    return wrap;
   };
+  const renderBody = () => {
+    const top = body.scrollTop;
+    clear(body);
+    const g = GROUPS.find(x => x[0] === group);
+    for (const [cat, title] of g[2]) body.append(section(cat, title));
+    body.scrollTop = top;
+  };
+  // Charakter drehen (Pfeile oder Ziehen neben dem Menü) – die Kamera bleibt stabil
+  const turn = d => { app.player.yaw += d; };
   renderTabs();
   renderBody();
   ui.openModal(h('div.editor',
@@ -254,13 +294,25 @@ export function openEditor(ui, fromMenu) {
     h('label', 'Name ', nameIn),
     tabs, body,
     h('div.actions',
+      h('button', { title: 'Charakter nach links drehen', onclick: () => turn(-0.6) }, '⟲'),
+      h('button', { title: 'Charakter nach rechts drehen', onclick: () => turn(0.6) }, '⟳'),
       h('button', { onclick: () => { Object.assign(a, randomLook()); apply(); renderBody(); sfx.boing(); } }, '🎲 Zufall'),
       h('button.primary', { onclick: () => ui.closeModal() }, 'Fertig'),
     ),
-    h('div.subtle.small', 'Weitere Kosmetik wird durch abgeschlossene Stockwerke und Achievements freigeschaltet.'),
-  ), 'side');
+    h('div.subtle.small', 'Weitere Kosmetik wird durch abgeschlossene Stockwerke und Achievements freigeschaltet. Tipp: neben dem Menü ziehen = Charakter drehen.'),
+  ), 'side editorside');
+  // Ziehen auf der freien Fläche dreht den Charakter (statt den Editor zu schliessen)
+  if (!fromMenu) {
+    const m = ui.modal;
+    let drag = null;
+    m.onclick = null;
+    m.onpointerdown = e => { if (e.target === m) drag = e.clientX; };
+    m.onpointermove = e => { if (drag !== null && e.buttons) { turn((e.clientX - drag) * 0.012); drag = e.clientX; } };
+    m.onpointerup = () => { drag = null; };
+  }
   ui.onModalClose = () => {
     app.cinematic = null;
+    app.player.snapCamera = true; // normale Kamera sofort wieder hinter dem Charakter
     Save.save();
     app.refreshSelf();
     if (fromMenu) ui.showMenu();

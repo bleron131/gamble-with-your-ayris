@@ -19,3 +19,10 @@ export function devReroll(first, roll, score, needed, max = 4000) {
   }
   return best;
 }
+
+// Double or Loss im Penthouse (Prompt 13): echtes 50/50 mit kryptografischem Zufall, keine versteckte Verlustchance.
+// Ausnahme: hat der Developer-Testspieler die Entscheidung ausgelöst, gewinnt sie immer.
+export function rollDouble(dev, rnd) {
+  if (dev) return 'green';
+  return rnd() < 0.5 ? 'green' : 'red';
+}

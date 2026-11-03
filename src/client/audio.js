@@ -390,22 +390,9 @@ function playStep(t, i, step) {
   }
 }
 
-// Dealer-Stimme über die Web Speech API (falls vorhanden)
-let lastSay = 0;
-export function say(text, lang = 'de-DE', rate = 1.05) {
-  try {
-    if (!window.speechSynthesis || settings.sfx * settings.master < 0.05) return;
-    const now = performance.now();
-    if (now - lastSay < 900) return;
-    lastSay = now;
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = lang;
-    u.rate = rate;
-    u.pitch = 0.9;
-    u.volume = Math.min(1, settings.sfx * settings.master);
-    window.speechSynthesis.speak(u);
-  } catch { /* ohne Stimme weiter */ }
-}
+// Prompt 13: KEINE gesprochenen Ergebnisansagen mehr (kein Text-to-Speech). Casino-Ergebnisse sind nur noch
+// visuell + Soundeffekt. Falls noch irgendwo eine Sprachausgabe läuft, wird sie beim Laden einmal abgebrochen.
+try { globalThis.speechSynthesis?.cancel?.(); } catch { /* egal */ }
 
 // Gedämpfter Klang während des Schwindels, weich zurück zum Normalklang
 export function setDizzyAudio(on) {

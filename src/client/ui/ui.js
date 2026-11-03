@@ -589,6 +589,13 @@ export class UI {
     setTimeout(() => el.remove(), 3400);
   }
 
+  // Kurzer farbiger Neon-Blitz über den ganzen Bildschirm (Double or Loss)
+  screenFlash(color) {
+    const el = h('div.screenflash', { style: { '--fc': color } });
+    this.overlay.append(el);
+    setTimeout(() => el.remove(), 1600);
+  }
+
   finalScreen(title, big, sub, cls) {
     const el = h('div.finalscreen', { class: cls }, h('div.ft', title), h('div.fb', big), h('div.fs', sub));
     this.overlay.append(el);
@@ -613,6 +620,7 @@ export class UI {
     const box = h('div.mbox', h('button.close', { onclick: () => this.closeModal() }, '✕'), content);
     this.modal.append(box);
     this.modal.onclick = e => { if (e.target === this.modal) this.closeModal(); };
+    this.modal.onpointerdown = this.modal.onpointermove = this.modal.onpointerup = null;
     this.modalOpen = true;
   }
   closeModal() {

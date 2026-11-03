@@ -290,7 +290,7 @@ test('Slots: jeder Treffer zahlt mehr als den Einsatz zurück, kleine Treffer si
   assert.ok(small > hits * 0.4, `kleine Treffer ${small}/${hits}`);
 });
 
-test('Sprung: natürlicher Bogen, kein Luft- oder Doppelsprung, neuer Sprung erst nach Bodenkontakt', async () => {
+test('Sprung: natürlicher Bogen, kein Luft- oder Doppelsprung, neuer Sprung sofort nach der Landung', async () => {
   const { Jumper, JUMP } = await import('../src/client/jump.js');
   const j = new Jumper();
   assert.equal(j.tryJump(), true);
@@ -308,9 +308,8 @@ test('Sprung: natürlicher Bogen, kein Luft- oder Doppelsprung, neuer Sprung ers
   assert.ok(t > 0.7 && t < 0.9, `Flugzeit ${t}`);
   assert.ok(peak > 0.95, 'hoch genug für Tische (Prompt 12)');
   assert.equal(j.y, 0);
-  assert.equal(j.tryJump(), false); // Bunny-Hop gesperrt: direkt nach der Landung noch nicht
-  j.step(JUMP.minGround + 0.01);
-  assert.equal(j.tryJump(), true);
+  assert.equal(j.tryJump(), true); // Prompt 13: nach der Landung sofort wieder springen
+  assert.equal(j.tryJump(), false); // aber kein Doppelsprung in der Luft
   // Grosse Bildzeit-Sprünge (Ruckler) dürfen nicht durch den Boden fallen
   j.step(0.5);
   assert.ok(j.y >= 0);

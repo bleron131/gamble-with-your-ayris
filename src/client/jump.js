@@ -1,8 +1,8 @@
 // Sprungphysik (ohne Three.js, damit sie auch im Test läuft): natürlicher Bogen mit Schwerkraft,
-// kein Doppel- oder Luftsprung, neuer Sprung erst nach kurzem Bodenkontakt (kein Bunny-Hopping).
+// kein Doppel- oder Luftsprung; nach der Landung darf sofort wieder gesprungen werden (Prompt 13).
 // Prompt 12: deutlich höher (verspielt übertrieben) und mit begehbaren Oberflächen – Sofas, Stühle, niedrige Deko
 // sowie Roulette-/Blackjack-Tische haben eine Standhöhe. Die Decke begrenzt den Sprung (kein Clipping).
-export const JUMP = { v0: 5.4, gravity: 13.5, minGround: 0.15, landTime: 0.2, maxStep: 1 / 60, headroom: 1.85, edge: 0.06 };
+export const JUMP = { v0: 5.4, gravity: 13.5, minGround: 0, landTime: 0.2, maxStep: 1 / 60, headroom: 1.85, edge: 0.06 };
 
 export class Jumper {
   constructor() { this.reset(); }

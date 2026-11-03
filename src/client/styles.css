@@ -617,3 +617,20 @@ button.mini { font-size: 11px; padding: 2px 8px; margin-left: 8px; border-radius
 .popup.out { opacity: 0; transform: translateX(-24px); }
 @keyframes notein { from { opacity: 0; transform: translateX(-40px); } }
 @media (max-height: 500px) { .popups, .popups.mid:not(.low), .popups.low { top: calc(40% - 40px); } .popup { width: min(240px, 50vw); } .popup .ptt { font-size: 12px; } .popup .pts { display: none; } }
+
+/* ── Prompt 13: Double or Loss ── */
+.screenflash { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 45%, transparent 20%, var(--fc) 140%); animation: sflash 1.6s ease-out forwards; mix-blend-mode: screen; }
+@keyframes sflash { 0% { opacity: 0; } 12% { opacity: .95; } 30% { opacity: .5; } 45% { opacity: .85; } 100% { opacity: 0; } }
+.finalscreen.double .ft { color: #39ff88; font-size: clamp(60px, 12vw, 140px); text-shadow: 0 0 18px #39ff88, 0 0 46px #39ff88; animation: neonpulse .9s ease-in-out infinite alternate; }
+.finalscreen.double .fb { color: #eafff2; text-shadow: 0 0 20px #39ff88; }
+.finalscreen.lose .fb { letter-spacing: 2px; }
+@keyframes neonpulse { to { text-shadow: 0 0 8px #39ff88, 0 0 26px #39ff88; } }
+
+/* ── Prompt 13: kompakter Charakter-Editor mit Gruppen ── */
+.modal.editorside .mbox { width: min(360px, 44vw); max-height: 94vh; display: flex; flex-direction: column; }
+.editor .edittabs.groups { gap: 5px; }
+.editor .edittabs.groups button { padding: 6px 10px; font-size: 12.5px; font-weight: 800; }
+.editor .editbody { overflow-y: auto; max-height: 52vh; padding-right: 4px; }
+.editor .esec { margin-bottom: 10px; }
+.editor .esect { font-family: var(--title); font-size: 13px; color: var(--gold); letter-spacing: 1px; margin: 4px 0 6px; text-transform: uppercase; }
+@media (max-height: 520px) { .editor .editbody { max-height: 40vh; } .modal.editorside .mbox { width: min(330px, 46vw); } }

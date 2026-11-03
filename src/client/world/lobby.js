@@ -355,6 +355,19 @@ export class LobbyWorld extends World {
     s.add(rack);
     this.addBox(x + 2.3, z - 0.6, 1.5, 0.5);
     this.addInteract({ pos: new THREE.Vector3(x, 0, z - 1.4), radius: 2, verb: 'ANPASSEN', label: 'Charakter anpassen', action: () => this.app.ui.openEditor() });
+    // Feste Punkte für den Charakter-Editor (Prompt 13): Spieler → Spiegel → Kamera immer kontrolliert,
+    // egal wo der Spieler vorher stand. Charakter schaut zur Kamera, der Spiegel zeigt den Rücken.
+    this.mirror = { x, z };
+  }
+
+  mirrorPose() {
+    const { x, z } = this.mirror;
+    const stand = { x, z: z - 1.5, yaw: Math.PI };
+    return {
+      stand,
+      cam: new THREE.Vector3(x - 0.55, 1.45, stand.z - 2.7),
+      look: new THREE.Vector3(x - 0.6, 1.0, stand.z),
+    };
   }
 
   buildHall() {

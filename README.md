@@ -50,7 +50,7 @@ Der Gratis-Server schläft nach 15 Minuten ohne Besucher; das Spiel weckt ihn be
 
 | Taste | Aktion |
 |---|---|
-| WASD / Pfeile | Laufen (Shift = rennen) |
+| WASD / Pfeile | Laufen (Shift = rennen); Springen geht jederzeit am Boden – auch beim Laufen, Sprinten und diagonal. Der Schwung bleibt in der Luft erhalten (Sprint-Sprünge fliegen weiter), leichte Luftsteuerung, nach der Landung sofort wieder springen |
 | Maus | Umschauen (im Casino Klick → Maus fangen; in der Shishabar rechte Maustaste/Drag) |
 | E | Interagieren (Aufzug, Tische, Shop, Spiegel, Hall of Fame, Barkeeper, Casino-Bar „MAKKA HOLEN“); vor einem Spielautomaten: SPIN |
 | Leertaste | Springen (hoch genug für Sofas, Barhocker und Roulette-/Blackjack-Tische); am Tisch: Spin / Deal / Würfeln |
@@ -277,6 +277,11 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
 - **Finale**: Nach $500'000'000 auf Stock 15 erscheint im Aufzug **???**. In der luxuriösen
   Nacht-Shishabar lauft ihr gemeinsam zum Mitarbeiter: **TAKE THE WINNINGS** speichert den Run,
   **DOUBLE OR LOSS** braucht die Zustimmung aller – dann wirft der Mitarbeiter die grün/rote Münze physisch in der 3D-Szene.
+  **Double or Loss ist ein echtes 50/50** (kryptografischer Zufall, keine versteckte Verlustchance): DOUBLE = Pot exakt
+  verdoppelt („DOUBLE! GEWINN VERDOPPELT“, Vorher/Gewinn), LOSS = genau der eingesetzte Pot ist weg („LOSS! ALLES VERLOREN“).
+  Das Ergebnis wird einmal auf dem Server bestimmt, sofort im Run gespeichert und an alle synchronisiert – Neuladen,
+  Disconnect oder erneutes Öffnen würfeln nicht neu, die Auszahlung passiert genau einmal, der Knopf ist bis zum Ende gesperrt.
+  Löst der Developer-Testspieler „Ayri000“ die Entscheidung aus, gewinnt sie immer; löst jemand anderes aus, gelten normale Chancen.
 
 ## Das Casino ist das Interface (Prompt 12)
 
@@ -314,6 +319,16 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
 - **Multiplayer**: Was an einer Station passiert (Karten, Kugel, Pinguin, Bildschirme), sehen alle; der Einsatz am Pult
   ist persönlich und wird erst beim Spielstart (bzw. bei Slots als Automaten-Einsatz) übertragen. Eine Station kann nur
   eine Person bedienen – andere schauen zu.
+
+## Prompt 13
+
+- **Keine Sprachansagen** mehr bei Casino-Ergebnissen (Blackjack, Roulette, Craps, Baccarat …): Text-to-Speech ist komplett
+  entfernt; Ergebnisse gibt es weiterhin visuell und mit allen Soundeffekten (Karten, Chips, Kugel, Gewinn-/Verlust-Sounds, Musik).
+- **Charakter-Editor am Spiegel**: feste Anpassungs-Kamera – der Charakter wird auf einen Punkt vor dem Spiegel gestellt,
+  die Kamera steht in sicherem Abstand (egal wie nah oder schräg man vorher stand, kein Clipping). Kompakte Kategorien:
+  Körper · Haare (Frisur + Haarfarbe) · Gesicht (Augen, Augenfarbe, Augenbrauen, Bart) · Oberteil · Jacke · Hose · Schuhe ·
+  Kopfbedeckung (+ Hutfarbe) · Accessoires – jeweils mit Auswahl und Farbe im selben Bereich, Änderungen sofort sichtbar.
+  Charakter drehen mit ⟲ ⟳ oder durch Ziehen neben dem Menü. Freischaltungen und Spielstände bleiben unverändert.
 
 ## Developer-Testmodus
 

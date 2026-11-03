@@ -2,6 +2,9 @@
 import * as THREE from 'three';
 import { Jumper, surfaceAt } from './jump.js';
 
+// Luftsteuerung beim Springen (Prompt 13): Schwung bleibt, leichte Korrektur, sanftes Ausrollen ohne Eingabe
+const AIR_CONTROL = 2.4, AIR_DRAG = 0.6;
+
 const EYE = 1.32;
 const BASE_FOV = 70;
 const DIZZY_TIME = 10;
@@ -208,13 +211,17 @@ export class LocalPlayer {
     // der Laufrichtung folgen, ohne dass sich die Richtung dabei mitdreht.
     if (keys !== this.lastKeys || manual) this.basisYaw = first ? this.yaw : this.camYaw;
     this.lastKeys = keys;
+    // Wunsch-Geschwindigkeit aus der Eingabe (Laufen / Sprinten, auch diagonal) – Bewegung, Sprint und Sprung
+    // werden unabhängig voneinander verarbeitet und blockieren sich nie gegenseitig
+    const want = this.want || (this.want = new THREE.Vector3());
+    want.set(0, 0, 0);
     if (f || r) {
       const fwd = new THREE.Vector3(Math.sin(this.basisYaw), 0, Math.cos(this.basisYaw));
       const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
       const dir = fwd.multiplyScalar(f).addScaledVector(right, r).normalize();
       if (dz > 0) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), dz * (0.35 * Math.sin(this.time * 1.3) + 0.15 * Math.sin(this.time * 3.7)));
       const speed = (input.down('ShiftLeft') || input.down('ShiftRight') ? 5.2 : 3.2) * (1 - dz * 0.15) * Math.max(0.2, analog);
-      this.pos.addScaledVector(dir, speed * dt);
+      want.copy(dir).multiplyScalar(speed);
       this.moving = true;
       const target = Math.atan2(dir.x, dir.z);
       if (!first) {
@@ -228,10 +235,26 @@ export class LocalPlayer {
       this.stepT -= dt * (speed / 3.2);
       if (this.stepT < 0 && !this.jump.airborne) { this.stepT = 0.36; this.app.sfx.step(0.03); }
     }
+    const vel = this.vel || (this.vel = new THREE.Vector3());
+    if (sitting || this.lounge) vel.set(0, 0, 0);
+    else if (!this.jump.airborne) vel.copy(want); // am Boden: direkte, knackige Steuerung
+    else {
+      // In der Luft: Schwung bleibt erhalten (Sprint-Sprung fliegt weiter), leichte Korrektur möglich,
+      // aber kein abruptes Stoppen oder Umdrehen
+      if (want.lengthSq() > 0) vel.lerp(want.clone().setLength(Math.max(want.length(), vel.length() * 0.9)), Math.min(1, dt * AIR_CONTROL));
+      else vel.multiplyScalar(Math.max(0, 1 - dt * AIR_DRAG));
+    }
     if (!sitting && !this.lounge) {
-      world.collide(this.pos, 0.3);
-      // Springen (Leertaste): nur am Boden, Kollision bleibt aktiv – kein Sprung durch Wände
-      if (input.hit('Space') && this.jump.tryJump()) { this.app.sfx.jump(); this.emoteT = 0; }
+      // Bewegung in kleinen Schritten mit Kollision je Schritt – auch schnelle Sprint-Sprünge clippen nie durch Wände
+      const dist = vel.length() * dt;
+      const steps = Math.max(1, Math.ceil(dist / 0.12));
+      for (let i = 0; i < steps; i++) { this.pos.addScaledVector(vel, dt / steps); world.collide(this.pos, 0.3); }
+      // Springen (Leertaste): nur am Boden; kurz vor der Landung gedrückt zählt auch (Puffer)
+      if (input.hit('Space')) this.jumpBuffer = 0.14;
+      if (this.jumpBuffer > 0) {
+        this.jumpBuffer -= dt;
+        if (this.jump.tryJump()) { this.jumpBuffer = 0; this.app.sfx.jump(); this.emoteT = 0; }
+      }
       const env = { ground: y => surfaceAt(world.colliders, this.pos.x, this.pos.z, y), ceil: world.H ?? 99 };
       if (this.jump.step(dt, env) === 'land') this.app.sfx.land();
       this.pos.y = this.jump.y;

@@ -11,7 +11,7 @@ import { NpcDirector, LOBBY_SEATS, SEAT_REACH } from './npcs.js';
 import { EventDirector, HIGH_ROLLERS } from './events.js';
 import { FloorDynamics, MODIFIERS } from './dynamics.js';
 import { newRunStats, runPlayer, sanitizeRunStats, computeAwards } from './runstats.js';
-import { isDeveloperTestPlayer } from './dev.js';
+import { isDeveloperTestPlayer, rollDouble } from './dev.js';
 import { challengesFor, isChallengeId, legacyChallengeIds, newTracker, trackResult, progress as challengeProgress } from './challenges.js';
 import { slotsGame, winTier } from './games/slots.js';
 import { rouletteGame } from './games/roulette.js';
@@ -118,6 +118,9 @@ export class Room {
       if (r && Number.isFinite(r.pot) && r.pot >= 0) {
         this.pot = Math.floor(r.pot);
         this.run = { id: typeof r.id === 'string' ? r.id.slice(0, 40) : makeRunId(), finalUnlocked: !!r.finalUnlocked, startedAt: r.startedAt || Date.now() };
+        // Double or Loss war schon entschieden (z. B. Neuladen während der Münze): Ergebnis bleibt, wird nicht neu gewürfelt
+        const d = r.double;
+        if (d && (d.result === 'green' || d.result === 'red') && Number.isFinite(d.before) && d.before >= 0) this.run.double = { result: d.result, before: Math.floor(d.before), after: d.result === 'green' ? Math.floor(d.before) * 2 : 0 };
         // Run-Fortschritt (Stockwerke) gehört zum gespeicherten Run
         if (Array.isArray(r.completed)) this.campaign.completed = cleanFloors(r.completed);
         if (Number.isFinite(r.unlocked)) this.campaign.unlocked = Math.max(1, Math.min(FLOORS.length, Math.floor(r.unlocked)));
@@ -127,6 +130,7 @@ export class Room {
       this.campaign.completed = cleanFloors(this.campaign.completed);
       this.campaign.unlocked = Math.max(1, Math.min(FLOORS.length, Math.floor(this.campaign.unlocked) || 1));
       this.campaign.everCompleted = cleanFloors([...(this.campaign.everCompleted || []), ...this.campaign.completed]);
+      if (this.run.double) this.later(0, () => this.resolveSavedDouble());
     }
     // 🍆-Belohnungen pro Run mitzählen (für DILDO KING) – jede reward-Nachricht läuft hier durch
     const raw = conn;
@@ -294,6 +298,7 @@ export class Room {
       prestige: `PRESTIGE ${this.prestige + 1} starten? Neuer Run mit höheren Zielen – 🍆, Kosmetik, Rekorde und Trophäen bleiben.`,
     };
     if (!labels[type]) return;
+    if (type === 'double') data = { ...data, by: p.id }; // wer die Entscheidung auslöst (Ayri000-Regel)
     if (this.players.size === 1) return this.executeVote(type, data);
     this.vote = { type, data, by: p.id, byName: p.name, label: labels[type], yes: [p.id], no: [], expires: Date.now() + VOTE_TIMEOUT };
     const v = this.vote;
@@ -353,6 +358,7 @@ export class Room {
       case 'take':
       case 'double':
         if (this.scene !== 'final' || this.finalBusy || !this.run.finalUnlocked) return 'Nicht möglich';
+        if (this.run.double) return 'Die Entscheidung ist bereits gefallen';
         for (const p of this.players.values()) if (!(p.pose.p[2] < FINAL_COUNTER_Z)) return 'Alle Spieler müssen zum Mitarbeiter laufen';
         return null;
       case 'newrun':
@@ -389,7 +395,7 @@ export class Room {
         return this.changeScene('final');
       }
       case 'take': return this.finalTake();
-      case 'double': return this.finalDouble();
+      case 'double': return this.finalDouble(data?.by);
       case 'newrun': return this.newRun('manual');
       case 'next': return this.nextFloor();
       case 'prestige': return this.startPrestige();
@@ -1068,21 +1074,46 @@ export class Room {
     this.later(11000, () => this.endFinal());
   }
 
-  finalDouble() {
+  // Ergebnis wird EINMAL bestimmt und sofort im Run gespeichert (Host speichert ihn mit): Neuladen, Disconnect oder
+  // erneutes Öffnen würfeln nicht neu. Der Pot ändert sich genau einmal – bei der Enthüllung nach der Münz-Animation.
+  finalDouble(byId) {
+    if (this.finalBusy || this.run.double) return;
     this.finalBusy = true;
-    const result = rand() < 0.5 ? 'green' : 'red';
-    const amount = this.pot;
-    this.event({ kind: 'coin', result, amount });
+    const starter = this.players.get(byId);
+    const result = rollDouble(isDeveloperTestPlayer(starter), rand);
+    const before = this.pot;
+    const after = result === 'green' ? before * 2 : 0;
+    this.run.double = { result, before, after };
+    this.event({ kind: 'coin', result, amount: before });
     this.markDirty();
+    const runId = this.run.id;
     this.later(7600, () => {
-      if (result === 'green') {
-        this.pot = amount * 2;
-        this.campaign.bestDouble = Math.max(this.campaign.bestDouble || 0, this.pot);
-        this.campaign.bestWinnings = Math.max(this.campaign.bestWinnings || 0, this.pot);
-      } else this.pot = 0;
-      this.event({ kind: 'doubleResult', result, amount: this.pot, before: amount });
+      if (this.run.id !== runId || this.run.double?.applied) return;
+      this.applyDouble();
       this.later(10000, () => this.endFinal());
     });
+  }
+
+  applyDouble() {
+    const d = this.run.double;
+    if (!d || d.applied) return;
+    d.applied = true;
+    this.pot = d.after; // Verlust: genau der eingesetzte Betrag (nie negativ), Gewinn: exakt verdoppelt
+    if (d.result === 'green') {
+      this.campaign.bestDouble = Math.max(this.campaign.bestDouble || 0, d.after);
+      this.campaign.bestWinnings = Math.max(this.campaign.bestWinnings || 0, d.after);
+    }
+    this.event({ kind: 'doubleResult', result: d.result, amount: d.after, before: d.before });
+    this.markDirty();
+  }
+
+  // Beim Laden eines Spielstands mit bereits gefallener Entscheidung: Ergebnis übernehmen und den Run abschliessen
+  resolveSavedDouble() {
+    const d = this.run.double;
+    if (!d) return;
+    this.applyDouble();
+    this.event({ kind: 'toast', msg: `Double or Loss stand bereits fest: ${d.result === 'green' ? 'DOUBLE' : 'LOSS'}` });
+    this.endFinal();
   }
 
   endFinal() {
