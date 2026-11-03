@@ -11,7 +11,7 @@ import { NpcDirector, LOBBY_SEATS, SEAT_REACH } from './npcs.js';
 import { EventDirector, HIGH_ROLLERS } from './events.js';
 import { FloorDynamics, MODIFIERS } from './dynamics.js';
 import { newRunStats, runPlayer, sanitizeRunStats, computeAwards } from './runstats.js';
-import { isDeveloperTestPlayer, rollDouble } from './dev.js';
+import { isDeveloperTestPlayer, rollDouble, canAccessStaffRooms } from './dev.js';
 import { challengesFor, isChallengeId, legacyChallengeIds, newTracker, trackResult, progress as challengeProgress } from './challenges.js';
 import { slotsGame, winTier } from './games/slots.js';
 import { rouletteGame } from './games/roulette.js';
@@ -210,7 +210,7 @@ export class Room {
       session = { entryPot: this.session.entryPot, targetReached: this.session.targetReached, ending: this.session.ending, tables, challenges: this.challengeStatus() };
     }
     return {
-      code: this.code, hostId: this.hostId, players, pot: this.pot, campaign: this.campaign, run: this.run,
+      code: this.code, hostId: this.hostId, players, pot: this.pot, campaign: this.campaign, run: this.run, staffDoor: !!this.staffDoorOpen,
       makkaLuckMs: Math.max(0, (this.makkaLuckUntil || 0) - Date.now()),
       scene: this.scene, floor: this.floor, session, vote: this.vote && { ...this.vote },
       npcs: this.npcs.snapshot(),
@@ -249,6 +249,7 @@ export class Room {
           else if (msg.phase === 'bar') this.barDrink(p);
           break;
         case 'smoke': this.smoke(p, msg.i); break;
+        case 'staffdoor': this.staffDoor(p, !!msg.open); break;
         case 'seat.take': this.takeSeat(p, msg.i); break;
         case 'hr.challenge': this.events.challenge(p); break;
         case 'seat.leave': if (p.lseat != null) { p.lseat = null; this.markDirty(); } break;
@@ -404,6 +405,7 @@ export class Room {
 
   changeScene(scene, extra = {}) {
     this.scene = scene;
+    this.staffDoorOpen = false; // neue Szene: STAFF-Tür zu
     for (const p of this.players.values()) { p.seat = null; p.lseat = null; }
     this.events.reset(scene);
     this.npcs.reset(scene, this.floor);
@@ -467,6 +469,17 @@ export class Room {
 
   // Gratis-MAKKA an der Casino-Bar (Prompt 12): reine Show – Trink-Animation und Geschmack, KEIN Glücks-Effekt,
   // damit die bezahlte MAKKA LUCK nicht umgangen werden kann. Kurze Pause zwischen zwei Drinks.
+  // STAFF ROOM (Prompt 15): nur wer die Staff-Berechtigung hat (zentral über dev.js), darf die Tür öffnen/schliessen.
+  // Der Zustand ist für alle sichtbar; betreten können den Raum trotzdem nur Berechtigte (Sperre pro Spieler im Client).
+  staffDoor(p, open) {
+    if (this.scene !== 'floor') return;
+    if (!canAccessStaffRooms(p)) return this.error(p.id, '🔒 ZUTRITT VERWEIGERT');
+    if (!!this.staffDoorOpen === open) return;
+    this.staffDoorOpen = open;
+    this.event({ kind: 'staffdoor', open, pid: p.id });
+    this.markDirty();
+  }
+
   barDrink(p) {
     if (this.scene !== 'floor') return;
     const now = Date.now();

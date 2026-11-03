@@ -44,7 +44,7 @@ export class UI {
     this.hud.append(this.topLeft);
     this.setHudOpen(open, true);
     this.dildoEl = h('div.dildos');
-    this.devEl = h('div.devmode.hidden', h('b', 'DEV MODE'), h('span', '100% WIN RATE'));
+    this.devEl = h('div.devmode.hidden', h('b', 'DEV MODE'), h('span', '100% WIN RATE'), h('span', 'STAFF ACCESS'));
     this.groupEl = h('div.group');
     this.hud.append(h('div.topright', this.devEl, this.dildoEl, this.groupEl,
       h('div.btnrow',

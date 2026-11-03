@@ -26,3 +26,9 @@ export function rollDouble(dev, rnd) {
   if (dev) return 'green';
   return rnd() < 0.5 ? 'green' : 'red';
 }
+
+// Berechtigungen des Developer-Testmodus (Prompt 15) – überall nur über diese Funktionen abfragen
+const DEV_PERMS = Object.freeze({ winAll: true, canAccessStaffRooms: true });
+const NO_PERMS = Object.freeze({ winAll: false, canAccessStaffRooms: false });
+export function devPermissions(player) { return isDeveloperTestPlayer(player) ? DEV_PERMS : NO_PERMS; }
+export function canAccessStaffRooms(player) { return devPermissions(player).canAccessStaffRooms; }

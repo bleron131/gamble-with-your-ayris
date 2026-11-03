@@ -320,6 +320,20 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   ist persönlich und wird erst beim Spielstart (bzw. bei Slots als Automaten-Einsatz) übertragen. Eine Station kann nur
   eine Person bedienen – andere schauen zu.
 
+## Prompt 15: STAFF ROOMS (Developer-Zugang)
+
+- Hinter der **STAFF-ONLY-Tür** an der Rückwand jedes Stockwerks liegt jetzt ein echtes Hinterzimmer: geheime
+  „Private Lounge“ im Rotlicht-Look (rote/pinke Neons, Samtsofas, Separee-Vorhang, Champagner-Bar, Barkeeperin Roxy,
+  Türsteher Bruno). Rein atmosphärisch, nichts Explizites.
+- **Zugang nur für den Developer-Testspieler „Ayri000“** (exakter Name, zentral über `canAccessStaffRooms()` /
+  `devPermissions()` in `src/shared/dev.js`). Ayri000 öffnet und schliesst die Tür mit **E** (echte Türanimation mit Sound,
+  von aussen und innen), die Sperre im Türrahmen fällt nur für Ayri000 weg.
+- Alle anderen sehen klein „🔒 STAFF ONLY“ bzw. „🔒 ZUTRITT VERWEIGERT“ – und kommen **auch bei offener Tür nicht hinein**
+  (Zugangskontrolle pro Spieler am Eingang). Öffnen/Schliessen prüft zusätzlich der Server; der Türzustand ist für alle
+  synchron, jede neue Szene startet mit geschlossener Tür. Der Raum ist rundum geschlossen – kein Weg zu gesperrten
+  Stockwerken, aus der Map oder an Belohnungen vorbei.
+- DEV-MODE-Anzeige (nur für Ayri000): `DEV MODE · 100% WIN RATE · STAFF ACCESS`.
+
 ## Prompt 14: freistehende Einsatz-Terminals
 
 - Jedes Einsatz-Terminal ist jetzt ein **freistehender Casino-Kiosk**: schwerer Standfuss direkt auf dem Boden (mit

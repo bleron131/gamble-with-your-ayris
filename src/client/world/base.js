@@ -33,6 +33,7 @@ export class World {
   collide(p, r = 0.3) {
     for (let iter = 0; iter < 2; iter++) {
       for (const c of this.colliders) {
+        if (c.off) continue; // abgeschaltet (z. B. offene Staff-Tür für Berechtigte)
         if (c.top !== undefined && p.y >= c.top - 0.06) continue; // darüber (gesprungen oder darauf stehend)
         if (c.type === 'box') {
           const nx = Math.max(c.minX, Math.min(p.x, c.maxX));

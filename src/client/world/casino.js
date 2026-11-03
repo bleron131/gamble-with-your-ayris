@@ -19,6 +19,8 @@ import { WheelView } from '../tables/wheel.js';
 import { ARCADE_VIEWS } from '../tables/arcade.js';
 import { layoutFloor } from './layout.js';
 import { stool } from '../tables/common.js';
+import { buildStaffRoom } from './staffroom.js';
+import { canAccessStaffRooms } from '../../shared/dev.js';
 import { STOOL_Y } from '../../shared/npcs.js';
 import { ARCADE_TYPES } from '../../shared/config.js';
 
@@ -75,6 +77,7 @@ export class CasinoWorld extends World {
     this.buildElevator();
     this.buildInfoBoard();
     this.addRoomWalls(-this.W / 2, this.W / 2, -this.D / 2, this.D / 2);
+    this.buildStaffAccess();
     this.updaters.push((dt, t) => { for (const v of Object.values(this.views)) v.tick(dt, t); });
     this.bakeWorld();
   }
@@ -104,13 +107,31 @@ export class CasinoWorld extends World {
     const wallMat = M.std('#ffffff', wk === 'velvet' ? 0.95 : 0.85, 0, { map: wallTexture(wk, wa, wb, wc) });
     wallMat.map = wallMat.map.clone(); wallMat.map.userData = {}; wallMat.map.needsUpdate = true; wallMat.map.repeat.set(W / (wk === 'brick' ? 3 : 6), wk === 'brick' ? H / 2 : 1.5);
     const trimMat = { gold: M.gold(), wood: M.std('#4a2a12', 0.5), chrome: M.std('#d0d4dc', 0.15, 0.95), dark: M.std('#1a1814', 0.8), neon: M.glow(st.neon, 2) }[st.trim] || M.std('#1a0f08', 0.5);
+    // Rückwand mit Öffnung für die STAFF-ONLY-Tür (Prompt 15: dahinter liegt ein echtes Hinterzimmer)
+    const dx = -W / 2 + 3, dw = 1.5, dh = 2.72;
+    const piece = (x0, x1, y0, y1) => {
+      const geo = new THREE.PlaneGeometry(x1 - x0, y1 - y0);
+      const uv = geo.attributes.uv, pos = geo.attributes.position;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, ((x0 + x1) / 2 + pos.getX(i) + W / 2) / W, ((y0 + y1) / 2 + pos.getY(i)) / H);
+      return mesh(geo, wallMat, (x0 + x1) / 2, (y0 + y1) / 2, -D / 2, { cast: false });
+    };
+    s.add(piece(-W / 2, dx - dw / 2, 0, H), piece(dx + dw / 2, W / 2, 0, H), piece(dx - dw / 2, dx + dw / 2, dh, H));
     for (const [x, z, w, ry] of [[0, -D / 2, W, 0], [0, D / 2, W, Math.PI], [-W / 2, 0, D, Math.PI / 2], [W / 2, 0, D, -Math.PI / 2]]) {
-      const m = mesh(new THREE.PlaneGeometry(w, H), wallMat, x, H / 2, z, { cast: false });
-      m.rotation.y = ry;
-      s.add(m);
+      const back = ry === 0;
+      if (!back) {
+        const m = mesh(new THREE.PlaneGeometry(w, H), wallMat, x, H / 2, z, { cast: false });
+        m.rotation.y = ry;
+        s.add(m);
+      }
       const off = new THREE.Vector3(Math.sin(ry), 0, Math.cos(ry));
-      const base = mesh(new THREE.BoxGeometry(w, 0.25, 0.08), st.trim === 'neon' ? M.std('#0a0a12', 0.4) : trimMat, x, 0.125, z, { cast: false });
-      base.rotation.y = ry; base.position.addScaledVector(off, 0.04); s.add(base);
+      const baseMat = st.trim === 'neon' ? M.std('#0a0a12', 0.4) : trimMat;
+      if (back) {
+        // Sockelleiste mit Lücke für die Tür
+        for (const [a, b] of [[-W / 2, dx - dw / 2], [dx + dw / 2, W / 2]]) s.add(mesh(new THREE.BoxGeometry(b - a, 0.25, 0.08), baseMat, (a + b) / 2, 0.125, z + 0.04, { cast: false }));
+      } else {
+        const base = mesh(new THREE.BoxGeometry(w, 0.25, 0.08), baseMat, x, 0.125, z, { cast: false });
+        base.rotation.y = ry; base.position.addScaledVector(off, 0.04); s.add(base);
+      }
       const top = mesh(new THREE.BoxGeometry(w, 0.15, 0.12), trimMat, x, H - 0.1, z, { cast: false });
       top.rotation.y = ry; top.position.addScaledVector(off, 0.06); s.add(top);
     }
@@ -286,8 +307,52 @@ export class CasinoWorld extends World {
     staff.position.set(0, 2.25, 0.06);
     door.add(staff);
     s.add(door);
+    this.staffDoorGroup = door;
     this.mafiaDoor = pivot;
     this.mafiaDoorPos = new THREE.Vector3(door.position.x, 0, door.position.z + 1);
+  }
+
+  // STAFF ROOM (Prompt 15): Rückwand bekommt eine Türöffnung, dahinter das Hinterzimmer. Zutritt pro Spieler:
+  // berechtigt (Ayri000) → Tür öffnen/schliessen, Sperre im Türrahmen fällt weg, solange die Tür offen ist.
+  // Alle anderen: Tür bleibt für sie eine Wand – auch wenn sie sichtbar offen steht.
+  buildStaffAccess() {
+    const { W, D } = this;
+    const dx = -W / 2 + 3;
+    // Rückwand-Collider durch zwei Teile mit Lücke ersetzen
+    const i = this.colliders.findIndex(c => c.type === 'box' && c.maxZ <= -D / 2 + 1e-6 && c.maxX - c.minX >= W);
+    if (i >= 0) {
+      const wall = this.colliders.splice(i, 1)[0];
+      this.addBox((wall.minX + dx - 0.7) / 2, (wall.minZ + wall.maxZ) / 2, dx - 0.7 - wall.minX, wall.maxZ - wall.minZ);
+      this.addBox((dx + 0.7 + wall.maxX) / 2, (wall.minZ + wall.maxZ) / 2, wall.maxX - dx - 0.7, wall.maxZ - wall.minZ);
+    }
+    this.staffBarrier = this.addBox(dx, -D / 2, 1.4, 0.36);
+    this.staffRoom = buildStaffRoom(this, dx);
+    this.staffOpen = false;
+    this.staffDoorK = 0;
+    const allowed = () => canAccessStaffRooms({ name: this.app.save?.name });
+    const label = () => (allowed() ? (this.staffOpen ? 'STAFF ROOM – Tür schliessen' : 'STAFF ROOM – Tür öffnen') : '🔒 STAFF ONLY');
+    const action = () => {
+      if (!allowed()) { this.app.sfx.denied?.(); this.app.ui.toast('🔒 ZUTRITT VERWEIGERT', 'warn', 1400); return; }
+      this.app.send({ t: 'staffdoor', open: !this.staffOpen });
+    };
+    this.addInteract({ pos: new THREE.Vector3(dx, 0, -D / 2 + 1.0), radius: 1.6, verb: 'STAFF', label, action });
+    this.addInteract({ pos: new THREE.Vector3(dx, 0, -D / 2 - 1.0), radius: 1.6, verb: 'STAFF', label, action });
+    this.updaters.push(dt => {
+      const target = this.staffOpen ? 1 : 0;
+      if (this.staffDoorK !== target) {
+        this.staffDoorK += Math.sign(target - this.staffDoorK) * Math.min(Math.abs(target - this.staffDoorK), dt * 1.6);
+        this.mafiaDoor.rotation.y = 1.45 * (this.staffDoorK * this.staffDoorK * (3 - 2 * this.staffDoorK));
+      }
+      // Sperre im Türrahmen: nur wer berechtigt ist UND die Tür offen ist, kommt durch
+      this.staffBarrier.off = allowed() && this.staffOpen && this.staffDoorK > 0.6;
+    });
+  }
+
+  // Server-Zustand der Tür übernehmen (für alle synchron sichtbar)
+  setStaffDoor(open) {
+    if (!!open === this.staffOpen) return;
+    this.staffOpen = !!open;
+    this.app.sfx.doors?.();
   }
 
   // High-Roller-Etagen: roter Teppich, Geldbrunnen, Riesen-Chips, goldene Statuen

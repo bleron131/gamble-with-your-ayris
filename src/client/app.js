@@ -359,6 +359,7 @@ export class App {
     };
     // Run-Fortschritt kommt immer exakt vom Server (kein Zusammenführen mit alten Runs); gespeichert wird er vom Gruppenersteller
     if (st.hostId === this.me) s.run = { id: st.run.id, pot: st.pot, finalUnlocked: st.run.finalUnlocked, startedAt: st.run.startedAt, double: st.run.double ? { result: st.run.double.result, before: st.run.double.before } : undefined, unlocked: c.unlocked, completed: [...c.completed], stats: st.runStats };
+    this.world?.setStaffDoor?.(st.staffDoor);
     if (st.pot > s.stats.highestPot) s.stats.highestPot = st.pot;
     if (st.scene === 'floor') this.record('bestPot', st.pot);
     const meP = st.players.find(p => p.id === this.me);
