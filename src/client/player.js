@@ -1,6 +1,6 @@
 // Lokaler Spieler: First-Person (Casino) bzw. Third-Person (Shishabar) mit Kollision.
 import * as THREE from 'three';
-import { Jumper } from './jump.js';
+import { Jumper, surfaceAt } from './jump.js';
 
 const EYE = 1.32;
 const BASE_FOV = 70;
@@ -232,7 +232,8 @@ export class LocalPlayer {
       world.collide(this.pos, 0.3);
       // Springen (Leertaste): nur am Boden, Kollision bleibt aktiv – kein Sprung durch Wände
       if (input.hit('Space') && this.jump.tryJump()) { this.app.sfx.jump(); this.emoteT = 0; }
-      if (this.jump.step(dt) === 'land') this.app.sfx.land();
+      const env = { ground: y => surfaceAt(world.colliders, this.pos.x, this.pos.z, y), ceil: world.H ?? 99 };
+      if (this.jump.step(dt, env) === 'land') this.app.sfx.land();
       this.pos.y = this.jump.y;
     }
     if (this.moving || this.jump.airborne) { this.emoteT = 0; this.smokeEnd = 0; }

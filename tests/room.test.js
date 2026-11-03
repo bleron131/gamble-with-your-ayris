@@ -305,7 +305,8 @@ test('Sprung: natürlicher Bogen, kein Luft- oder Doppelsprung, neuer Sprung ers
   assert.ok(landed, 'landet wieder');
   const expectedPeak = JUMP.v0 ** 2 / (2 * JUMP.gravity);
   assert.ok(Math.abs(peak - expectedPeak) < 0.05, `Höhe ${peak}`);
-  assert.ok(t > 0.5 && t < 0.7, `Flugzeit ${t}`);
+  assert.ok(t > 0.7 && t < 0.9, `Flugzeit ${t}`);
+  assert.ok(peak > 0.95, 'hoch genug für Tische (Prompt 12)');
   assert.equal(j.y, 0);
   assert.equal(j.tryJump(), false); // Bunny-Hop gesperrt: direkt nach der Landung noch nicht
   j.step(JUMP.minGround + 0.01);
@@ -313,6 +314,28 @@ test('Sprung: natürlicher Bogen, kein Luft- oder Doppelsprung, neuer Sprung ers
   // Grosse Bildzeit-Sprünge (Ruckler) dürfen nicht durch den Boden fallen
   j.step(0.5);
   assert.ok(j.y >= 0);
+});
+
+test('Sprung: auf Tisch/Sofa landen, herunterlaufen, Decke begrenzt', async () => {
+  const { Jumper, surfaceAt, JUMP } = await import('../src/client/jump.js');
+  const table = { type: 'box', minX: -1, maxX: 1, minZ: -1, maxZ: 1, h: 1.2, top: 0.88 };
+  const pos = { x: 1.4, z: 0 };
+  const env = { ground: y => surfaceAt([table], pos.x, pos.z, y), ceil: 4.5 };
+  const j = new Jumper();
+  j.tryJump();
+  let landed = false;
+  for (let i = 0; i < 120 && !landed; i++) { if (j.y > 0.9) pos.x = 0.5; landed = j.step(1 / 60, env) === 'land'; }
+  assert.ok(landed && Math.abs(j.y - 0.88) < 1e-9, `steht auf dem Tisch (${j.y})`);
+  pos.x = 2; // herunterlaufen
+  for (let i = 0; i < 60; i++) j.step(1 / 60, env);
+  assert.equal(j.y, 0);
+  // niedrige Decke: Kopf stösst an, kein Clipping
+  const low = new Jumper();
+  low.tryJump();
+  let top = 0;
+  for (let i = 0; i < 90; i++) { low.step(1 / 60, { ceil: 2.3 }); top = Math.max(top, low.y); }
+  assert.ok(top + JUMP.headroom <= 2.3 + 1e-9, `Kopf unter der Decke (${top})`);
+  assert.equal(low.y, 0);
 });
 
 // ───────────────────────── Roulette: vorbereitete Wetten & Rebet ─────────────────────────

@@ -145,7 +145,7 @@ export class NpcDirector {
   reactionFor(npc) {
     const kind = npc.spot?.split(':')[0];
     if (kind === 'slot' || kind === 'table') return rand() < 0.3 ? 'win' : 'lose';
-    if (kind === 'bar') return 'drink';
+    if (kind === 'bar') return pick(['drink', 'drink', 'talk', 'laugh']);
     if (kind === 'talk') return pick(['talk', 'talk', 'laugh']);
     if (kind === 'watch') return pick(['cheer', 'talk', 'lose']);
     if (kind === 'seat') {

@@ -4,13 +4,14 @@ import { TableView, halfMoonTable, makeDealer, cardShoe, stool, chipStack, CardS
 import { printedFelt } from '../textures.js';
 import { handTotal, cardValue } from '../../shared/games/blackjack.js';
 import { h, clear } from '../ui/dom.js';
-import { BetAmount, actionButton, limitLine } from '../ui/betpanel.js';
+import { actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
 import { say, sfx, sfxAt } from '../audio.js';
 
 export class BlackjackView extends TableView {
   constructor(app, def, floor) {
     super(app, def, floor);
+    this.standTop = 0.88;
     this.seatLocal.set(0, 0, 1.5);
     this.camLocal.set(0, 1.95, 1.55);
     this.lookLocal.set(0.38, 0.8, 0.2);
@@ -155,9 +156,9 @@ export class BlackjackView extends TableView {
   update(dt) { this.dealer.update(dt); }
 
   buildPanel() {
-    this.bet = new BetAmount(this.limits, () => this.app.pot, this.denoms, this.limits.min);
+    this.bet = this.pad;
     this.btn = {
-      deal: actionButton('DEAL', () => this.start(), 'primary big'),
+      deal: actionButton('PLAY', () => this.start(), 'primary big'),
       hit: actionButton('HIT (H)', () => this.act('hit'), 'primary'),
       stand: actionButton('STAND (S)', () => this.act('stand'), 'primary'),
       double: actionButton('DOUBLE (D)', () => this.act('double')),

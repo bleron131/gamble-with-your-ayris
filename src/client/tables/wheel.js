@@ -5,7 +5,7 @@ import { M, mesh, neonSign } from '../world/props.js';
 import { wheelTexture, WHEEL_COLORS } from '../textures.js';
 import { WHEEL_SEGMENTS, WHEEL_PAYS } from '../../shared/games/wheel.js';
 import { h, clear } from '../ui/dom.js';
-import { ChipPicker, actionButton, limitLine } from '../ui/betpanel.js';
+import { actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
 import { sfx } from '../audio.js';
 
@@ -158,10 +158,10 @@ export class WheelView extends TableView {
   }
 
   buildPanel() {
-    this.picker = new ChipPicker(this.denoms, this.limits.min);
+    this.picker = this.pad;
     this.listEl = h('div.betlist');
     this.totalEl = h('div.betval');
-    const quick = h('div.quick');
+    const quick = h('div.quick.noMirror');
     for (const k of KEYS) quick.append(h('button.small', { style: { background: WHEEL_COLORS[k], color: k === 'x1' ? '#111' : '#fff' }, onclick: () => this.addBet(k) }, `${k.slice(1)}× (${WHEEL_PAYS[k]}:1)`));
     this.spinBtn = actionButton('RAD DREHEN', () => this.spin(), 'primary big');
     this.panel = h('div.tablepanel',

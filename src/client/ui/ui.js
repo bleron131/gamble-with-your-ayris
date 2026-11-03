@@ -13,6 +13,8 @@ import { openTrophies } from './modals.js';
 import { TROPHIES } from '../world/trophies.js';
 import { openElevator, openShop, openEditor, openStats, openSettings, renderScoreboard, openBar } from './modals.js';
 
+function touchHint() { return matchMedia('(pointer: coarse)').matches; }
+
 export class UI {
   constructor(app) {
     this.app = app;
@@ -33,7 +35,14 @@ export class UI {
     this.dynEl = h('div.dynchips');
     this.feedEl = h('div.feed');
     // Pot-Anzeige und Feed untereinander: der Feed rutscht automatisch nach unten, wenn die Challenge-Liste sichtbar ist
-    this.hud.append(h('div.topleft', h('div.panel.potpanel', h('div.lbl', 'TEAM POT'), this.potEl, this.targetEl, this.progress, this.levelEl, this.dynEl, this.chEl), this.feedEl));
+    // Prompt 12: HUD standardmässig eingeklappt – sichtbar bleibt nur TEAM POT + Pfeil; Zustand gilt für die Sitzung
+    let open = false;
+    try { open = sessionStorage.getItem('hudOpen') === '1'; } catch { /* privater Modus */ }
+    this.hudToggle = h('button.hudtoggle', { title: 'HUD aus-/einklappen', onclick: () => this.setHudOpen(!this.hudOpen) }, '▾');
+    this.hudMore = h('div.hudmore', h('div.hudinner', this.targetEl, this.progress, this.levelEl, this.dynEl, this.chEl, this.feedEl));
+    this.topLeft = h('div.topleft', h('div.panel.potpanel', h('div.pothead', h('div.lbl', 'TEAM POT'), this.hudToggle), this.potEl, this.hudMore));
+    this.hud.append(this.topLeft);
+    this.setHudOpen(open, true);
     this.dildoEl = h('div.dildos');
     this.devEl = h('div.devmode.hidden', h('b', 'DEV MODE'), h('span', '100% WIN RATE'));
     this.groupEl = h('div.group');
@@ -411,8 +420,17 @@ export class UI {
     else this.popup('reward', `+${n} 🍆`, reason);
   }
 
+  setHudOpen(on, init) {
+    this.hudOpen = !!on;
+    this.topLeft.classList.toggle('open', this.hudOpen);
+    this.hudToggle.textContent = this.hudOpen ? '▴' : '▾';
+    try { sessionStorage.setItem('hudOpen', this.hudOpen ? '1' : '0'); } catch { /* egal */ }
+    if (!init) sfx.click();
+  }
+
   // Animierte Feedback-Popups (Challenge, Stockwerk, neues Item, Achievement …) – verschwinden automatisch.
-  // Höchstens 3 gleichzeitig, der Rest wartet kurz in der Schlange.
+  // Prompt 12: klein und links gestapelt (nicht mehr in der Bildschirmmitte). Höchstens 3 gleichzeitig, der Rest
+  // wartet in der Schlange; jede Meldung blendet sich nach kurzer Zeit selbst aus.
   popup(kind, title, sub = '', ms = 3600) {
     this.popupQueue.push({ kind, title, sub, ms });
     this.pumpPopups();
@@ -493,16 +511,29 @@ export class UI {
   }
 
   // ───────────────────────── Tisch ─────────────────────────
+  // Prompt 12: kein separates Einsatzfenster mehr. Die Spiellogik-Leiste der Station bleibt unsichtbar im DOM
+  // und wird aufs 3D-Pult gespiegelt; sichtbar ist nur eine schmale Leiste mit Spielname, Kurzregel und Aufstehen.
   openTablePanel(view) {
     this.tableView = view;
     clear(this.tableWrap);
     const panel = view.buildPanel();
-    this.tableWrap.append(panel, h('button.leave', { onclick: () => this.app.leaveTable() }, '✕ Aufstehen (ESC)'));
+    const title = panel?.querySelector('.ptitle')?.textContent || view.def.type.toUpperCase();
+    const rule = panel?.querySelector('.phint')?.textContent || '';
+    const mirror = h('div.panelmirror', panel);
+    const bar = h('div.tablebar',
+      h('div.tbtitle', title),
+      rule ? h('div.tbrule', rule) : null,
+      h('div.tbkeys', touchHint() ? 'Tippe auf das Pult und die Spielfelder' : 'Klick aufs Pult & die Spielfelder · Ziffern tippen · ESC = Aufstehen'),
+      h('button.leave', { onclick: () => this.app.leaveTable() }, '✕ Aufstehen'),
+    );
+    this.tableWrap.append(mirror, bar);
     this.tableWrap.classList.remove('hidden');
     this.crosshair.style.display = 'none';
     view.refreshPanel();
+    view.pad?.attach(panel);
   }
   closeTablePanel() {
+    this.tableView?.pad?.detach();
     this.tableView = null;
     this.tableWrap.classList.add('hidden');
     clear(this.tableWrap);

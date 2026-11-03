@@ -443,11 +443,11 @@ export const moneywheelGame = {
 // 5 Enten mit unterschiedlicher Form; Quote = 0.9 / Siegchance (Ayri-Glück hebt die Auszahlung auf gut 100 %). Das Rennen (Zwischenstände) wird hier vorausberechnet:
 // Führungswechsel sind möglich, aber die Gewinner-Ente kommt garantiert als erste ins Ziel.
 export const DUCKS = [
-  { name: 'Quackers', color: '#ffd60a', p: 0.30 },
-  { name: 'Ayri-Ente', color: '#ff4fa3', p: 0.25 },
-  { name: 'Bleifuss', color: '#2bd9fe', p: 0.20 },
-  { name: 'Schnatter', color: '#7cff6b', p: 0.15 },
-  { name: 'Lucky Lou', color: '#c084ff', p: 0.10 },
+  { name: 'FARUK', color: '#ffd60a', p: 0.30 },
+  { name: 'ERLAF', color: '#ff4fa3', p: 0.25 },
+  { name: 'YARL', color: '#2bd9fe', p: 0.20 },
+  { name: 'SABIN', color: '#7cff6b', p: 0.15 },
+  { name: 'QUACKY', color: '#c084ff', p: 0.10 },
 ].map(d => ({ ...d, odds: round2(0.9 / d.p) })); // mit Ayri-Glück insgesamt leicht über 100 %
 export const DUCK_STEPS = 14;
 function pickDuck() { let r = rand(); for (let i = 0; i < DUCKS.length; i++) { r -= DUCKS[i].p; if (r <= 0) return i; } return DUCKS.length - 1; }

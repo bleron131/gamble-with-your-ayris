@@ -18,6 +18,7 @@ export class LobbyWorld extends World {
     super(app);
     this.mode = 'third';
     this.kind = 'lobby';
+    this.H = H;
     const s = this.scene;
     s.background = new THREE.Color('#120814');
     s.fog = new THREE.Fog('#120814', 18, 40);
@@ -156,7 +157,7 @@ export class LobbyWorld extends World {
       for (const [dx, dz, ry] of [[0, -1.35, 0], [0, 1.35, Math.PI], [-1.5, 0, Math.PI / 2]]) {
         const so = sofa(col, dx === -1.5 ? 1.6 : 2.4);
         so.position.set(x + dx, 0, z + dz); so.rotation.y = ry; s.add(so);
-        if (dx === -1.5) this.addBox(x + dx, z + dz, 0.8, 1.6, 0.9); else this.addBox(x + dx, z + dz, 2.4, 0.8, 0.9);
+        if (dx === -1.5) this.addBox(x + dx, z + dz, 0.8, 1.6, 0.9, 0.5); else this.addBox(x + dx, z + dz, 2.4, 0.8, 0.9, 0.5);
       }
     }
     this.buildSeats();

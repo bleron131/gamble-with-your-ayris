@@ -3,13 +3,14 @@
 // sind zusätzlich echte 3D-Maschinen (Pins + Kugel, Rad, Rennbahn, Würfel). Bedient wird über das Tischpanel.
 // Alles, was angezeigt wird, kommt aus dem Server-Zustand – die Animationen spielen nur das feste Ergebnis ab.
 import * as THREE from 'three';
-import { TableView, ease } from './common.js';
+import { TableView, ease, cardMesh, setCardFace } from './common.js';
 import { M, mesh, neonSign } from '../world/props.js';
 import { diceFaceTexture } from '../textures.js';
 import { h, clear } from '../ui/dom.js';
-import { BetAmount, actionButton, limitLine } from '../ui/betpanel.js';
+import { actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney, fmtShort } from '../../shared/config.js';
 import { sfx, sfxAt } from '../audio.js';
+import { ARCADE_SCALE, ARCADE_WIDTH } from '../world/layout.js'; // Grösse je Station (Prompt 12: deutlich grössere Maschinen)
 import {
   crashMultAt, hiloOdds, minesMult, MINES_TILES, TOWER_LEVELS, TOWER_MODES, towerMult, PENGUIN_LANES, PENGUIN_MODES, penguinMult,
   PLINKO_ROWS, PLINKO_PAYS, KENO_N, KENO_PAYS, KENO_DRAW, MONEY_WHEEL, DUCKS, DUCK_STEPS, STREET_BETS,
@@ -32,6 +33,7 @@ const STYLE = {
   streetcraps: { color: '#ff5a5a', title: 'STREET CRAPS', body: '#2a0a0a' },
 };
 
+
 // ───────────────────────── Basis: Automat mit Bildschirm ─────────────────────────
 class ArcadeView extends TableView {
   constructor(app, def, floor, opts = {}) {
@@ -45,7 +47,22 @@ class ArcadeView extends TableView {
     this.footprint = { w: this.cabW + 0.1, d: 1.0, oz: -0.05 };
     this.resultDelay = 0;
     this.dirty = true;
+    // Prompt 12: grössere Maschinen – die ganze Station wird skaliert (Kamera, Pult, Klickflächen skalieren mit)
+    this.S = opts.scale || ARCADE_SCALE[def.type] || 1;
     this.build(opts);
+  }
+  place(x, z, rotY) {
+    // Augenhöhe beim Spielen bleibt menschlich, auch wenn die Maschine grösser ist
+    this.camLocal.y = Math.min(this.camLocal.y, 2.0 / this.S);
+    super.place(x, z, rotY);
+    this.group.scale.setScalar(this.S);
+    this.group.updateMatrixWorld(true);
+  }
+  addColliders(world) {
+    const p = this.toWorld(new THREE.Vector3(0, 0, this.footprint.oz || 0));
+    const swap = Math.abs(Math.sin(this.group.rotation.y)) > 0.7;
+    const w = this.footprint.w * this.S, d = this.footprint.d * this.S;
+    world.addBox(p.x, p.z, swap ? d : w, swap ? w : d);
   }
 
   build(opts) {
@@ -69,13 +86,13 @@ class ArcadeView extends TableView {
       this.tex = new THREE.CanvasTexture(this.canvas);
       this.tex.colorSpace = THREE.SRGBColorSpace;
       const scr = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), new THREE.MeshBasicMaterial({ map: this.tex, toneMapped: false }));
-      scr.position.set(0, opts.screenY || 1.6, 0.255);
+      scr.position.set(0, opts.screenY || 1.6, opts.screenZ ?? 0.255);
       scr.userData.noBake = true;
       g.add(scr);
       this.screen = scr;
     }
     const sign = neonSign(this.st.title, this.st.color, Math.min(w + 0.2, 2.6), 0.42);
-    sign.position.set(0, H + 0.32, -0.1);
+    sign.position.set(0, opts.signY || H + 0.32, opts.signZ ?? -0.1);
     g.add(sign);
     this.buildExtra?.(opts);
   }
@@ -111,7 +128,9 @@ class ArcadeView extends TableView {
     this.dirty = false;
     const g = this.ctx, W = this.canvas.width, Hh = this.canvas.height;
     g.fillStyle = '#07040f'; g.fillRect(0, 0, W, Hh);
+    this.nextZones = [];
     this.draw(g, W, Hh, t);
+    this.zones = this.nextZones;
     g.strokeStyle = this.st.color; g.lineWidth = 6; g.strokeRect(3, 3, W - 6, Hh - 6);
     this.tex.needsUpdate = true;
   }
@@ -124,7 +143,7 @@ class ArcadeView extends TableView {
 
   // ── Panel ──
   basePanel(title, hint, extra = []) {
-    this.bet = new BetAmount(this.limits, () => this.app.pot, this.denoms, this.limits.min);
+    this.bet = this.pad;
     this.statusEl = h('div.betval');
     this.panel = h('div.tablepanel',
       h('div.ptitle', title),
@@ -152,6 +171,35 @@ class ArcadeView extends TableView {
   }
   buildPanel() { return this.basePanel(this.st.title, ''); }
   refreshPanel() {}
+  statusText() { return this.statusEl?.textContent || ''; }
+
+  // ── Direkt auf dem Bildschirm klicken (Prompt 12): draw() meldet Klickflächen über zone() ──
+  zone(x, y, w, h, label, action) { (this.nextZones ||= []).push({ x, y, w, h, label, action }); }
+  screenHit(raycaster) {
+    if (!this.screen || !this.zones?.length) return null;
+    const hit = raycaster.intersectObject(this.screen, false)[0];
+    if (!hit?.uv) return null;
+    const x = hit.uv.x * this.canvas.width, y = (1 - hit.uv.y) * this.canvas.height;
+    return this.zones.find(z => x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h) || null;
+  }
+  pick(raycaster, button) {
+    if (button !== 0 && button !== undefined) return false;
+    const z = this.screenHit(raycaster);
+    if (!z) return false;
+    const lbl = typeof z.label === 'function' ? z.label() : z.label;
+    if (!lbl) return false;
+    z.action();
+    this.dirty = true;
+    return true;
+  }
+  hover(raycaster) {
+    const z = this.screenHit(raycaster);
+    const lbl = z && (typeof z.label === 'function' ? z.label() : z.label);
+    if ((z && lbl ? z : null) !== this.hoverZone) { this.hoverZone = z && lbl ? z : null; this.dirty = true; }
+    return lbl || null;
+  }
+  hoverLabel(l) { return `Klick: ${l}`; }
+  hl(g, x, y, w, h) { const z = this.hoverZone; if (z && Math.abs(z.x - x) < 1 && Math.abs(z.y - y) < 1) { g.strokeStyle = '#ffffff'; g.lineWidth = 4; g.beginPath(); g.roundRect(x + 2, y + 2, w - 4, h - 4, 10); g.stroke(); } }
 }
 
 // ───────────────────────── CRASH ─────────────────────────
@@ -165,9 +213,14 @@ class CrashView extends ArcadeView {
     return Math.max(local, s.startedAt ? Date.now() - s.startedAt - 150 : 0);
   }
   curMult() { const s = this.s; if (!s) return 1; if (s.phase === 'crashed') return s.crash; return s.phase === 'running' ? crashMultAt(this.elapsed()) : 1; }
-  animating() { return this.s?.phase === 'running'; }
+  animating() { return this.s?.phase === 'running' || performance.now() - (this.crashT || 0) < 1000; }
   onChange(s, prev) {
     if (prev && prev.phase === 'running' && s.phase === 'crashed') {
+      this.crashT = performance.now();
+      // Bildschirm wackelt kurz
+      const base = this.screen.position.clone();
+      this.anim.add(0.6, k => { this.screen.position.set(base.x + Math.sin(k * 60) * 0.02 * (1 - k), base.y + Math.cos(k * 47) * 0.015 * (1 - k), base.z); }, () => this.screen.position.copy(base));
+      this.floatText(`CRASHED @ ${s.crash.toFixed(2)}×`, '#ff4d4d', { y: 2.75, scale: 1.4, z: 0.4 });
       const v = this.vol();
       if (v > 0.05) sfxAt(v, () => sfx.explosion());
       if (this.near()) this.app.world.particles?.confetti(this.toWorld(new THREE.Vector3(0, 2, 0.4)), 30, 1.2);
@@ -196,6 +249,8 @@ class CrashView extends ArcadeView {
       g.strokeStyle = s.phase === 'crashed' ? '#ff4d4d' : '#2bd9fe'; g.lineWidth = 6; g.stroke();
     }
     const crashed = s.phase === 'crashed';
+    const since = performance.now() - (this.crashT || 0);
+    if (crashed && since < 900) { g.fillStyle = `rgba(255,30,30,${0.55 * (1 - since / 900)})`; g.fillRect(0, 0, W, H); }
     this.label(g, W / 2, H / 2 - 10, `${m.toFixed(2)}×`, 110, crashed ? '#ff4d4d' : s.cashed ? '#7cff6b' : '#ffffff');
     if (crashed) this.label(g, W / 2, H / 2 + 70, `CRASHED @ ${s.crash.toFixed(2)}`, 36, '#ff4d4d');
     if (s.cashed) this.label(g, W / 2, 34, `CASHOUT ${s.cashed.toFixed(2)}× = ${fmtMoney(Math.floor(s.bet * s.cashed))}`, 26, '#7cff6b', UI);
@@ -204,9 +259,8 @@ class CrashView extends ArcadeView {
     this.idleText(g, W, H);
   }
   buildPanel() {
-    this.autoEl = h('input', { type: 'number', min: 0, step: 0.1, value: '', placeholder: 'aus', style: { width: '80px' } });
-    return this.basePanel('📈 CRASH', 'Der Multiplikator steigt, bis er zufällig abstürzt. Rechtzeitig CASH OUT drücken: Einsatz × Multiplikator. Optional automatischer Cashout.',
-      [h('div.betrow', h('span', 'Auto-Cashout bei'), this.autoEl, h('span', '×'))]);
+    return this.basePanel('📈 CRASH', 'Der Multiplikator steigt, bis er zufällig abstürzt. Rechtzeitig CASH OUT drücken: Einsatz × Multiplikator. Optional automatischer Cashout (AUTO).',
+      [h('div.betrow', h('span', 'Auto-Cashout:'), this.seg([[0, 'AUTO AUS'], [1.5, '1.5×'], [2, '2×'], [3, '3×'], [5, '5×'], [10, '10×']], this.auto, v => { this.auto = v; }))]);
   }
   refreshMultBtn() { if (this.cashBtn && this.s?.phase === 'running' && this.s.cashed === null) this.cashBtn.textContent = `CASH OUT ${fmtMoney(Math.floor(this.s.bet * this.curMult()))}`; }
   refreshPanel() {
@@ -218,11 +272,11 @@ class CrashView extends ArcadeView {
       this.cashBtn = actionButton('CASH OUT', () => this.act('cashout'), 'primary big');
       this.actions.append(this.cashBtn);
       this.refreshMultBtn();
-    } else this.actions.append(actionButton(running ? 'Warte auf den Crash…' : 'START', () => this.start({ auto: +this.autoEl.value || 0 }), 'primary big'));
+    } else this.actions.append(actionButton(running ? 'Warte auf den Crash…' : 'PLAY', () => this.start({ auto: this.auto || 0 }), 'primary big'));
     this.actions.lastChild.disabled = running && !(s.cashed === null && this.mine);
     this.statusEl.textContent = running ? (s.cashed ? `Ausgecasht bei ${s.cashed.toFixed(2)}×` : 'Läuft…') : s.phase === 'crashed' ? `Crash bei ${s.crash.toFixed(2)}×` : 'Bereit';
   }
-  onKey(code) { if (code === 'Space') { if (this.s?.phase === 'running') this.act('cashout'); else this.start({ auto: +this.autoEl?.value || 0 }); return true; } return false; }
+  onKey(code) { if (code === 'Space') { if (this.s?.phase === 'running') this.act('cashout'); else this.start({ auto: this.auto || 0 }); return true; } return false; }
 }
 
 // ───────────────────────── HILO ─────────────────────────
@@ -238,25 +292,64 @@ function drawCard(g, x, y, w, c, faceUp = true) {
   g.font = `${w * 0.36}px ${UI}`; g.fillText(SUIT[c.s], x, y + hgt * 0.22);
 }
 class HiloView extends ArcadeView {
+  // Prompt 12: physischer Tisch mit grosser Karte in der Mitte, Bildschirm dahinter (Multiplikator, Chance, möglicher Gewinn)
+  constructor(app, def, floor) {
+    super(app, def, floor, { w: 2.0, h: 0.95, screenW: 1.7, screenH: 0.8, screenY: 1.85, screenZ: -0.5, lookY: 1.4, signY: 2.5, signZ: -0.55 });
+    this.camLocal.set(0, 1.85, 1.45);
+    this.lookLocal.set(0, 1.3, -0.2);
+  }
+  buildExtra() {
+    const g = this.group;
+    g.add(mesh(new THREE.BoxGeometry(1.86, 1.0, 0.06), M.std('#2a0d22', 0.4, 0.3), 0, 1.85, -0.54));
+    g.add(mesh(new THREE.BoxGeometry(1.9, 0.04, 0.78), M.std('#0d5a2e', 0.95), 0, 0.97, -0.15, { cast: false }));
+    // grosse Karte auf einem Ständer (dreht sich bei jeder neuen Karte)
+    this.bigCard = new THREE.Group();
+    this.bigCard.position.set(0, 1.33, -0.2);
+    this.bigCard.rotation.x = -0.2;
+    this.cardMesh = cardMesh(null);
+    this.cardMesh.rotation.x = Math.PI / 2;
+    this.cardMesh.scale.setScalar(2.6);
+    this.bigCard.add(this.cardMesh);
+    g.add(this.bigCard);
+    g.add(mesh(new THREE.BoxGeometry(0.5, 0.04, 0.12), M.gold(), 0, 1.0, -0.25));
+    this.trail = new THREE.Group();
+    g.add(this.trail);
+  }
   draw(g, W, H) {
     const s = this.s || {};
-    if (!s.card) { this.label(g, W / 2, H / 2 - 20, 'HÖHER ODER TIEFER?', 40, this.st.color); this.idleText(g, W, H); return; }
-    const k = Math.min(1, (performance.now() - (this.flipT || 0)) / 350);
-    drawCard(g, W / 2, H / 2 - 10, 150 * (0.85 + 0.15 * k), s.card);
-    (s.trail || []).slice(-7, -1).forEach((c, i) => drawCard(g, 70 + i * 62, H - 60, 52, c));
-    this.label(g, W - 110, 70, `${s.mult.toFixed(2)}×`, 44, s.last === 'lose' ? '#ff4d4d' : '#ffd97a');
-    this.label(g, W - 110, 115, `${s.steps} richtig`, 22, '#b9a8d0', UI);
+    if (!s.card) { this.label(g, W / 2, H / 2 - 20, 'HIGHER OR LOWER?', 48, this.st.color); this.label(g, W / 2, H / 2 + 40, 'Ass tief · König hoch · gleich = PUSH', 24, '#d8c8f0', UI); this.idleText(g, W, H); return; }
+    this.label(g, W / 2, 62, `${s.mult.toFixed(2)}×`, 78, s.last === 'lose' ? '#ff4d4d' : '#ffd97a');
+    this.label(g, W / 2, 118, `${s.steps} richtig · Gewinn jetzt ${fmtMoney(Math.floor(s.bet * s.mult))}`, 24, '#e8dcff', UI);
     if (s.phase === 'play') {
       const hi = hiloOdds(s.card.r, 'hi'), lo = hiloOdds(s.card.r, 'lo');
-      this.label(g, 110, 70, `▲ ${Math.round(hi.chance * 100)}% · ${hi.mult ? hi.mult.toFixed(2) + '×' : '—'}`, 22, '#7cff6b', UI);
-      this.label(g, 110, 110, `▼ ${Math.round(lo.chance * 100)}% · ${lo.mult ? lo.mult.toFixed(2) + '×' : '—'}`, 22, '#ff9f43', UI);
+      const box = (x, col, t1, odds) => {
+        g.fillStyle = col; g.beginPath(); g.roundRect(x - 135, 150, 270, 110, 16); g.fill();
+        this.label(g, x, 182, t1, 30, '#111');
+        this.label(g, x, 214, odds.count ? `${Math.round(odds.chance * 100)}% · ${odds.mult.toFixed(2)}×` : '—', 22, '#111', UI);
+        this.label(g, x, 242, odds.count ? `→ ${fmtMoney(Math.floor(s.bet * s.mult * odds.mult))}` : '', 20, '#111', UI);
+      };
+      box(W * 0.25, '#7cff6b', '▲ HIGHER', hi);
+      box(W * 0.75, '#ff9f43', '▼ LOWER', lo);
     }
     const msg = { win: 'RICHTIG!', lose: 'DANEBEN!', push: 'GLEICH = PUSH', cash: `GEWINN ${fmtMoney(Math.floor(s.bet * s.mult))}` }[s.last];
-    if (msg) this.label(g, W / 2, 40, msg, 30, s.last === 'lose' ? '#ff4d4d' : s.last === 'push' ? '#ffd97a' : '#7cff6b');
+    if (msg) this.label(g, W / 2, H - 30, msg, 34, s.last === 'lose' ? '#ff4d4d' : s.last === 'push' ? '#ffd97a' : '#7cff6b');
   }
   animating() { return performance.now() - (this.flipT || 0) < 400; }
   onChange(s, prev) {
-    if (prev && prev.card && s.card && (prev.card.r !== s.card.r || prev.card.s !== s.card.s || prev.trail?.length !== s.trail?.length)) { this.flipT = performance.now(); if (this.vol() > 0.05) sfxAt(this.vol(), () => sfx.flip()); }
+    const changed = !prev || !prev.card || !s.card || prev.card.r !== s.card.r || prev.card.s !== s.card.s || prev.trail?.length !== s.trail?.length;
+    if (s.card && changed) {
+      this.flipT = performance.now();
+      if (prev && this.vol() > 0.05) sfxAt(this.vol(), () => sfx.flip());
+      const c = this.bigCard, card = s.card;
+      if (!prev) { setCardFace(this.cardMesh, card); } else {
+        let swapped = false;
+        this.anim.add(0.45, k => { c.rotation.y = k * Math.PI * 2; c.position.y = 1.33 + Math.sin(k * Math.PI) * 0.12; if (k > 0.25 && !swapped) { swapped = true; setCardFace(this.cardMesh, card); } }, () => { c.rotation.y = 0; });
+      }
+      if (prev && s.last === 'lose') { const p0 = c.position.clone(); this.anim.add(0.5, k => { c.position.x = p0.x + Math.sin(k * 40) * 0.03 * (1 - k); }, () => c.position.copy(p0), 0.45); }
+      // gespielte Karten liegen klein auf dem Tisch
+      while (this.trail.children.length) this.trail.remove(this.trail.children[0]);
+      (s.trail || []).slice(-7, -1).forEach((tc, i, arr) => { const m = cardMesh(tc); m.position.set((i - (arr.length - 1) / 2) * 0.2, 0.995, 0.12); m.scale.setScalar(0.9); this.trail.add(m); });
+    }
   }
   buildPanel() { return this.basePanel('🔼 HILO', 'Ist die nächste Karte höher oder tiefer? Richtig = Multiplikator steigt, falsch = Einsatz weg. Gleiche Karte = PUSH (nichts passiert, weiter mit der neuen Karte). Ass ist tief, König hoch.'); }
   refreshPanel() {
@@ -265,15 +358,15 @@ class HiloView extends ArcadeView {
     clear(this.actions);
     if (s.phase === 'play' && this.mine) {
       const hi = hiloOdds(s.card.r, 'hi'), lo = hiloOdds(s.card.r, 'lo');
-      const b1 = actionButton(`▲ HÖHER (${Math.round(hi.chance * 100)}% · ${hi.mult.toFixed(2)}×)`, () => this.act('hi'), 'big');
-      const b2 = actionButton(`▼ TIEFER (${Math.round(lo.chance * 100)}% · ${lo.mult.toFixed(2)}×)`, () => this.act('lo'), 'big');
+      const b1 = actionButton(`▲ HIGHER (${Math.round(hi.chance * 100)}% · ${hi.mult.toFixed(2)}×)`, () => this.act('hi'), 'big');
+      const b2 = actionButton(`▼ LOWER (${Math.round(lo.chance * 100)}% · ${lo.mult.toFixed(2)}×)`, () => this.act('lo'), 'big');
       b1.disabled = !hi.count; b2.disabled = !lo.count;
-      const cash = actionButton(`GEWINN NEHMEN ${fmtMoney(Math.floor(s.bet * s.mult))}`, () => this.act('cash'), 'primary big');
+      const cash = actionButton(`CASH OUT ${fmtMoney(Math.floor(s.bet * s.mult))}`, () => this.act('cash'), 'primary big');
       cash.disabled = s.steps < 1;
       this.actions.append(b1, b2, cash);
       this.statusEl.textContent = `${s.mult.toFixed(2)}× · ${s.steps} richtig`;
     } else {
-      this.actions.append(actionButton('KARTE ZIEHEN', () => this.start(), 'primary big'));
+      this.actions.append(actionButton('PLAY', () => this.start(), 'primary big'));
       this.statusEl.textContent = s.last === 'lose' ? 'Daneben – nochmal?' : 'Bereit';
     }
   }
@@ -298,6 +391,8 @@ class MinesView extends ArcadeView {
       const isOpen = open.has(i), isMine = mines.has(i);
       g.fillStyle = s.hit === i ? (boom < 600 && Math.floor(boom / 80) % 2 ? '#ffd60a' : '#ff2e2e') : isOpen ? '#123d22' : isMine ? '#3a1414' : '#2a2a40';
       g.beginPath(); g.roundRect(x + 4, y + 4, size - 8, size - 8, 10); g.fill();
+      this.zone(x, y, size, size, () => (s.phase === 'play' && this.mine && !isOpen ? `Feld ${i + 1} aufdecken` : null), () => this.act(`pick:${i}`));
+      this.hl(g, x, y, size, size);
       if (isOpen) this.label(g, x + size / 2, y + size / 2, '💎', size * 0.5, '#7cff6b', UI);
       else if (isMine) this.label(g, x + size / 2, y + size / 2, '💣', size * 0.5, '#fff', UI);
     }
@@ -337,9 +432,9 @@ class MinesView extends ArcadeView {
       const c = actionButton(`CASH OUT ${fmtMoney(Math.floor(s.bet * s.mult))}`, () => this.act('cash'), 'primary big');
       c.disabled = !(s.open?.length);
       this.actions.append(c);
-      this.statusEl.textContent = `${s.mult.toFixed(2)}× · nächstes Feld ${minesMult(s.mines, s.open.length + 1).toFixed(2)}×`;
+      this.statusEl.textContent = `Feld am Bildschirm wählen · nächstes ${minesMult(s.mines, s.open.length + 1).toFixed(2)}×`;
     } else {
-      this.actions.append(actionButton('START', () => this.start({ mines: this.minesSel }), 'primary big'));
+      this.actions.append(actionButton('PLAY', () => this.start({ mines: this.minesSel }), 'primary big'));
       this.statusEl.textContent = s.phase === 'done' ? (s.hit !== null && s.hit !== undefined ? 'Mine erwischt' : 'Ausgecasht') : 'Bereit';
     }
   }
@@ -363,6 +458,7 @@ class TowerView extends ArcadeView {
         const failHere = s.fail?.level === lv && s.fail.tile === t;
         g.fillStyle = failHere ? '#ff2e2e' : lv < s.level && s.picks?.[lv] === t ? '#1f7a3a' : cur ? '#3a2a60' : s.board ? (safeReveal ? '#183a24' : '#3a1414') : '#221a33';
         g.beginPath(); g.roundRect(x + 4, y + 3, tw - 8, lh - 6, 8); g.fill();
+        if (cur) { this.zone(x, y, tw, lh, () => (this.mine && this.s?.phase === 'play' && this.s.level === lv ? `Feld ${t + 1} auf Ebene ${lv + 1}` : null), () => this.act(`pick:${t}`)); this.hl(g, x, y, tw, lh); }
         if (failHere) this.label(g, x + tw / 2, y + lh / 2, '🐉', lh * 0.6, '#fff', UI);
         else if (lv < s.level && s.picks?.[lv] === t) this.label(g, x + tw / 2, y + lh / 2, '🥚', lh * 0.55, '#fff', UI);
         else if (s.board && !safeReveal) this.label(g, x + tw / 2, y + lh / 2, '🐉', lh * 0.45, '#ff9f43', UI);
@@ -384,15 +480,14 @@ class TowerView extends ArcadeView {
     const s = this.s || {};
     const play = s.phase === 'play' && this.mine;
     clear(this.tiles);
-    if (play) for (let t = 0; t < TOWER_MODES[s.mode].tiles; t++) this.tiles.append(actionButton(`Feld ${t + 1}`, () => this.act(`pick:${t}`), 'big'));
     clear(this.actions);
     if (play) {
       const c = actionButton(`CASH OUT ${fmtMoney(Math.floor(s.bet * s.mult))}`, () => this.act('cash'), 'primary big');
       c.disabled = !s.level;
       this.actions.append(c);
-      this.statusEl.textContent = `Ebene ${s.level + 1}/${TOWER_LEVELS} · nächste ${towerMult(s.mode, s.level + 1).toFixed(2)}×`;
+      this.statusEl.textContent = `Ebene ${s.level + 1}/${TOWER_LEVELS}: Feld am Turm wählen · ${towerMult(s.mode, s.level + 1).toFixed(2)}×`;
     } else {
-      this.actions.append(actionButton('TURM BETRETEN', () => this.start({ mode: this.mode }), 'primary big'));
+      this.actions.append(actionButton('PLAY', () => this.start({ mode: this.mode }), 'primary big'));
       this.statusEl.textContent = s.fail ? `Drache auf Ebene ${s.fail.level + 1}` : s.phase === 'done' ? 'Ausgecasht' : 'Bereit';
     }
   }
@@ -404,38 +499,137 @@ class TowerView extends ArcadeView {
   }
 }
 
-// ───────────────────────── PENGUIN CROSS ─────────────────────────
+// ───────────────────────── PENGUIN CROSS (3D-Bahn, Prompt 12) ─────────────────────────
+// Grosse Maschine: vorne die Eisbahn mit 10 Abschnitten (Robben rutschen hin und her), dahinter der grosse
+// Multiplikator-Bildschirm. STEP = der Pinguin springt sichtbar einen Abschnitt weiter, CASH OUT = Gewinn sichern.
+function makePenguin() {
+  const g = new THREE.Group();
+  const black = M.std('#15151c', 0.5), white = M.std('#f4f4f4', 0.6), orange = M.std('#ff8a1a', 0.5);
+  const body = mesh(new THREE.SphereGeometry(0.06, 14, 12), black, 0, 0.075, 0); body.scale.set(1, 1.3, 0.9); g.add(body);
+  const belly = mesh(new THREE.SphereGeometry(0.048, 12, 10), white, 0, 0.068, 0.02); belly.scale.set(1, 1.3, 0.8); g.add(belly);
+  const head = mesh(new THREE.SphereGeometry(0.042, 12, 10), black, 0, 0.16, 0.005); g.add(head);
+  for (const sx of [-1, 1]) {
+    g.add(mesh(new THREE.SphereGeometry(0.012, 8, 6), white, sx * 0.017, 0.17, 0.036));
+    g.add(mesh(new THREE.SphereGeometry(0.006, 6, 5), black, sx * 0.017, 0.17, 0.046));
+    const fl = mesh(new THREE.SphereGeometry(0.03, 8, 6), black, sx * 0.058, 0.08, 0); fl.scale.set(0.35, 1.1, 0.7); fl.rotation.z = sx * 0.3; g.add(fl);
+    g.add(mesh(new THREE.BoxGeometry(0.03, 0.008, 0.04), orange, sx * 0.022, 0.004, 0.015));
+  }
+  const beak = mesh(new THREE.ConeGeometry(0.014, 0.035, 8), orange, 0, 0.155, 0.05); beak.rotation.x = Math.PI / 2; g.add(beak);
+  g.traverse(o => { o.userData.noBake = true; });
+  return g;
+}
+function makeSeal() {
+  const g = new THREE.Group();
+  const grey = M.std('#6a7480', 0.4);
+  const b = mesh(new THREE.SphereGeometry(0.06, 12, 10), grey, 0, 0.045, 0); b.scale.set(0.9, 0.75, 1.6); g.add(b);
+  g.add(mesh(new THREE.SphereGeometry(0.035, 10, 8), grey, 0, 0.08, 0.075));
+  g.add(mesh(new THREE.SphereGeometry(0.01, 6, 5), M.std('#111', 0.3), 0, 0.085, 0.11));
+  g.traverse(o => { o.userData.noBake = true; });
+  return g;
+}
 class PenguinView extends ArcadeView {
-  constructor(app, def, floor) { super(app, def, floor, { screenH: 1.05, screenY: 1.65 }); this.mode = 'easy'; }
-  draw(g, W, H, t) {
+  constructor(app, def, floor) {
+    super(app, def, floor, { w: 3.2, h: 1.0, screenW: 2.5, screenH: 0.9, screenY: 1.85, screenZ: -0.5, lookY: 1.35, signY: 2.62, signZ: -0.55 });
+    this.mode = 'easy';
+    this.camLocal.set(0, 2.0, 1.7);
+    this.lookLocal.set(0, 1.3, -0.25);
+    this.footprint = { w: 3.3, d: 1.0, oz: -0.15 };
+  }
+  laneX(i) { return -1.4 + i * (2.8 / PENGUIN_LANES); }
+  buildExtra() {
+    const g = this.group;
+    // Rückwand für den grossen Bildschirm
+    g.add(mesh(new THREE.BoxGeometry(2.66, 1.06, 0.06), M.std('#0a1a2a', 0.4, 0.3), 0, 1.85, -0.54));
+    for (const sx of [-1, 1]) g.add(mesh(new THREE.BoxGeometry(0.06, 1.4, 0.06), M.glow(this.st.color, 1.3), sx * 1.33, 1.75, -0.54, { cast: false }));
+    // Eisbahn: Startfeld + 10 Abschnitte, abwechselnd hell/dunkel, mit Zahlen am Rand
+    this.laneMats = [];
+    for (let i = 0; i <= PENGUIN_LANES; i++) {
+      const w = 2.8 / PENGUIN_LANES - 0.012;
+      const mat = new THREE.MeshStandardMaterial({ color: i === 0 ? '#e9f8ff' : i % 2 ? '#7fc8ee' : '#a8dcf5', roughness: 0.15, metalness: 0.1, emissive: '#000000' });
+      this.laneMats.push(mat);
+      g.add(mesh(new THREE.BoxGeometry(w, 0.03, 0.78), mat, this.laneX(i), 1.015, -0.12, { cast: false }));
+    }
+    // Ziel-Fahne
+    g.add(mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.35, 6), M.std('#ddd', 0.3, 0.8), this.laneX(PENGUIN_LANES) + 0.12, 1.2, -0.45));
+    g.add(mesh(new THREE.BoxGeometry(0.12, 0.08, 0.005), M.std('#ff2e63', 0.5), this.laneX(PENGUIN_LANES) + 0.18, 1.33, -0.45));
+    this.seals = [];
+    for (let i = 1; i <= PENGUIN_LANES; i++) { const sl = makeSeal(); sl.position.set(this.laneX(i), 1.03, 0); g.add(sl); this.seals.push(sl); }
+    this.penguin = makePenguin();
+    this.penguin.scale.setScalar(1.3);
+    this.penguin.position.set(this.laneX(0), 1.03, 0.1);
+    g.add(this.penguin);
+    this.pg = null;
+  }
+  draw(g, W, H) {
     const s = this.s || {};
     const mode = s.mode || this.mode;
-    const lw = (W - 120) / (PENGUIN_LANES + 1);
-    for (let i = 0; i <= PENGUIN_LANES; i++) {
-      const x = 60 + i * lw;
-      g.fillStyle = i === 0 ? '#dff6ff' : i % 2 ? '#2a5a8a' : '#24507a';
-      g.fillRect(x, 60, lw - 2, H - 120);
-      if (i > 0) {
-        this.label(g, x + lw / 2, 40, `${penguinMult(mode, i).toFixed(1)}×`, 16, i <= (s.lane || 0) ? '#7cff6b' : '#b9a8d0', UI);
-        // Eisschollen / Robben als Gefahr
-        const yy = 80 + ((t * 60 * (0.6 + (i % 3) * 0.3) + i * 70) % (H - 160));
-        this.label(g, x + lw / 2, yy, i === s.fail ? '💦' : '🦭', 26, '#fff', UI);
-      }
+    const fail = !!s.fail;
+    this.label(g, W / 2, H * 0.36, `${(s.mult || 1).toFixed(2)}×`, 120, fail ? '#ff4d4d' : s.phase === 'play' ? '#ffffff' : '#9be7ff');
+    const bw = (W - 80) / PENGUIN_LANES;
+    for (let i = 1; i <= PENGUIN_LANES; i++) {
+      const x = 40 + (i - 1) * bw, reached = i <= (s.lane || 0), next = s.phase === 'play' && i === s.lane + 1;
+      g.fillStyle = s.fail === i ? '#ff2e2e' : reached ? '#1f7a3a' : next ? '#2a5a8a' : '#18243a';
+      g.beginPath(); g.roundRect(x + 3, H - 118, bw - 6, 52, 10); g.fill();
+      this.label(g, x + bw / 2, H - 92, `${penguinMult(mode, i).toFixed(i < 8 ? 2 : 1)}×`, 19, '#fff', UI);
     }
-    const lane = s.fail ? s.fail : s.lane || 0;
-    const k = Math.min(1, (performance.now() - (this.moveT || 0)) / 400);
-    const fromX = 60 + ((this.prevLane ?? lane) + 0.5) * lw, toX = 60 + (lane + 0.5) * lw;
-    const px = fromX + (toX - fromX) * ease.outCubic(k);
-    this.label(g, px, H / 2 - Math.sin(k * Math.PI) * 30, s.fail ? '😵' : '🐧', 44, '#fff', UI);
-    this.label(g, W / 2, H - 30, `${(s.mult || 1).toFixed(2)}× · ${PENGUIN_MODES[mode].name}`, 24, s.fail ? '#ff4d4d' : '#ffd97a');
+    const msg = fail ? '💥 ERWISCHT! Einsatz weg' : s.phase === 'play' ? (s.lane ? `Gewinn jetzt: ${fmtMoney(Math.floor(s.bet * s.mult))} · STEP oder CASH OUT` : 'STEP drücken – der Pinguin springt!')
+      : s.phase === 'done' ? `AUSGECASHT: ${fmtMoney(Math.floor(s.bet * s.mult))}` : `${PENGUIN_MODES[mode].name} · EINSATZ WÄHLEN, PLAY`;
+    this.label(g, W / 2, H - 34, msg, 26, fail ? '#ff6b6b' : '#ffd97a', UI);
   }
-  animating() { return this.near(); }
+  animating() { return performance.now() - (this.moveT || 0) < 700; }
   onChange(s, prev) {
-    if (prev && (s.lane !== prev.lane || (!prev.fail && s.fail))) { this.prevLane = prev.lane; this.moveT = performance.now(); if (this.vol() > 0.05) sfxAt(this.vol(), () => (s.fail ? sfx.aww() : sfx.boing())); }
-    if (prev && prev.roundId !== s.roundId) { this.prevLane = 0; this.moveT = 0; }
+    if (prev && prev.roundId !== s.roundId) { this.resetPenguin(); }
+    if (prev && prev.roundId === s.roundId && (s.lane !== prev.lane || (!prev.fail && s.fail))) {
+      this.moveT = performance.now();
+      this.hop(prev.lane, s.fail ? s.fail : s.lane, !!s.fail);
+      if (this.vol() > 0.05) sfxAt(this.vol(), () => sfx.boing());
+    }
+    this.laneMats.forEach((m, i) => m.emissive.set(i && i <= (s.lane || 0) ? '#0a4a1a' : s.fail === i ? '#5a0a0a' : '#000000'));
+  }
+  resetPenguin() {
+    const p = this.penguin;
+    this.anim.add(0.3, k => { p.position.x += (this.laneX(0) - p.position.x) * k; }, () => { p.position.set(this.laneX(0), 1.03, 0.1); p.rotation.set(0, 0, 0); p.scale.setScalar(1.3); });
+  }
+  // Sichtbarer Sprung zum nächsten Abschnitt; bei Fail: Robbe rammt, Pinguin dreht sich, plumpst platt aufs Eis
+  hop(from, to, fail) {
+    const p = this.penguin, x0 = this.laneX(from), x1 = this.laneX(to);
+    p.rotation.set(0, Math.PI / 2, 0);
+    this.anim.add(0.42, k => {
+      p.position.x = x0 + (x1 - x0) * ease.outCubic(k);
+      p.position.y = 1.03 + Math.sin(k * Math.PI) * 0.16;
+      const sq = k > 0.85 ? 1 - (k - 0.85) * 2 : 1;
+      p.scale.set(1.3, 1.3 * sq, 1.3);
+    }, () => {
+      p.scale.setScalar(1.3);
+      if (!fail) { this.anim.add(0.25, k => { p.rotation.y = Math.PI / 2 * (1 - k); }); return; }
+      const seal = this.seals[to - 1];
+      const z0 = seal.position.z;
+      this.anim.add(0.25, k => { seal.position.z = z0 + (p.position.z - z0) * k; }, () => {
+        if (this.vol() > 0.05) sfxAt(this.vol(), () => sfx.aww?.());
+        if (this.near()) { const wp = this.toWorld(p.position.clone()); for (let i = 0; i < 18; i++) this.app.world.particles?.emit({ pos: wp.clone(), vel: [(Math.random() - 0.5) * 1.6, 1 + Math.random() * 1.5, (Math.random() - 0.5) * 1.6], life: 0.8, size: 0.05, color: i % 2 ? '#bfefff' : '#ffffff', gravity: 5 }); }
+        this.anim.add(1.1, k => {
+          p.rotation.y = Math.PI / 2 + k * Math.PI * 5;
+          p.rotation.z = Math.min(1, k * 1.6) * Math.PI / 2;
+          p.position.y = 1.03 + Math.sin(Math.min(1, k * 1.4) * Math.PI) * 0.12;
+          p.position.z = 0.1 + k * 0.12;
+          p.scale.set(1.3, 1.3 * (1 - 0.45 * Math.max(0, k - 0.6) / 0.4), 1.3);
+        });
+      });
+    });
+  }
+  tick2(dt, t) {
+    if (!this.near()) return;
+    const s = this.s || {};
+    this.seals.forEach((sl, i) => {
+      if (s.fail === i + 1 && s.phase !== 'play') return;
+      const sp = 0.7 + (i % 3) * 0.35;
+      sl.position.z = -0.15 + Math.sin(t * sp + i * 1.7) * 0.28;
+      sl.rotation.y = Math.cos(t * sp + i * 1.7) > 0 ? 0 : Math.PI;
+    });
+    if (!this.anim.list.length && !s.fail) this.penguin.rotation.z = Math.sin(t * 4) * 0.06;
   }
   buildPanel() {
-    return this.basePanel('🐧 PENGUIN CROSS', 'Bring den Pinguin über die Eisbahnen. Jeder geschaffte Abschnitt erhöht den Multiplikator – WEITER oder CASH OUT. Erwischt = Einsatz weg.',
+    return this.basePanel('🐧 PENGUIN CROSS', 'Bring den Pinguin über die Eisbahn. Jeder geschaffte Abschnitt erhöht den Multiplikator – STEP oder CASH OUT. Erwischt = Einsatz weg.',
       [h('div.betrow', h('span', 'Schwierigkeit:'), this.seg(Object.entries(PENGUIN_MODES).map(([k, v]) => [k, v.name]), this.mode, v => { this.mode = v; this.dirty = true; }))]);
   }
   refreshPanel() {
@@ -443,13 +637,13 @@ class PenguinView extends ArcadeView {
     const s = this.s || {};
     clear(this.actions);
     if (s.phase === 'play' && this.mine) {
-      this.actions.append(actionButton(`WEITER (${penguinMult(s.mode, s.lane + 1).toFixed(2)}×)`, () => this.act('go'), 'big'));
+      this.actions.append(actionButton(`STEP (${penguinMult(s.mode, s.lane + 1).toFixed(2)}×)`, () => this.act('go'), 'big'));
       const c = actionButton(`CASH OUT ${fmtMoney(Math.floor(s.bet * s.mult))}`, () => this.act('cash'), 'primary big');
       c.disabled = !s.lane;
       this.actions.append(c);
       this.statusEl.textContent = `Abschnitt ${s.lane}/${PENGUIN_LANES} · ${s.mult.toFixed(2)}×`;
     } else {
-      this.actions.append(actionButton('LOS GEHT’S', () => this.start({ mode: this.mode }), 'primary big'));
+      this.actions.append(actionButton('PLAY', () => this.start({ mode: this.mode }), 'primary big'));
       this.statusEl.textContent = s.fail ? `Erwischt auf Abschnitt ${s.fail}` : s.phase === 'done' ? 'Ausgecasht' : 'Bereit';
     }
   }
@@ -468,7 +662,7 @@ class KenoView extends ArcadeView {
   animating() { return this.s?.phase === 'draw'; }
   draw(g, W, H) {
     const s = this.s || {};
-    const picks = new Set(s.phase !== 'idle' || s.picks?.length ? (this.mine || !this.picks.length ? s.picks || [] : this.picks) : this.picks);
+    const picks = new Set(this.mine && !this.state?.busy ? this.picks : s.picks || []);
     const drawn = new Set(this.shown());
     const cols = 8, cw = (W - 40) / cols, ch = (H - 110) / 5;
     for (let i = 1; i <= KENO_N; i++) {
@@ -476,11 +670,14 @@ class KenoView extends ArcadeView {
       const p = picks.has(i), d = drawn.has(i);
       g.fillStyle = p && d ? '#ffd60a' : d ? '#3a2a80' : p ? '#2a5a3a' : '#1c1830';
       g.beginPath(); g.roundRect(x + 3, y + 3, cw - 6, ch - 6, 8); g.fill();
+      this.zone(x, y, cw, ch, () => (this.mine && !this.state?.busy ? (this.picks.includes(i) ? `Zahl ${i} abwählen` : this.picks.length < 8 ? `Zahl ${i} wählen` : null) : null), () => this.togglePick(i));
+      this.hl(g, x, y, cw, ch);
       this.label(g, x + cw / 2, y + ch / 2, String(i), 24, p && d ? '#111' : '#fff', UI);
     }
     const hits = [...drawn].filter(n => picks.has(n)).length;
     this.label(g, W / 2, H - 45, s.drawn?.length ? `${hits} Treffer${s.phase === 'idle' ? ` · ${s.mult}×` : ''}` : 'Wähle 1–8 Zahlen', 30, '#ffd97a');
   }
+  togglePick(i) { if (this.picks.includes(i)) this.picks = this.picks.filter(n => n !== i); else if (this.picks.length < 8) this.picks.push(i); sfx.chip(); this.dirty = true; this.refreshPanel(); }
   onChange(s, prev) { if (prev && prev.roundId !== s.roundId) { const v = this.vol(); for (let i = 0; i < KENO_DRAW; i++) setTimeout(() => { if (v > 0.05) sfxAt(v, () => sfx.ballTick?.() || sfx.pop()); this.refreshPanel(); }, i * 380); } }
   buildPanel() {
     this.board = h('div.kenogrid');
@@ -500,12 +697,12 @@ class KenoView extends ArcadeView {
     const pays = KENO_PAYS[this.picks.length];
     this.payEl.textContent = pays ? 'Auszahlung: ' + pays.map((v, i) => v ? `${i} Treffer ${v}×` : null).filter(Boolean).join(' · ') : 'Noch keine Zahlen gewählt';
     clear(this.actions);
-    this.actions.append(actionButton('Zufällig', () => { const pool = Array.from({ length: KENO_N }, (_, i) => i + 1).sort(() => Math.random() - 0.5); this.picks = pool.slice(0, Math.max(1, this.picks.length || 5)); this.dirty = true; this.refreshPanel(); }));
-    this.actions.append(actionButton('Löschen', () => { this.picks = []; this.dirty = true; this.refreshPanel(); }));
-    const go = actionButton(busy ? 'Ziehung läuft…' : 'ZIEHEN', () => { if (!this.picks.length) return this.app.ui.toast('Wähle mindestens eine Zahl', 'warn'); this.start({ picks: this.picks }); }, 'primary big');
+    this.actions.append(actionButton('RANDOM', () => { const pool = Array.from({ length: KENO_N }, (_, i) => i + 1).sort(() => Math.random() - 0.5); this.picks = pool.slice(0, Math.max(1, this.picks.length || 5)); this.dirty = true; this.refreshPanel(); }));
+    this.actions.append(actionButton('CLEAR', () => { this.picks = []; this.dirty = true; this.refreshPanel(); }));
+    const go = actionButton(busy ? 'Ziehung läuft…' : 'PLAY', () => { if (!this.picks.length) return this.app.ui.toast('Wähle mindestens eine Zahl', 'warn'); this.start({ picks: this.picks }); }, 'primary big');
     go.disabled = busy;
     this.actions.append(go);
-    this.statusEl.textContent = busy ? `${drawn.size}/${KENO_DRAW} gezogen` : s.drawn?.length ? `${s.hits} Treffer · ${s.mult}×` : `${this.picks.length} Zahlen gewählt`;
+    this.statusEl.textContent = busy ? `${drawn.size}/${KENO_DRAW} gezogen` : s.drawn?.length ? `${s.hits} Treffer · ${s.mult}×` : (this.picks.length ? `${this.picks.length} Zahlen · Auszahlung bis ${Math.max(...KENO_PAYS[this.picks.length])}×` : 'Zahlen am Bildschirm antippen (1–8)');
   }
   onKey(code) { if (code === 'Space') { if (this.picks.length) this.start({ picks: this.picks }); return true; } return false; }
 }
@@ -573,7 +770,7 @@ class PlinkoView extends ArcadeView {
     if (!this.panel) return;
     const busy = !!this.state?.busy;
     clear(this.actions);
-    const b = actionButton(busy ? 'Kugel fällt…' : 'KUGEL FALLEN LASSEN', () => this.start({ risk: this.risk }), 'primary big');
+    const b = actionButton(busy ? 'Kugel fällt…' : 'PLAY', () => this.start({ risk: this.risk }), 'primary big');
     b.disabled = busy;
     this.actions.append(b);
     const s = this.s || {};
@@ -635,7 +832,7 @@ class MoneyWheelView extends ArcadeView {
     if (!this.panel) return;
     const busy = !!this.state?.busy;
     clear(this.actions);
-    const b = actionButton(busy ? 'Rad dreht…' : 'RAD DREHEN', () => this.start(), 'primary big');
+    const b = actionButton(busy ? 'Rad dreht…' : 'PLAY', () => this.start(), 'primary big');
     b.disabled = busy;
     this.actions.append(b);
     const s = this.s || {};
@@ -705,17 +902,22 @@ class DuckView extends ArcadeView {
       dk.position.x = -this.trackLen / 2 + p * this.trackLen;
       dk.rotation.z = Math.sin(t * 12 + i) * 0.08;
     });
-    if (k >= 1 && !r.done) { r.done = true; this.drawBoard(`🏆 ${DUCKS[r.winner].name}!`); if (this.vol() > 0.05) sfxAt(this.vol(), () => sfx.cheer?.() || sfx.ding()); }
+    if (k >= 1 && !r.done) {
+      r.done = true;
+      this.floatText(`🏆 ${DUCKS[r.winner].name} GEWINNT!`, DUCKS[r.winner].color, { y: 1.75, scale: 1.5, z: -0.1 });
+      const wd = this.ducks[r.winner], y0 = wd.position.y;
+      this.anim.add(1.4, q => { wd.position.y = y0 + Math.abs(Math.sin(q * Math.PI * 4)) * 0.08 * (1 - q); wd.rotation.y = q * Math.PI * 4; }, () => { wd.rotation.y = 0; });
+      this.drawBoard(`🏆 ${DUCKS[r.winner].name}!`); if (this.vol() > 0.05) sfxAt(this.vol(), () => sfx.cheer?.() || sfx.ding()); }
   }
   buildPanel() {
     return this.basePanel('🦆 DUCK RACE', 'Setz auf eine Ente – gewinnt sie das Rennen, zahlt sie ihre Quote. Die Führung kann im Rennen mehrfach wechseln.',
-      [h('div.betrow', h('span', 'Ente:'), this.seg(DUCKS.map((d, i) => [i, `${d.name} ${d.odds}×`]), this.pick, v => { this.pick = v; }))]);
+      [h('div.betrow', h('span', 'Ente:'), this.seg(DUCKS.map((d, i) => [i, `${d.name} (${d.odds}×)`]), this.pick, v => { this.pick = v; }))]);
   }
   refreshPanel() {
     if (!this.panel) return;
     const busy = !!this.state?.busy;
     clear(this.actions);
-    const b = actionButton(busy ? 'Rennen läuft…' : 'RENNEN STARTEN', () => this.start({ pick: this.pick }), 'primary big');
+    const b = actionButton(busy ? 'Rennen läuft…' : 'PLAY', () => this.start({ pick: this.pick }), 'primary big');
     b.disabled = busy;
     this.actions.append(b);
     const s = this.s || {};
@@ -765,7 +967,7 @@ class StreetCrapsView extends ArcadeView {
     if (!this.panel) return;
     const busy = !!this.state?.busy;
     clear(this.actions);
-    const b = actionButton(busy ? 'Würfel rollen…' : 'WÜRFELN', () => this.start({ pick: this.pick }), 'primary big');
+    const b = actionButton(busy ? 'Würfel rollen…' : 'PLAY', () => this.start({ pick: this.pick }), 'primary big');
     b.disabled = busy;
     this.actions.append(b);
     const s = this.s || {};
@@ -779,5 +981,5 @@ export const ARCADE_VIEWS = {
   keno: KenoView, plinko: PlinkoView, moneywheel: MoneyWheelView, duck: DuckView, streetcraps: StreetCrapsView,
 };
 // Breite an der Wand (für die Platzierung im Raum)
-export const ARCADE_WIDTH = { crash: 2.1, hilo: 1.7, mines: 1.7, tower: 1.7, penguin: 1.7, keno: 1.7, plinko: 2.2, moneywheel: 2.6, duck: 3.4, streetcraps: 2.2 };
+export { ARCADE_WIDTH };
 export { fmtShort };

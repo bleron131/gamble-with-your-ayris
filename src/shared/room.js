@@ -23,6 +23,8 @@ import { wheelGame } from './games/wheel.js';
 import { ARCADE_GAMES } from './games/arcade.js';
 
 const SLOT_HOLD_MS = 4000;
+export const BAR_COOLDOWN_MS = 12000;
+export const BAR_FLAVORS = ['Classic', 'Mango', 'Wassermelone', 'Zitrone', 'Cola-Kirsch', 'Pfirsich', 'Blaue Himbeere', 'Mystery 🤫'];
 
 export const GAMES = {
   slots: slotsGame('normal'),
@@ -240,6 +242,7 @@ export class Room {
         case 'drink':
           if (msg.phase === 'drink') this.drinkMakka(p);
           else if (msg.phase === 'cocktail') this.drinkCocktail(p);
+          else if (msg.phase === 'bar') this.barDrink(p);
           break;
         case 'smoke': this.smoke(p, msg.i); break;
         case 'seat.take': this.takeSeat(p, msg.i); break;
@@ -249,6 +252,7 @@ export class Room {
         case 'vote.cast': this.castVote(p, !!msg.yes); break;
         case 'table.sit': this.sit(p, msg.id); break;
         case 'slot.bet': this.slotBet(p, msg.id, msg.dir); break;
+        case 'slot.setbet': this.slotSetBet(p, msg.id, msg.bet); break;
         case 'slot.spin': this.slotSpin(p, msg.id); break;
         case 'table.leave': this.leaveTable(p); break;
         case 'table.start': this.tableStart(p, msg.id, msg.payload || {}); break;
@@ -453,6 +457,18 @@ export class Room {
     p.makka++;
     this.event({ kind: 'drink', pid: p.id, name: p.name, phase: 'buy', count: p.makka });
     this.markDirty();
+  }
+
+  // Gratis-MAKKA an der Casino-Bar (Prompt 12): reine Show – Trink-Animation und Geschmack, KEIN Glücks-Effekt,
+  // damit die bezahlte MAKKA LUCK nicht umgangen werden kann. Kurze Pause zwischen zwei Drinks.
+  barDrink(p) {
+    if (this.scene !== 'floor') return;
+    const now = Date.now();
+    if (now < (p.barUntil || 0) || now < (p.drinkUntil || 0)) return;
+    p.barUntil = now + BAR_COOLDOWN_MS;
+    p.drinkUntil = now + 2000;
+    const flavor = BAR_FLAVORS[Math.floor(rand() * BAR_FLAVORS.length)];
+    this.event({ kind: 'drink', pid: p.id, name: p.name, phase: 'bar', flavor });
   }
 
   drinkMakka(p) {
@@ -712,6 +728,20 @@ export class Room {
     if (i < 0) i = steps.findIndex(v => v >= t.state.bet);
     i = Math.max(0, Math.min(steps.length - 1, i + (dir > 0 ? 1 : -1)));
     t.state.bet = steps[i];
+    t.state.betBy = p.name;
+    t.state.betId = (t.state.betId || 0) + 1;
+    this.markDirty();
+  }
+
+  // Exakter Einsatz vom 3D-Pult: auf die (ggf. durch Modifier/Rush skalierten) Limits begrenzt
+  slotSetBet(p, id, bet) {
+    const t = this.getTable(p, id);
+    if (!t || !GAMES[t.type].walkUp) return;
+    bet = Math.floor(+bet);
+    if (!Number.isFinite(bet) || bet <= 0) return;
+    if (!this.slotLock(p, t)) return;
+    const lim = this.dyn.limits(floorDef(this.floor, this.prestige).limits[t.type], t.type);
+    t.state.bet = Math.max(lim.min, Math.min(lim.max, bet));
     t.state.betBy = p.name;
     t.state.betId = (t.state.betId || 0) + 1;
     this.markDirty();

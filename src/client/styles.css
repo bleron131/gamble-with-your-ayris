@@ -582,3 +582,38 @@ button.mini { font-size: 11px; padding: 2px 8px; margin-left: 8px; border-radius
 /* ── Developer-Testmodus (nur für Ayri000 sichtbar) ── */
 .devmode { display: flex; flex-direction: column; align-items: flex-end; padding: 3px 10px; border-radius: 8px; background: rgba(255, 0, 80, .25); border: 1px dashed #ff3c6e; font-size: 10px; line-height: 1.2; color: #ffd0dc; letter-spacing: 1px; }
 .devmode b { font-family: var(--title); font-size: 11px; color: #ff6b8e; }
+
+/* ── Prompt 12: Stationen werden direkt im 3D-Raum bedient – nur noch eine schmale Info-Leiste ── */
+.tablewrap { left: calc(16px + var(--sl, 0px)); right: auto; top: auto; bottom: calc(16px + var(--sb)); width: min(330px, 34vw); max-height: none; overflow: visible; }
+.panelmirror { display: none !important; }
+.tablebar { background: rgba(14, 8, 26, .82); border: 1px solid rgba(255, 215, 0, .45); border-radius: 12px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; backdrop-filter: blur(4px); }
+.tablebar .tbtitle { font-family: 'Bungee', Impact, sans-serif; color: var(--gold); font-size: 15px; letter-spacing: .5px; }
+.tablebar .tbrule { font-size: 12px; color: #d8cdea; line-height: 1.35; max-height: 4.2em; overflow: hidden; }
+.tablebar .tbkeys { font-size: 11px; color: #9d8fb8; }
+.tablebar .leave { align-self: flex-start; margin-top: 2px; padding: 5px 12px; font-size: 13px; }
+@media (max-width: 700px), (max-height: 520px) {
+  .tablewrap { width: min(260px, 46vw); left: calc(8px + var(--sl, 0px)); bottom: calc(8px + var(--sb)); top: auto; }
+  .tablebar .tbrule { display: none; }
+}
+
+/* ── Prompt 12: einklappbares HUD (nur TEAM POT + Pfeil) ── */
+.potpanel { position: relative; min-width: 0; }
+.pothead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.hudtoggle { padding: 0 8px; min-width: 28px; height: 24px; line-height: 22px; font-size: 15px; border-radius: 8px; background: rgba(255, 255, 255, .08); border: 1px solid var(--line); color: var(--gold); cursor: pointer; }
+.hudtoggle:hover { background: rgba(255, 215, 0, .18); }
+.hudmore { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .35s ease; }
+.hudmore > .hudinner { overflow: hidden; min-height: 0; width: 260px; max-width: 70vw; opacity: 0; transition: opacity .3s; }
+.topleft.open .hudmore { grid-template-rows: 1fr; }
+.topleft.open .hudmore > .hudinner { opacity: 1; }
+.hudinner .feed { margin-top: 8px; width: 100%; }
+.potdelta { right: 52px; }
+
+/* ── Prompt 12: kleine Benachrichtigungen links, gestapelt ── */
+.popups, .popups.mid:not(.low), .popups.low { left: calc(16px + var(--sl)); right: auto; top: calc(50% - 70px); bottom: auto; transform: none; align-items: flex-start; gap: 6px; z-index: 30; }
+.popup { min-width: 0; width: min(290px, 60vw); max-width: none; padding: 6px 12px 6px 9px; gap: 9px; border-width: 1.5px; border-radius: 11px; animation: notein .4s cubic-bezier(.2, 1.4, .4, 1); box-shadow: 0 4px 14px rgba(0, 0, 0, .45); }
+.popup .pi { font-size: 19px; animation: none; }
+.popup .ptt { font-size: 13px; letter-spacing: .4px; line-height: 1.2; }
+.popup .pts { font-size: 11px; line-height: 1.25; }
+.popup.out { opacity: 0; transform: translateX(-24px); }
+@keyframes notein { from { opacity: 0; transform: translateX(-40px); } }
+@media (max-height: 500px) { .popups, .popups.mid:not(.low), .popups.low { top: calc(40% - 40px); } .popup { width: min(240px, 50vw); } .popup .ptt { font-size: 12px; } .popup .pts { display: none; } }

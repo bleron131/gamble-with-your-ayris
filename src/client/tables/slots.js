@@ -27,6 +27,8 @@ export class SlotView extends TableView {
     this.footprint = { w: 1.0, d: 1.3, oz: -0.3 };
     this.radius = 1.35;
     this.buttons = [];
+    // 3D-Einsatzpult rechts neben dem Automaten (Ziffernblock statt nur BET +/−)
+    this.padOpts = { walkUp: true, pos: new THREE.Vector3(0.68, 1.16, 0.34), yaw: -0.55, tilt: -0.6, scale: 0.72, maxH: 0.5, onChange: v => this.app.slotSetBet(this.def.id, v), delay: 900 };
     this.flash = 0;
     this.celebrate = null;
     this.build();
@@ -161,7 +163,7 @@ export class SlotView extends TableView {
     if (b) b.t = 0.28;
   }
 
-  pickMeshes() { return this.buttons.map(b => b.mesh); }
+  pickMeshes() { return [...this.buttons.map(b => b.mesh), ...(this.pad?.meshes() || [])]; }
 
   drawBet(bet, flash = false) {
     const g = this.betCanvas.getContext('2d');
@@ -199,6 +201,7 @@ export class SlotView extends TableView {
     const s = ts.state;
     if (!prev || prev.state.betId !== s.betId || prev.state.bet !== s.bet) {
       this.drawBet(s.bet, !!prev);
+      if (this.pad && s.bet && s.bet !== this.pad.value) this.pad.set(s.bet, { silent: true });
       if (prev) { this.betFlash = 0.35; this.pressButton(s.bet > prev.state.bet ? 'bet+' : 'bet-'); }
     }
     if (!prev || prev.state.spinId === s.spinId) {

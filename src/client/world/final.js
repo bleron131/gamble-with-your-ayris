@@ -18,6 +18,7 @@ export class FinalWorld extends World {
     super(app);
     this.mode = 'third';
     this.kind = 'final';
+    this.H = H;
     const s = this.scene;
     s.background = new THREE.Color('#05061a');
     s.fog = new THREE.Fog('#070818', 25, 60);

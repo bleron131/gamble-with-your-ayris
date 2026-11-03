@@ -6,7 +6,7 @@ import { M, mesh } from '../world/props.js';
 import { rouletteLayout, rouletteRotorTexture, woodTexture } from '../textures.js';
 import { WHEEL_ORDER, RED, spotLabel, insideNumbers, insideSpot } from '../../shared/games/roulette.js';
 import { h, clear } from '../ui/dom.js';
-import { ChipPicker, actionButton, limitLine } from '../ui/betpanel.js';
+import { actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
 import { sfx, sfxAt, say, setDuck } from '../audio.js';
 
@@ -19,6 +19,7 @@ const TIER_TEXT = { small: 'WIN', medium: 'NICE WIN', big: 'BIG WIN', mega: 'MEG
 export class RouletteView extends TableView {
   constructor(app, def, floor) {
     super(app, def, floor);
+    this.standTop = 0.9;
     this.seatLocal.set(0.35, 0, 0.95);
     // Etwas höher und nach links versetzt, damit Rad und Tableau neben dem Wett-Panel gut sichtbar sind
     this.camLocal.set(0.15, 2.3, 1.45);
@@ -452,11 +453,11 @@ export class RouletteView extends TableView {
   }
 
   buildPanel() {
-    this.picker = new ChipPicker(this.denoms, this.limits.min, () => this.refreshPanel());
+    this.picker = this.pad;
     this.selEl = h('div.selchip');
     this.totalEl = h('div.betval.big');
     this.listEl = h('div.betlist');
-    const quick = h('div.quick');
+    const quick = h('div.quick.noMirror');
     for (const [spot, label] of [['red', 'ROT'], ['black', 'SCHWARZ'], ['even', 'GERADE'], ['odd', 'UNGERADE'], ['low', '1-18'], ['high', '19-36'], ['d1', '1-12'], ['d2', '13-24'], ['d3', '25-36'], ['c1', 'Spalte 1'], ['c2', 'Spalte 2'], ['c3', 'Spalte 3']]) {
       quick.append(h('button.small', { class: spot === 'red' ? 'red' : spot === 'black' ? 'black' : '', onclick: () => { this.edit('add', spot, this.picker.value); sfx.chip(); this.app.hands?.play('toss'); } }, label));
     }

@@ -16,7 +16,10 @@ import { BaccaratView } from '../tables/baccarat.js';
 import { CrapsView } from '../tables/craps.js';
 import { PokerView } from '../tables/poker.js';
 import { WheelView } from '../tables/wheel.js';
-import { ARCADE_VIEWS, ARCADE_WIDTH } from '../tables/arcade.js';
+import { ARCADE_VIEWS } from '../tables/arcade.js';
+import { layoutFloor } from './layout.js';
+import { stool } from '../tables/common.js';
+import { STOOL_Y } from '../../shared/npcs.js';
 import { ARCADE_TYPES } from '../../shared/config.js';
 
 // Arcade-Stationen (Prompt 10) stehen wie Automaten an den Wänden
@@ -47,16 +50,14 @@ export class CasinoWorld extends World {
     this.decoBlocks = [];
     this.wallUsed = [];
     const tables = floorTables(n);
-    // Raumgrösse wächst mit der Zahl der Tische (Spiele bauen sich über die Stockwerke auf)
-    const centerCount = tables.filter(t => !WALL_GAMES.includes(t.type)).length;
-    this.rows = centerCount <= 3 ? 1 : centerCount <= 8 ? 2 : 3;
-    this.perRow = Math.max(1, Math.ceil(centerCount / this.rows));
-    this.W = Math.max(16, 13 + this.perRow * 6) + this.tier * 2;
-    this.D = 15 + this.rows * 5 + this.tier * 2;
+    // Prompt 12: kompakte, in Bereiche gegliederte Räume (SLOTS · TABLE GAMES · ARCADE · Eye-Catcher · BAR/LOUNGE).
+    // Die kleinste Raumgrösse, auf der alle Stationen samt Spielerplatz überschneidungsfrei Platz finden.
+    this.layout = layoutFloor(tables, { bar: !!st.bar, vip: !!st.vip, minW: 16 + Math.min(4, this.tier), minD: 15 });
+    this.W = this.layout.W;
+    this.D = this.layout.D;
+    this.rowZ = this.layout.rows;
+    this.rows = Math.max(1, this.rowZ.length);
     this.H = st.H || 4.5 + this.tier * 0.6;
-    // Platz für die Arcade-Stationen an den Wänden: Raum wird bei Bedarf breiter
-    this.arcadeDefs = tables.filter(t => ARCADE_TYPES.includes(t.type));
-    for (let k = 0; k < 20 && !this.planArcade(true); k++) this.W += 2;
     const s = this.scene;
     s.background = new THREE.Color(this.theme.ceil);
     s.fog = new THREE.Fog(this.theme.ceil, 20, 50 + this.tier * 6);
@@ -66,6 +67,7 @@ export class CasinoWorld extends World {
     this.buildLights();
     this.initFlash();
     this.plan = this.planTables(tables);
+    this.buildZones();
     this.buildDecor();
     if (this.style.luxury || this.style.redCarpet) this.buildLuxury();
     this.views = {};
@@ -165,6 +167,56 @@ export class CasinoWorld extends World {
     }
   }
 
+  // Bereiche durch Raumgestaltung statt Schilder (Prompt 12): eigener Bodenbelag mit Leuchtkante je Bereich,
+  // Pflanzkübel an den Inselenden, Lounge-Sofas neben der Bar.
+  buildZones() {
+    const s = this.scene, A = this.layout.areas, { W, D, tier } = this;
+    const rug = (r, color, edge, { tex, pad = 0.35, glow = 1.6 } = {}) => {
+      if (!r) return;
+      const x0 = Math.max(-W / 2 + 0.05, r.x0 - pad), x1 = Math.min(W / 2 - 0.05, r.x1 + pad), z0 = Math.max(-D / 2 + 0.05, r.z0 - pad), z1 = Math.min(D / 2 - 0.05, r.z1 + pad);
+      const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      const mat = tex ? M.std('#ffffff', 0.95, 0, { map: (() => { const t = tex.clone(); t.userData = {}; t.repeat.set(w / 4, d / 4); t.needsUpdate = true; return t; })() }) : M.std(color, 0.9);
+      const m = mesh(new THREE.PlaneGeometry(w, d), mat, cx, 0.008, cz, { cast: false });
+      m.rotation.x = -Math.PI / 2; s.add(m);
+      const em = M.glow(edge, glow);
+      for (const [ex, ez, ew, ed] of [[cx, z0, w, 0.05], [cx, z1, w, 0.05], [x0, cz, 0.05, d], [x1, cz, 0.05, d]]) s.add(mesh(new THREE.BoxGeometry(ew, 0.012, ed), em, ex, 0.012, ez, { cast: false }));
+    };
+    const st = this.style;
+    rug(A.slots, '#22102e', '#ff3cac');
+    rug(A.tables, null, tier >= 2 ? '#ffd97a' : '#d9a441', { tex: carpetTexture((tier + 2) % 6), pad: 0.5, glow: 0.9 });
+    rug(A.arcade, '#0a1020', '#2bd9fe');
+    if (A.stage) rug({ ...A.stage, z0: -D / 2 + 0.3 }, '#1a0a20', st.neon || '#ffd700', { pad: 0.2 });
+    if (A.lounge && st.bar) {
+      rug({ x0: W / 2 - 4.6, x1: W / 2 - 0.3, z0: -D / 2 + 9.2, z1: -D / 2 + 11.6 }, null, '#ffb35a', { tex: woodTexture('#5a3a1e'), pad: 0, glow: 0.8 });
+      // Lounge: zwei Sofas gegenüber, Tischchen – Spieler können sich draufstellen (springen)
+      const lz = -D / 2 + 10.4;
+      for (const [x, ry] of [[W / 2 - 0.75, -Math.PI / 2], [W / 2 - 4.0, Math.PI / 2]]) {
+        const so = sofa(tier >= 3 ? '#5a0f24' : '#3a2a5a', 2.0); so.position.set(x, 0, lz); so.rotation.y = ry; s.add(so);
+        this.addBox(x, lz, 0.9, 2.1, 0.9, 0.5);
+      }
+      const tbl = new THREE.Group();
+      tbl.add(mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.05, 24), M.std('#1a1008', 0.3, 0.2), 0, 0.45, 0));
+      tbl.add(mesh(new THREE.CylinderGeometry(0.06, 0.1, 0.43, 10), M.gold(), 0, 0.215, 0));
+      tbl.position.set(W / 2 - 2.38, 0, lz); s.add(tbl);
+      this.addCircle(W / 2 - 2.38, lz, 0.45, 0.48);
+      this.lounge = { x: W / 2 - 2.38, z: lz };
+      this.decoBlocks.push({ x: W / 2 - 2.4, z: lz, r: 2.4 });
+    }
+    // Pflanzkübel an den Enden der freistehenden Inseln
+    for (const lines of [['slotA', 'slotB'], ['arcA', 'arcB']]) {
+      const items = this.plan.filter(p => lines.includes(p.line));
+      if (!items.length) continue;
+      const xs = items.map(p => [p.rect.x0, p.rect.x1]).flat(), zs = items.map(p => [p.rect.z0, p.rect.z1]).flat();
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+      for (const z of [Math.min(...zs) - 0.45, Math.max(...zs) + 0.45]) {
+        if (!this.isFree(cx, z, 0.35)) continue;
+        const pl = plant(1.2); pl.position.set(cx, 0, z); s.add(pl);
+        this.addCircle(cx, z, 0.35);
+        this.decoBlocks.push({ x: cx, z, r: 0.5 });
+      }
+    }
+  }
+
   buildDecor() {
     const { W, D, H, tier, theme } = this;
     const s = this.scene;
@@ -199,12 +251,20 @@ export class CasinoWorld extends World {
       s.add(bt.root);
       this.updaters.push(dt => bt.update(dt));
       this.barPos = new THREE.Vector3(W / 2 - 3.1, 0, -D / 2 + 5);
+      // Barhocker (NPCs sitzen darauf, Spieler können draufspringen) und „[E] MAKKA HOLEN“ (Prompt 12)
+      this.barStools = [-1.6, -0.55, 0.55, 1.6].map(dz => {
+        const x = W / 2 - 3.05, z = -D / 2 + 5 + dz;
+        const st = stool(tier); st.position.set(x, 0, z); st.scale.set(1, 0.9, 1); s.add(st);
+        this.addCircle(x, z, 0.22, 0.68);
+        return { x, z };
+      });
+      this.addInteract({ pos: new THREE.Vector3(W / 2 - 3.0, 0, -D / 2 + 5), radius: 2.0, verb: 'MAKKA', label: () => (this.app.barCooldown() > 0 ? `MAKKA HOLEN (in ${this.app.barCooldown()}s wieder)` : 'MAKKA HOLEN – gratis, nur zum Spass'), action: () => this.app.barMakka() });
     }
     // VIP-Lounge mit Absperrung
     if (st.vip) {
       const vx = W / 2 - 3, vz = D / 2 - 4.5;
       const so = sofa('#7a1230', 2.4); so.position.set(vx + 0.6, 0, vz); so.rotation.y = -Math.PI / 2; s.add(so);
-      this.addBox(vx + 0.6, vz, 0.9, 2.4);
+      this.addBox(vx + 0.6, vz, 0.9, 2.4, 0.9, 0.5);
       const rope = velvetRope(2.4); rope.position.set(vx - 1.2, 0, vz); rope.rotation.y = Math.PI / 2; s.add(rope);
       this.addBox(vx - 1.2, vz, 0.2, 2.4);
       const vip = neonSign('VIP', '#ffd97a', 1.2, 0.5); vip.position.set(W / 2 - 0.06, 2.6, vz); vip.rotation.y = -Math.PI / 2; s.add(vip);
@@ -298,73 +358,9 @@ export class CasinoWorld extends World {
     this.addCircle(x, z, 0.6);
   }
 
-  // Tischplan: Automaten an den Seitenwänden, Glücksrad an der Rückwand, Tische in 1–3 Reihen in der Mitte.
-  // Die vorderste Reihe bleibt vom Aufzug und der Bühne der Mafia-Szene weg.
-  planTables(defs) {
-    const { W, D } = this;
-    const plan = [];
-    const slots = defs.filter(d => d.type === 'slots');
-    const high = defs.filter(d => d.type === 'highslots');
-    const wheel = defs.filter(d => d.type === 'wheel');
-    // Tischspiele gemischt verteilen (Blackjack, Roulette, Baccarat … abwechselnd)
-    const byType = {};
-    for (const d of defs) if (!WALL_GAMES.includes(d.type)) (byType[d.type] ||= []).push(d);
-    const center = [];
-    for (let k = 0; center.length < Object.values(byType).flat().length; k++) for (const list of Object.values(byType)) if (list[k]) center.push(list[k]);
-    slots.forEach((d, i) => plan.push({ def: d, x: -W / 2 + 0.75, z: -((slots.length - 1) / 2 - i) * 1.4 + 1, rot: Math.PI / 2 }));
-    high.forEach((d, i) => plan.push({ def: d, x: W / 2 - 0.75, z: ((high.length - 1) / 2 - i) * 1.4 + 2, rot: -Math.PI / 2 }));
-    wheel.forEach(d => plan.push({ def: d, x: W / 4, z: -D / 2 + 1.1, rot: 0 }));
-    plan.push(...this.planArcade());
-    const { rows, perRow } = this;
-    const zFront = D / 2 - 10.5, zBack = -D / 2 + 4.5;
-    this.rowZ = rows === 1 ? [Math.max(zBack, Math.min(zFront, -1))] : Array.from({ length: rows }, (_, r) => zBack + r * (zFront - zBack) / (rows - 1));
-    const usable = W - 13;
-    center.forEach((d, i) => {
-      const row = Math.floor(i / perRow), col = i % perRow;
-      const inRow = Math.min(perRow, center.length - row * perRow);
-      const x = inRow === 1 ? 0 : -usable / 2 + col * usable / (inRow - 1);
-      plan.push({ def: d, x, z: this.rowZ[row], rot: 0, center: true });
-    });
-    return plan;
-  }
-
-  // Arcade-Stationen auf freie Wandabschnitte verteilen (hinten, vorne neben dem Aufzug, Seitenwände).
-  // dry = nur prüfen, ob alles passt (für die Raumgrösse)
-  planArcade(dry = false) {
-    const { W, D } = this;
-    const defs = this.arcadeDefs || [];
-    if (!defs.length) return dry ? true : [];
-    const margin = 1.5, gap = 0.35;
-    // Wände als Intervalle [a, b] entlang der Wand, mit gesperrten Bereichen
-    const walls = [
-      { side: 'back', a: -W / 2 + margin, b: W / 2 - margin, block: [[-W / 2 + 1.2, -W / 2 + 4.8], [W / 4 - 2.5, W / 4 + 2.5]] },
-      { side: 'front', a: -W / 2 + margin, b: W / 2 - margin, block: [[-4.8, 4.8], ...(this.style.vip ? [[W / 2 - 6, W / 2]] : [])] },
-      { side: 'left', a: -D / 2 + margin, b: D / 2 - margin, block: [[1 - 0.9 - 4 * 0.7 - 0.6, 1 + 0.9 + 4 * 0.7 + 0.6], [D / 2 - 11, D / 2]] },
-      { side: 'right', a: -D / 2 + margin, b: D / 2 - margin, block: [[2 - 0.9 - 3 * 0.7 - 0.6, 2 + 0.9 + 3 * 0.7 + 0.6], ...(this.style.bar ? [[-D / 2 + 0.5, -D / 2 + 9.5]] : []), [D / 2 - 11, D / 2]] },
-    ];
-    const free = [];
-    for (const w of walls) {
-      let segs = [[w.a, w.b]];
-      for (const [x0, x1] of w.block) segs = segs.flatMap(([a, b]) => (x1 <= a || x0 >= b ? [[a, b]] : [[a, x0], [x1, b]].filter(([p, q]) => q - p > 0.5)));
-      for (const sg of segs) free.push({ side: w.side, a: sg[0], b: sg[1], cur: sg[0] });
-    }
-    // Breite Stationen zuerst (Duck Race, Money Wheel …), damit sie einen langen Abschnitt bekommen
-    const order = [...defs].sort((p, q) => (ARCADE_WIDTH[q.type] || 1.7) - (ARCADE_WIDTH[p.type] || 1.7));
-    const out = [];
-    for (const d of order) {
-      const wd = ARCADE_WIDTH[d.type] || 1.7;
-      const seg = free.find(f => f.b - f.cur >= wd);
-      if (!seg) return dry ? false : out;
-      const c = seg.cur + wd / 2;
-      seg.cur += wd + gap;
-      const inset = 0.65;
-      const pos = seg.side === 'back' ? { x: c, z: -D / 2 + inset, rot: 0 }
-        : seg.side === 'front' ? { x: c, z: D / 2 - inset, rot: Math.PI }
-          : seg.side === 'left' ? { x: -W / 2 + inset, z: c, rot: Math.PI / 2 } : { x: W / 2 - inset, z: c, rot: -Math.PI / 2 };
-      out.push({ def: d, ...pos, arcade: wd });
-    }
-    return dry ? true : out;
-  }
+  // Tischplan aus der Raumplanung (layout.js): Slot-Insel links, Tischinseln in der Mitte, Arcade rechts,
+  // Eye-Catcher an der Rückwand. Jeder Eintrag kennt sein Rechteck (Körper + Spielerplatz).
+  planTables() { return this.layout.plan; }
 
   // Mitte zwischen zwei Tischreihen (für Deko wie den Geldbrunnen)
   rowGaps() { return (this.rowZ || []).slice(1).map((z, i) => (z + this.rowZ[i]) / 2); }
@@ -375,9 +371,9 @@ export class CasinoWorld extends World {
     if (Math.abs(x) > W / 2 - r * 0.6 || Math.abs(z) > D / 2 - r * 0.6) return false;
     if (Math.abs(x) < 3.5 + r && z > D / 2 - 10 - r) return false;
     for (const p of this.plan || []) {
-      const hw = p.center ? 1.6 : p.arcade ? p.arcade / 2 + 0.35 : p.def.type === 'wheel' ? 1.8 : 0.8, hd = p.center ? 1.9 : p.arcade ? 1.6 : p.def.type === 'wheel' ? 1.3 : 1.0;
-      if (Math.abs(x - p.x) < hw + r && Math.abs(z - p.z) < hd + r) return false;
+      for (const q of [p.rect, p.standRect]) if (q && x + r > q.x0 && x - r < q.x1 && z + r > q.z0 && z - r < q.z1) return false;
     }
+    for (const zn of this.layout?.zones || []) if (zn.name === 'lounge' && x + r > zn.x0 && x - r < zn.x1 && z + r > zn.z0 && z - r < zn.z1) return false;
     for (const b of this.decoBlocks || []) if (Math.hypot(x - b.x, z - b.z) < b.r + r) return false;
     // Bar, Personaltür und Glücksrad an den Wänden freihalten
     if (this.style?.bar && x > W / 2 - 4.5 && Math.abs(z - (-D / 2 + 5)) < 4) return false;
@@ -389,7 +385,7 @@ export class CasinoWorld extends World {
   reserveWalls() {
     const { W, D } = this;
     const u = this.wallUsed;
-    for (const p of this.plan) if (!p.center) u.push({ x: p.x, z: p.z, w: p.arcade || (p.def.type === 'wheel' ? 3 : 1.6) });
+    for (const p of this.plan) if (p.wall) u.push({ x: p.x, z: p.z, w: p.dims.w + 0.2 });
     u.push({ x: -W / 2 + 3, z: -D / 2, w: 2.4 }, { x: 0, z: -D / 2, w: Math.min(W - 4, 8) });
     if (this.style.bar) u.push({ x: W / 2, z: -D / 2 + 5, w: 7 });
     if (this.style.vip) u.push({ x: W / 2, z: D / 2 - 4.5, w: 3 });
@@ -474,7 +470,7 @@ export class CasinoWorld extends World {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
     const board = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.6), new THREE.MeshBasicMaterial({ map: t, toneMapped: false }));
     board.material.color.setScalar(0.9);
-    board.position.set(3.4, 2.2, this.D / 2 - 0.06);
+    board.position.set(2.3, 2.2, this.D / 2 - 0.06);
     board.rotation.y = Math.PI;
     s.add(board);
   }
@@ -505,7 +501,10 @@ export class CasinoWorld extends World {
       return { x: p.x, z: p.z, ry: Math.atan2(c.x - p.x, c.z - p.z), pose: 'stand' };
     }
     if (kind === 'bar') {
-      if (this.barPos) return { x: this.barPos.x - 0.1, z: this.barPos.z + (+id - 1.5) * 1.05, ry: Math.PI / 2, pose: 'stand' };
+      // Plätze 0 und 3 sitzen auf einem Barhocker, 1 und 2 stehen an der Theke (unterhalten sich, trinken)
+      const k = +id;
+      if (this.barStools && (k === 0 || k === 3)) { const st = this.barStools[k]; return { x: st.x, z: st.z, y: STOOL_Y + 0.02, ry: Math.PI / 2, pose: 'sit', ax: st.x - 0.55, az: st.z }; }
+      if (this.barPos) return { x: this.barPos.x - 0.25, z: this.barPos.z + (k - 1.5) * 1.05, ry: Math.PI / 2 + (k === 1 ? 0.5 : -0.5), pose: 'stand' };
       return standSpot(this, 'wander', +id + 6);
     }
     return standSpot(this, kind, +id);

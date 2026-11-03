@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { TableView, halfMoonTable, makeDealer, cardShoe, stool, chipStack, CardSet, TextSprite } from './common.js';
 import { printedFelt } from '../textures.js';
 import { h, clear } from '../ui/dom.js';
-import { BetAmount, actionButton, limitLine } from '../ui/betpanel.js';
+import { actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
 
 const fx = x => x / 1024 * 2.5 - 1.25;
@@ -12,6 +12,7 @@ const fz = y => y / 512 * 1.6 - 0.35;
 export class PokerView extends TableView {
   constructor(app, def, floor) {
     super(app, def, floor);
+    this.standTop = 0.88;
     this.seatLocal.set(0, 0, 1.5);
     this.camLocal.set(0, 1.95, 1.55);
     this.lookLocal.set(0.38, 0.8, 0.2);
@@ -60,7 +61,7 @@ export class PokerView extends TableView {
   update(dt) { this.dealer.update(dt); }
 
   buildPanel() {
-    this.bet = new BetAmount(this.limits, () => this.app.pot, this.denoms, this.limits.min);
+    this.bet = this.pad;
     this.btn = {
       deal: actionButton('DEAL (Ante)', () => this.start(), 'primary big'),
       call: actionButton('CALL (C)', () => this.act('call'), 'primary'),

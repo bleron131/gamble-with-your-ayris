@@ -17,8 +17,9 @@ export class World {
   }
 
   // h = Höhe des Hindernisses (niedrige Möbel blockieren die Third-Person-Kamera nicht, wenn sie darüber schwebt)
-  addBox(cx, cz, w, d, h = 9) { this.colliders.push({ type: 'box', minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2, h }); }
-  addCircle(x, z, r) { this.colliders.push({ type: 'circle', x, z, r }); }
+  // top = begehbare Oberkante (Sofas, Tische …): wer höher ist, läuft darüber und kann darauf stehen
+  addBox(cx, cz, w, d, h = 9, top) { const c = { type: 'box', minX: cx - w / 2, maxX: cx + w / 2, minZ: cz - d / 2, maxZ: cz + d / 2, h }; if (top !== undefined) c.top = top; this.colliders.push(c); return c; }
+  addCircle(x, z, r, top) { const c = { type: 'circle', x, z, r }; if (top !== undefined) c.top = top; this.colliders.push(c); return c; }
   addInteract(o) { this.interactables.push({ radius: 1.6, ...o }); return o; }
 
   // Wände eines rechteckigen Raums
@@ -32,6 +33,7 @@ export class World {
   collide(p, r = 0.3) {
     for (let iter = 0; iter < 2; iter++) {
       for (const c of this.colliders) {
+        if (c.top !== undefined && p.y >= c.top - 0.06) continue; // darüber (gesprungen oder darauf stehend)
         if (c.type === 'box') {
           const nx = Math.max(c.minX, Math.min(p.x, c.maxX));
           const nz = Math.max(c.minZ, Math.min(p.z, c.maxZ));

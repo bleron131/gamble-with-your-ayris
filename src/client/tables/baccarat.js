@@ -4,7 +4,7 @@ import { TableView, halfMoonTable, makeDealer, cardShoe, stool, chipStack, CardS
 import { printedFelt } from '../textures.js';
 import { bacTotal } from '../../shared/games/baccarat.js';
 import { h, clear } from '../ui/dom.js';
-import { ChipPicker, actionButton, limitLine } from '../ui/betpanel.js';
+import { actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
 import { sfx, say } from '../audio.js';
 
@@ -14,6 +14,7 @@ const toLocal = (x, y) => new THREE.Vector3(x / 1024 * 2.5 - 1.25, 0.86, y / 512
 export class BaccaratView extends TableView {
   constructor(app, def, floor) {
     super(app, def, floor);
+    this.standTop = 0.88;
     this.seatLocal.set(0, 0, 1.5);
     this.camLocal.set(0, 1.95, 1.55);
     this.lookLocal.set(0.38, 0.8, 0.2);
@@ -120,7 +121,7 @@ export class BaccaratView extends TableView {
   }
 
   buildPanel() {
-    this.picker = new ChipPicker(this.denoms, this.limits.min);
+    this.picker = this.pad;
     this.totalEl = h('div.betval');
     this.listEl = h('div.betlist');
     this.dealBtn = actionButton('DEAL', () => this.deal(), 'primary big');

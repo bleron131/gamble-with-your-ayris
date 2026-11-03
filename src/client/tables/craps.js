@@ -5,7 +5,7 @@ import { M, mesh } from '../world/props.js';
 import { crapsLayout, diceFaceTexture, woodTexture } from '../textures.js';
 import { CRAPS_BETS } from '../../shared/games/craps.js';
 import { h, clear } from '../ui/dom.js';
-import { ChipPicker, actionButton, limitLine } from '../ui/betpanel.js';
+import { actionButton, limitLine } from '../ui/betpanel.js';
 import { fmtMoney } from '../../shared/config.js';
 import { sfx, say } from '../audio.js';
 
@@ -26,6 +26,7 @@ function makeDie() {
 export class CrapsView extends TableView {
   constructor(app, def, floor) {
     super(app, def, floor);
+    this.standTop = 0.95;
     this.seatLocal.set(0.2, 0, 1.15);
     this.camLocal.set(0.2, 2.0, 1.35);
     this.lookLocal.set(0.45, 0.8, -0.1);
@@ -206,10 +207,10 @@ export class CrapsView extends TableView {
   update(dt) { this.stick.update(dt); }
 
   buildPanel() {
-    this.picker = new ChipPicker(this.denoms, this.limits.min);
+    this.picker = this.pad;
     this.listEl = h('div.betlist');
     this.info = h('div.info');
-    const quick = h('div.quick');
+    const quick = h('div.quick.noMirror');
     for (const k of Object.keys(CRAPS_BETS)) quick.append(h('button.small', { onclick: () => this.addBet(k) }, CRAPS_BETS[k].label));
     this.rollBtn = actionButton('🎲 WÜRFELN', () => this.roll(), 'primary big');
     this.panel = h('div.tablepanel',

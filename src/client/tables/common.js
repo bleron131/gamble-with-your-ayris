@@ -4,6 +4,7 @@ import { cardTexture, cardBackTexture, chipSideTexture, chipTopTexture, chipColo
 import { Character, npcAppearance } from '../character.js';
 import { M, mesh } from '../world/props.js';
 import { fmtShort } from '../../shared/config.js';
+import { Pad3D } from './pad3d.js';
 
 // ───────────────────────── Animationen ─────────────────────────
 export const ease = {
@@ -246,6 +247,12 @@ export class TableView {
   place(x, z, rotY) {
     this.group.position.set(x, 0, z);
     this.group.rotation.y = rotY;
+    // Einheitliches 3D-Einsatzpult (Prompt 12) – an jeder Station, rechts unten im Blick des Spielers
+    if (!this.pad && !this.noPad) {
+      this.pad = new Pad3D(this, { color: this.padColor, ...(this.padOpts || {}) });
+      this.group.add(this.pad.group);
+    }
+    this.pad?.place();
     this.group.updateMatrixWorld(true);
   }
   toWorld(v) { return v.clone().applyMatrix4(this.group.matrixWorld); }
@@ -257,7 +264,8 @@ export class TableView {
     const r = this.group.rotation.y;
     const swap = Math.abs(Math.sin(r)) > 0.7;
     const w = swap ? this.footprint.d : this.footprint.w, d = swap ? this.footprint.w : this.footprint.d;
-    world.addBox(p.x, p.z, w, d);
+    // Tischspiele (Roulette, Blackjack …) haben eine begehbare Tischplatte – man kann draufspringen (Prompt 12)
+    world.addBox(p.x, p.z, w, d, this.standTop ? 1.2 : 9, this.standTop);
   }
   interactPos() { return this.toWorld(this.seatLocal.clone().multiplyScalar(1.05)); }
   get mine() { return this.state && this.state.occupant === this.app.me; }
@@ -286,12 +294,14 @@ export class TableView {
   get denoms() { return denominations(this.limits.min, this.limits.max); }
   setState(ts) { this.lastState = this.state; this.state = ts; this.onState(ts, this.lastState); }
   onState() {}
-  tick(dt, t) { this.anim.update(dt); this.update?.(dt, t); }
+  tick(dt, t) { this.anim.update(dt); this.update?.(dt, t); this.pad?.update(dt); }
   onEvent() {}
   buildPanel() { return null; }
   refreshPanel() {}
   pick() { return false; }
   hover() { return null; }
+  // Einsatz kommt vom 3D-Pult (ersetzt die alten HTML-Chip-/Betragsfelder)
+  get padBet() { return this.pad; }
 }
 
 // Text-Schild als Sprite (Handwerte, Ergebnisse)

@@ -142,6 +142,12 @@ export class App {
     sfx.button();
     this.send({ t: 'slot.bet', id, dir });
   }
+  // Einsatz direkt über das 3D-Pult am Automaten setzen (Server prüft Limits und Sperre)
+  slotSetBet(id, bet) {
+    const v = this.slotUsable(id);
+    if (!v || !(bet > 0)) return;
+    this.send({ t: 'slot.setbet', id, bet });
+  }
   slotSpin(id) {
     const v = this.slotUsable(id);
     if (!v) return;
@@ -239,6 +245,7 @@ export class App {
     const ndc = new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
     if (this.player.seated) {
       this.raycaster.setFromCamera(ndc, this.engine.camera);
+      if (kind === 'tap' && this.player.seated.pad?.pick(this.raycaster)) return;
       this.player.seated.hover?.(this.raycaster);
       this.player.seated.pick(this.raycaster, kind === 'long' ? 2 : 0);
       return;
@@ -621,6 +628,7 @@ export class App {
       case 'drink':
         if (mine) this.onDrink(ev);
         if (ev.phase === 'buy') this.ui.feed(`🍾 <b>${esc(ev.name)}</b> kauft einen MAKKA`);
+        else if (ev.phase === 'bar') { this.ui.feed(`🍾 <b>${esc(ev.name)}</b> holt sich einen MAKKA ${esc(ev.flavor)} an der Bar`); if (!mine) { this.avatarIcon(ev.pid, '🍾'); sfxAt(this.avatarVolume(ev.pid), () => sfx.gulp()); } }
         else if (ev.phase === 'cocktail') { if (!mine) { sfxAt(this.avatarVolume(ev.pid), () => sfx.sip()); if (ev.n === 3) this.avatarIcon(ev.pid, '🥴'); } }
         else { this.ui.feed(`🥴 <b>${esc(ev.name)}</b> trinkt MAKKA – alles dreht sich!`); if (!mine) { this.avatarIcon(ev.pid, '🥴'); sfxAt(this.avatarVolume(ev.pid), () => sfx.gulp()); } }
         break;
@@ -952,6 +960,16 @@ export class App {
     this.send({ t: 'drink', phase: 'drink' });
   }
 
+  // Gratis-MAKKA an der Casino-Bar (Prompt 12) – nur Show, kein Glücks-Effekt
+  barCooldown() { return Math.max(0, Math.ceil(((this.barUntil || 0) - performance.now()) / 1000)); }
+  barMakka() {
+    if (this.player.drinkT > 0 || this.ui.modalOpen) return;
+    if (this.barCooldown() > 0) { sfx.denied(); this.ui.toast(`Der Barkeeper mixt noch… (${this.barCooldown()}s)`, 'info', 1500); return; }
+    this.barUntil = performance.now() + 12000;
+    sfx.register?.();
+    this.send({ t: 'drink', phase: 'bar' });
+  }
+
   drinkCocktail() {
     const p = this.player;
     if (p.drinkT > 0 || this.ui.modalOpen || this.save.appearance.accessory !== 'cocktail') return;
@@ -967,6 +985,16 @@ export class App {
       setTimeout(() => sfx.bottle(), 350);
       this.ui.toast(`MAKKA gekauft (−1 🍆) · MAKKA ×${ev.count} im Inventar · T bzw. 🍾 zum Trinken`, 'good', 4000);
       this.ui.refreshHud();
+      return;
+    }
+    if (ev.phase === 'bar') {
+      p.startDrink(2.0, 'makka');
+      p.emoteT = 0;
+      sfx.open?.();
+      if (this.world.mode === 'first') { this.hands.holdItem(makkaBottle(1)); this.hands.itemT = 2.0; }
+      [0.6, 1.05, 1.5].forEach(d => setTimeout(() => sfx.gulp(), d * 1000));
+      setTimeout(() => this.ui.toast(`🍾 MAKKA ${ev.flavor} – Prost! (gratis, ohne Glücks-Effekt)`, 'good', 2600), 2000);
+      this.save.stats.barMakkas = (this.save.stats.barMakkas || 0) + 1;
       return;
     }
     const makka = ev.phase === 'drink';
@@ -1195,6 +1223,7 @@ export class App {
     if (this.player.seated) {
       if (e.code === 'Escape' || e.code === 'KeyQ') { this.leaveTable(); e.preventDefault(); return; }
       if (this.player.seated.onKey?.(e.code)) { e.preventDefault(); return; }
+      if (this.player.seated.pad?.onKey(e.code)) { e.preventDefault(); return; }
       return;
     }
     if (!this.state) return;
@@ -1236,6 +1265,7 @@ export class App {
     if (!this.state || this.ui.modalOpen) return;
     if (this.player.seated) {
       this.raycaster.setFromCamera(this.ndc(e), this.engine.camera);
+      if (e.button === 0 && this.player.seated.pad?.pick(this.raycaster)) return;
       this.player.seated.pick(this.raycaster, e.button);
       return;
     }
@@ -1300,8 +1330,13 @@ export class App {
     } else if (this.player.seated) {
       const v = this.player.seated;
       let lbl = null;
-      if (!touch) { this.raycaster.setFromCamera(new THREE.Vector2(...this.mouseNdc()), this.engine.camera); lbl = v.hover(this.raycaster); }
-      this.ui.setHint(lbl ? (v.hoverLabel ? v.hoverLabel(lbl) : `Klick: Chip auf ${lbl}`) : rouletteSpin === v ? `${camKey} – Kugelkamera` : '');
+      let padLbl = null;
+      if (!touch) {
+        this.raycaster.setFromCamera(new THREE.Vector2(...this.mouseNdc()), this.engine.camera);
+        padLbl = v.pad?.hover(this.raycaster);
+        if (!padLbl) lbl = v.hover(this.raycaster);
+      }
+      this.ui.setHint(padLbl ? `Klick: ${padLbl}` : lbl ? (v.hoverLabel ? v.hoverLabel(lbl) : `Klick: Chip auf ${lbl}`) : rouletteSpin === v ? `${camKey} – Kugelkamera` : '');
     } else this.ui.setHint('');
     // Position senden (15 Hz)
     this.moveTimer -= dt;
