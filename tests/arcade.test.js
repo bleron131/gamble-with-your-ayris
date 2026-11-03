@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { Room } from '../src/shared/room.js';
 import { floorDef } from '../src/shared/config.js';
 import { crashMultAt, crashMsFor, DUCKS, DUCK_STEPS, PLINKO_PAYS, MONEY_WHEEL, minesMult, hiloOdds } from '../src/shared/games/arcade.js';
+import { seedRandom } from '../src/shared/rng.js';
+
+// Reproduzierbar: fester Seed, damit Deploys nicht an seltenen Zufallsfällen scheitern
+seedRandom(+(process.env.ARCADE_SEED || 7));
 
 function fakeConn() { const msgs = []; return { msgs, send: m => msgs.push(JSON.parse(JSON.stringify(m))), results: () => msgs.filter(m => m.t === 'event' && m.ev.kind === 'result').map(m => m.ev), errors: () => msgs.filter(m => m.t === 'error').map(m => m.msg) }; }
 function setup(n = 1) {
