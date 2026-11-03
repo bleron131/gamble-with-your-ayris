@@ -92,6 +92,7 @@ export class Pad3D {
     this.group = new THREE.Group();
     this.group.name = 'pad3d';
     this.face = new THREE.Group();
+    this.face.userData.noBake = true; // Pult ändert Grösse/Knöpfe zur Laufzeit → nie zusammenfassen
     this.group.add(this.face);
     this.raw = null;          // gewünschter Einsatz (null = Minimum)
     this.typing = '';         // laufende Eingabe über den Ziffernblock
@@ -165,6 +166,7 @@ export class Pad3D {
     // Ständer bzw. Tischarm (wird in place() ausgerichtet)
     this.post = mesh(new THREE.CylinderGeometry(0.018, 0.024, 1, 10), M.std('#b8b8c8', 0.25, 0.9), 0, 0, 0, { cast: false });
     this.foot = mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.03, 20), M.std('#22202c', 0.4, 0.6), 0, 0, 0, { cast: false });
+    this.post.userData.noBake = this.foot.userData.noBake = true;
     this.group.add(this.post, this.foot);
     this.layout();
     this.drawDisplay();
@@ -187,6 +189,7 @@ export class Pad3D {
   press(key) {
     if (!this.usable()) { sfx.denied(); return; }
     key.t = 0.22;
+    this.settle = 0.6;
     const k = key.label;
     if (key.kind === 'act') { sfx.button(); key.el?.click(); this.syncT = 0.05; return; }
     if (QUICK.has(k)) { sfx.chip(); this.set(this.quick(k)); this.flash(); return; }
@@ -414,17 +417,24 @@ export class Pad3D {
   update(dt) {
     const app = this.view.app;
     const dist = app.distanceTo?.(this.view.group.position) ?? 0;
-    const vis = dist < 22;
+    const mine = app.player?.seated === this.view;
+    // Performance: weit weg unsichtbar, mittlere Distanz nur Platte + Display (wenige Draw Calls)
+    const vis = mine || dist < 14;
     this.group.visible = vis;
     if (!vis) return;
-    const mine = app.player?.seated === this.view;
+    const detail = mine || dist < 7;
+    if (detail !== this.detail) { this.detail = detail; for (const k of this.keys) k.mesh.visible = detail; this.actGroup.visible = detail; }
     if (mine && this.panel) { this.syncT -= dt; if (this.syncT <= 0) { this.syncT = 0.15; this.sync(); } }
     if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) { this.dkey = ''; this.drawDisplay(); } }
     else if ((this.potT = (this.potT || 0) + dt) > 0.5) { this.potT = 0; this.drawDisplay(); }
     // Hover-Highlight + Drück-Animation
     const hov = mine || this.opts.walkUp ? (this.hovered || (this.opts.walkUp ? app.hoverButton?.padKey : null)) : null;
+    if (hov !== this.lastHov) { this.lastHov = hov; this.settle = 0.6; }
+    if (this.settle > 0) this.settle -= dt;
+    if (!detail || (!mine && !(this.settle > 0) && !this.animating)) return;
+    this.animating = false;
     for (const k of [...this.keys, ...this.acts]) {
-      if (k.t > 0) k.t = Math.max(0, k.t - dt);
+      if (k.t > 0) { k.t = Math.max(0, k.t - dt); this.animating = true; }
       const press = k.t > 0 ? Math.sin((k.t / 0.22) * Math.PI) : 0;
       k.mesh.position.z = -press * 0.014;
       const face = k.mesh.material[4];

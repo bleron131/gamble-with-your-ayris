@@ -52,9 +52,11 @@ Der Gratis-Server schläft nach 15 Minuten ohne Besucher; das Spiel weckt ihn be
 |---|---|
 | WASD / Pfeile | Laufen (Shift = rennen) |
 | Maus | Umschauen (im Casino Klick → Maus fangen; in der Shishabar rechte Maustaste/Drag) |
-| E | Interagieren (Aufzug, Tische, Shop, Spiegel, Hall of Fame, Barkeeper); vor einem Spielautomaten: SPIN |
-| Leertaste | Springen; am Tisch: Spin / Deal / Würfeln |
-| Klick auf Automatenknöpfe | BET − / BET + / SPIN direkt am 3D-Automaten (Fadenkreuz oder Mauszeiger) |
+| E | Interagieren (Aufzug, Tische, Shop, Spiegel, Hall of Fame, Barkeeper, Casino-Bar „MAKKA HOLEN“); vor einem Spielautomaten: SPIN |
+| Leertaste | Springen (hoch genug für Sofas, Barhocker und Roulette-/Blackjack-Tische); am Tisch: Spin / Deal / Würfeln |
+| Klick aufs 3D-Pult | Einsatz per Ziffernblock (1–9, C, 0, 000) und MIN / 1/4 / 1/2 / MAX, dazu die Aktionsknöpfe der Station (PLAY, HIT, CASH OUT …) |
+| 0–9 / Backspace (sitzend) | Einsatz am Pult tippen / löschen (C) |
+| Klick auf Automatenknöpfe | BET − / BET + / SPIN direkt am 3D-Automaten (Fadenkreuz oder Mauszeiger); daneben das Pult für einen exakten Einsatz |
 | R / F | Vor einem Spielautomaten: BET + / BET − |
 | C | Roulette-Kugelkamera an/aus, solange eine Kugel rollt (nur für dich) |
 | Z / Backspace | Roulette: letzten Chip zurücknehmen |
@@ -111,9 +113,9 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   Stock 1 Slots + Blackjack · Stock 2 + Roulette · Stock 3 + Glücksrad · Stock 4 + Baccarat · Stock 5 + Craps ·
   Stock 6 + Hold'em · Stock 7 + High-Limit-Slots. Danach kommen mehr Automaten und Tische dazu (bis zu 5 Slots,
   3 Blackjack-, 2 Roulette-, 2 Baccarat- und 2 Poker-Tische), die Limits steigen mit jedem Stockwerk und die Räume
-  wachsen mit (bis zu drei Tischreihen, Laufwege und Aufzugsbereich bleiben frei).
+  wachsen mit – so kompakt wie möglich, in Bereiche gegliedert (siehe „Das Casino ist das Interface“).
   Andere Spieler sehen jede Wette (`BLERON SETZT $10'000 AUF ROT`) und können am Tisch zuschauen.
-- **Arcade-Stationen (Prompt 10)**: zusätzlich zu den Tischen stehen an den Wänden zehn Arcade-Spiele als 3D-Stationen
+- **Arcade-Stationen (Prompt 10)**: zusätzlich zu den Tischen stehen im Arcade-Bereich zehn Arcade-Spiele als 3D-Stationen
   mit grossem Bildschirm, den alle sehen:
   **HiLo** (ab Stock 1; höher/tiefer, Chance und Multiplikator vor jedem Tipp, gleiche Karte = PUSH) ·
   **Mines** (ab 2; Touchscreen-Terminal, 5×5 Felder, 1–20 Minen, jederzeit CASH OUT) ·
@@ -121,7 +123,7 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   **Plinko** (ab 4; echte Pin-Maschine, die Kugel folgt exakt dem berechneten Pfad, Risiko LOW/MEDIUM/HIGH) ·
   **Keno** (ab 5; 1–8 aus 40 Zahlen, 10 Zahlen werden nacheinander gezogen) ·
   **Money Wheel** (ab 6; grosses Rad mit 0×–25×) · **Dragon Tower** (ab 8; 8 Ebenen, Schwierigkeit wählbar, Top-Bonus) ·
-  **Penguin Cross** (ab 9; Abschnitt für Abschnitt WEITER oder CASH OUT) · **Duck Race** (ab 10; Rennbahn mit 5 Enten,
+  **Penguin Cross** (ab 9; 3D-Eisbahn, Abschnitt für Abschnitt STEP oder CASH OUT) · **Duck Race** (ab 10; Rennbahn mit 5 Enten,
   Führungswechsel, feste Quoten) · **Street Craps** (ab 11; ein Wurf, HOCH/TIEF/SIEBEN/PASCH, Regeln auf dem Tisch).
   Alle Ergebnisse bestimmt der Server, alle Zuschauer sehen dieselbe Runde. Einsätze und Gewinne laufen über den
   Team-Pot, landen in Bilanz und Statistiken, NPCs spielen mit und machen Spielern Platz. Wer mitten in einer Runde
@@ -276,6 +278,43 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   Nacht-Shishabar lauft ihr gemeinsam zum Mitarbeiter: **TAKE THE WINNINGS** speichert den Run,
   **DOUBLE OR LOSS** braucht die Zustimmung aller – dann wirft der Mitarbeiter die grün/rote Münze physisch in der 3D-Szene.
 
+## Das Casino ist das Interface (Prompt 12)
+
+- **Einheitliches 3D-Einsatzpult** an jeder Station (Tische, Slots, Arcade), rechts unten im Blick: Display mit
+  `MIN: $… MAX: $…` und dem grossen aktuellen Einsatz, Ziffernblock **1–9 · C · 0 · 000**, Schnellwahl **MIN · 1/4 · 1/2 · MAX**
+  (Anteile vom verfügbaren Team-Pot, immer in den Tischlimits) und grosse, beleuchtete Aktionsknöpfe mit Hover-Leuchten,
+  Drück-Animation und Klick-Sound. Ein separates Einsatzfenster gibt es nicht mehr – am Bildschirmrand bleibt nur eine
+  schmale Leiste mit Spielname, Kurzregel und „Aufstehen“. Extra-Optionen (Minen-Anzahl, Schwierigkeit, Risiko, Ente,
+  Tipp, Auto-Cashout …) liegen als Knöpfe direkt am Pult.
+- **Direkt an der Maschine**: Keno-Zahlen, Mines-Felder und Dragon-Tower-Felder werden auf dem Bildschirm angeklickt;
+  Roulette-, Craps-, Baccarat- und Glücksrad-Felder direkt auf dem Tisch (der Chip-Wert ist der Pult-Einsatz).
+  Blackjack-Knöpfe (PLAY, HIT, STAND, DOUBLE, SPLIT) erscheinen nur, wenn sie erlaubt sind.
+- **Penguin Cross** ist eine grosse Maschine mit 3D-Eisbahn (10 Abschnitte, rutschende Robben) und grossem
+  Multiplikator-Bildschirm: STEP = der Pinguin springt sichtbar weiter, erwischt = Robbe rammt, Pirouette, platt aufs Eis.
+  **HiLo** ist ein Tisch mit grosser, umdrehender Karte; Bildschirm mit Multiplikator, Chance und möglichem Gewinn.
+  **Crash**: „CRASHED @ x“ mit rotem Blitz, wackelndem Bildschirm, Explosion. **Duck Race** mit FARUK, ERLAF, YARL, SABIN
+  und QUACKY, der Sieger hüpft und wird gross angezeigt.
+- **Grössere Maschinen** (Plinko, Crash, Dragon Tower, Penguin, Duck, Money Wheel, Keno deutlich grösser).
+- **Kompakte Stockwerke mit Bereichen**: Die Raumplanung (`src/client/world/layout.js`) sucht die kleinste Raumgrösse,
+  auf der alle Stationen samt Spielerplatz überschneidungsfrei passen. SLOTS links (Automaten-Insel Rücken an Rücken,
+  High-Limit-Reihe an der Wand), TABLE GAMES als Tischinsel in der Mitte, ARCADE / DIGITAL GAMES rechts (freistehende
+  Insel und Wandreihe), Eye-Catcher (Glücksrad, Money Wheel, Plinko, Duck Race, Penguin Cross) an der Rückwand,
+  BAR/LOUNGE hinten rechts mit Barhockern und Sofas. Die Bereiche erkennt man am eigenen Bodenbelag mit Leuchtkante,
+  Pflanzkübel stehen an den Inselenden; vom Aufzug führt ein freier Hauptweg in den Raum.
+- **HUD**: standardmässig eingeklappt – nur TEAM POT und ein Pfeil; aufgeklappt (weich animiert) Ziel, Fortschritt,
+  Modifier, Challenges und Feed. Der Zustand gilt für die laufende Sitzung.
+- **Benachrichtigungen** (Achievements, Challenges, Rekorde …) klein links gestapelt, höchstens 3 gleichzeitig,
+  der Rest wartet in der Schlange, jede blendet sich selbst aus.
+- **Springen & Möbel**: deutlich höherer Sprung; Sofas, Barhocker, Lounge-Tischchen und die Tischspiele haben eine
+  begehbare Oberfläche. Wände und Decke bleiben dicht, Aufzug und gesperrte Stockwerke unverändert.
+- **Casino-Bar** (ab Stock 3): **[E] MAKKA HOLEN** – gratis, mit Trink-Animation und zufälliger Sorte (Mango,
+  Wassermelone, Blaue Himbeere …), kurze Pause zwischen zwei Drinks. Bewusst **ohne** Glücks-Effekt, damit die bezahlte
+  MAKKA LUCK nicht umgangen wird. Bar-NPCs sitzen auf den Hockern, stehen an der Theke, trinken und unterhalten sich,
+  gehen zur Bar und wieder zurück; Spieler haben an Stationen immer Vorrang.
+- **Multiplayer**: Was an einer Station passiert (Karten, Kugel, Pinguin, Bildschirme), sehen alle; der Einsatz am Pult
+  ist persönlich und wird erst beim Spielstart (bzw. bei Slots als Automaten-Einsatz) übertragen. Eine Station kann nur
+  eine Person bedienen – andere schauen zu.
+
 ## Developer-Testmodus
 
 Wer exakt den Namen `Ayri000` verwendet (Gross-/Kleinschreibung, keine Leerzeichen), gewinnt jede **eigene** Casino-Runde
@@ -312,6 +351,9 @@ in Folge häufiger –, damit lange Pechsträhnen selten werden (`luckChance` in
   NPCs in der Nähe (auf dem Handy keine).
 - Partikel kommen aus einem Pool (keine Neuerzeugung pro Partikel) und werden weit weg oder hinter der Kamera gar nicht erst erzeugt.
 - Netzwerk: Positionen 15×/s, NPC-Änderungen als eigene kleine Nachricht statt kompletter Spielzustände.
+- 3D-Pulte: weiter als 14 m unsichtbar, ab 7 m nur Platte und Display (wenige Draw Calls); Display-Texturen werden nur
+  bei Änderungen neu gezeichnet, Hover-/Drück-Animationen laufen nur am eigenen bzw. angeschauten Pult.
+  Arcade-Bildschirme zeichnen nur bei Änderungen oder laufender Animation und nur in der Nähe.
 
 ## Architektur
 
