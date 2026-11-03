@@ -1,0 +1,505 @@
+// Dialoge: Aufzug (Levelauswahl + Ausrüstung), AYRI SHOP, Charaktereditor, Statistiken, Einstellungen.
+import * as THREE from 'three';
+import { h, clear } from './dom.js';
+import { FLOORS, floorDef, ITEMS, LOADOUT_SLOTS, GAME_NAMES, GAME_ICONS, ACHIEVEMENTS, COSMETIC_UNLOCKS, LUCKY_COSMETICS, fmtMoney, START_CAPITAL } from '../../shared/config.js';
+import { OPTIONS } from '../character.js';
+import * as Save from '../save.js';
+import { challengesFor } from '../../shared/challenges.js';
+import { cosmeticLock, EXTRA_EMOTES, favoriteGame, secretCount, SECRET_TOTAL, RECORDS, fmtRecord } from '../progress.js';
+import { enterFullscreen } from '../fullscreen.js';
+import { TIER_NAMES } from '../engine.js';
+import { sfx } from '../audio.js';
+
+// ───────────────────────── Aufzug ─────────────────────────
+export function openElevator(ui) {
+  const app = ui.app, st = app.state, s = Save.get();
+  if (!st) return;
+  const camp = st.campaign;
+  const grid = h('div.floors');
+  const mine = new Set(s.challenges || []);
+  for (const base of FLOORS) {
+    const f = floorDef(base.n, app.prestige);
+    const chs = challengesFor(f.n);
+    const done = camp.completed.includes(f.n);
+    const unlocked = f.n <= camp.unlocked;
+    const afford = st.pot >= f.minBet;
+    const status = done ? '✓ GESCHAFFT' : unlocked ? 'FREIGESCHALTET' : '🔒 GESPERRT';
+    const card = h('button.floor', {
+      class: [done ? 'done' : '', unlocked ? 'open' : 'locked', !afford && unlocked ? 'poor' : '', f.n === 15 ? 'final' : ''].join(' '),
+      disabled: !unlocked,
+      onclick: () => { if (!unlocked) return; sfx.click(); ui.closeModal(); app.requestTravel(f.n); },
+    },
+      h('div.fn', f.n),
+      h('div.fname', f.name),
+      h('div.fgames', f.games.map(g => GAME_ICONS[g]).join(' ')),
+      h('div.ftarget', `Ziel ${fmtMoney(f.target)}`),
+      h('div.fmin', `Min. ${fmtMoney(f.minBet)}`),
+      h('div.fstatus', status),
+      h('div.fch', `Challenges ${chs.filter(c => mine.has(c.id)).length}/${chs.length} `, h('span.marks', chs.map(c => mine.has(c.id) ? '✓' : '□').join(''))),
+    );
+    card.title = f.games.map(g => `${GAME_NAMES[g]}: ${fmtMoney(f.limits[g].min)} – ${fmtMoney(f.limits[g].max)}`).join('\n')
+      + '\n\nOptionale Challenges (blockieren nichts):\n' + chs.map(c => `${mine.has(c.id) ? '✓' : '□'} ${c.text} (+${c.reward} 🍆)`).join('\n');
+    grid.append(card);
+  }
+  if (st.run.finalUnlocked || st.campaign.gameComplete) {
+    grid.append(h('button.floor.secret', { onclick: () => { sfx.click(); ui.closeModal(); app.requestTravel('final'); } },
+      h('div.fn', st.run.finalUnlocked ? '???' : '★'), h('div.fname', 'CASINO PENTHOUSE'), h('div.fstatus', st.run.finalUnlocked ? 'Die finale Entscheidung wartet' : 'Feiern & Prestige')));
+  }
+  const prestigeBtn = st.campaign.prestigeReady
+    ? h('div.actions', h('button.primary.big', { onclick: () => { ui.closeModal(); app.requestPrestige(); } }, `★ PRESTIGE ${(st.campaign.prestige || 0) + 1} STARTEN (freiwillig)`))
+    : null;
+  ui.openModal(h('div.elevator',
+    h('h2', `🛗 AUFZUG${app.prestige ? ` · ★ PRESTIGE ${app.prestige}` : ''}`),
+    h('div.subtle', `Team-Pot: ${fmtMoney(st.pot)} – wird auf jedes Stockwerk mitgenommen. Alle freigeschalteten Stockwerke können jederzeit erneut besucht werden.`),
+    grid,
+    prestigeBtn,
+    h('div.subtle.small', `🏅 Challenges sind optional und geben einmalig Bonus-🍆 – freigeschaltet wird nur über das Ziel. Erledigt: ${mine.size}/${FLOORS.reduce((a, f) => a + challengesFor(f.n).length, 0)} (Maus über ein Stockwerk für Details).`),
+    loadoutEditor(ui),
+    h('div.subtle.small', `Bankrott (Pot unter Mindesteinsatz) ruft die Mafia: Der Run ist verloren – neuer Run mit ${fmtMoney(START_CAPITAL)}, nur Stock 1 freigeschaltet. 🍆, Items und Kosmetik bleiben.`),
+  ), 'wide');
+}
+
+function loadoutEditor(ui) {
+  const s = Save.get();
+  const wrap = h('div.loadout');
+  const render = () => {
+    clear(wrap);
+    wrap.append(h('h3', `🎒 Ausrüstung (${s.loadout.length}/${LOADOUT_SLOTS}) – welche Items nimmst du mit?`));
+    const owned = Object.entries(s.inventory).filter(([, c]) => c > 0);
+    if (!owned.length) { wrap.append(h('div.subtle', 'Noch keine Items. Kaufe welche im AYRI SHOP mit 🍆.')); return; }
+    const row = h('div.invrow');
+    for (const [k, c] of owned) {
+      const def = ITEMS[k];
+      const on = s.loadout.includes(k);
+      row.append(h('button.inv', {
+        class: on ? 'on' : '',
+        title: def.desc,
+        onclick: () => {
+          if (on) s.loadout = s.loadout.filter(x => x !== k);
+          else if (s.loadout.length < LOADOUT_SLOTS) s.loadout.push(k);
+          else return ui.toast(`Maximal ${LOADOUT_SLOTS} Items`, 'warn');
+          sfx.click();
+          Save.save();
+          ui.app.syncLoadout();
+          render();
+        },
+      }, h('span.ico', def.icon), h('span', def.name), h('span.cnt', def.usage === 'single' ? `×${c}` : 'permanent')));
+    }
+    wrap.append(row);
+  };
+  render();
+  return wrap;
+}
+
+// ───────────────────────── Bar ─────────────────────────
+export function openBar(ui, nextLine) {
+  const s = Save.get();
+  const app = ui.app;
+  const line = h('div.barline', nextLine());
+  const buy = h('button.primary.big', {
+    disabled: s.dildos < Save.MAKKA_PRICE ? true : null,
+    onclick: () => { if (app.buyMakka()) ui.closeModal(); },
+  }, `MAKKA kaufen – ${Save.MAKKA_PRICE} 🍆`);
+  ui.openModal(h('div.bar',
+    h('h2', '🍸 KEMALS BAR'),
+    h('div.makkacard',
+      h('div.makkaicon', '🍾'),
+      h('div',
+        h('div.sname', 'MAKKA'),
+        h('div.sdesc', 'Pinke Ayri-Limonade in der klaren Flasche. Schmeckt nach Zitrone – und dreht dir 10 Sekunden lang die Welt. Im Casino getrunken: MAKKA LUCK (bessere Chancen für die Gruppe, aber kein garantierter Gewinn).'),
+        h('div.susage', `Preis: ${Save.MAKKA_PRICE} 🍆 · Dein Bestand: ${s.dildos} 🍆`))),
+    line,
+    h('div.actions',
+      buy,
+      h('button', { onclick: () => { line.textContent = nextLine(); sfx.click(); } }, 'Mit Kemal reden'),
+    ),
+    h('div.subtle.small', `Im Inventar: MAKKA ×${app.makkaCount}. MAKKA kann mitgenommen werden – trinken mit T bzw. 🍾. Im Casino gibt es dazu 10 Sekunden MAKKA LUCK für die ganze Gruppe.`),
+  ), 'small');
+}
+
+// ───────────────────────── Shop ─────────────────────────
+export function openShop(ui) {
+  const s = Save.get();
+  const wrap = h('div.shop');
+  const render = () => {
+    clear(wrap);
+    wrap.append(h('h2', '🍆 AYRI SHOP'), h('div.subtle', `Dein Bestand: 🍆 ${s.dildos} · Dildos gibt es nur durch Fortschritt, Challenges und Achievements – niemals für echtes Geld.`));
+    const grid = h('div.shopgrid');
+    for (const [k, def] of Object.entries(ITEMS)) {
+      const owned = s.inventory[k] || 0;
+      const perm = def.usage === 'perLevel';
+      const can = s.dildos >= def.cost && !(perm && owned);
+      grid.append(h('div.shopitem', { class: owned ? 'owned' : '' },
+        h('div.sico', def.icon),
+        h('div.sname', def.name),
+        h('div.susage', perm ? 'PERMANENT · 1× pro Level' : 'EINMAL VERWENDBAR'),
+        h('div.sdesc', def.desc),
+        h('div.sowned', perm ? (owned ? '✓ Im Besitz' : '') : owned ? `Im Inventar: ${owned}` : ''),
+        h('button.primary', {
+          disabled: !can,
+          onclick: () => {
+            if (!can) return;
+            s.dildos -= def.cost;
+            s.stats.dildosSpent += def.cost;
+            s.inventory[k] = owned + 1;
+            if (!s.loadout.includes(k) && s.loadout.length < LOADOUT_SLOTS) s.loadout.push(k);
+            Save.save();
+            ui.app.syncLoadout();
+            sfx.shop();
+            ui.toast(`${def.icon} ${def.name} gekauft!`, 'good');
+            ui.refreshHud();
+            render();
+          },
+        }, perm && owned ? 'Besitzt du' : `${def.cost} 🍆`),
+      ));
+    }
+    wrap.append(grid);
+    wrap.append(h('div.subtle.small', 'Gekaufte Items landen im Inventar. Im Aufzug wählst du vor jedem Stockwerk aus, welche du mitnimmst (max. 4).'));
+    // Kosmetik & Emotes: rein optisch; Glücks-Kosmetik gibt nur winzige 🍆-Boni
+    wrap.append(h('h3', '✨ Kosmetik & Emotes'));
+    const cg = h('div.shopgrid');
+    for (const [key, u] of Object.entries(COSMETIC_UNLOCKS).filter(([, u]) => u.shop)) {
+      const [cat, val] = key.split(':');
+      const owned = (s.cosmetics || []).includes(key);
+      const name = cat === 'emote' ? (EXTRA_EMOTES.find(e => e[0] === val)?.[2] || val) : (OPTIONS[cat]?.find(o => o[0] === val)?.[1] || val);
+      const icon = cat === 'emote' ? EXTRA_EMOTES.find(e => e[0] === val)?.[1] : { hat: '🎩', glasses: '🕶️', jewelry: '📿' }[cat] || '✨';
+      const lucky = LUCKY_COSMETICS[key];
+      const can = !owned && s.dildos >= u.shop;
+      cg.append(h('div.shopitem', { class: owned ? 'owned' : '' },
+        h('div.sico', icon), h('div.sname', name),
+        h('div.susage', cat === 'emote' ? 'EMOTE' : lucky ? 'GLÜCKS-KOSMETIK' : 'KOSMETIK'),
+        h('div.sdesc', lucky ? `Winziger Bonus: ${Math.round(lucky.bonus * 100)}% Chance auf +1 🍆 bei Belohnungen, Glitzern bei Gewinnen${lucky.challenge ? ', +1 🍆 auf Challenges' : ''}.` : cat === 'emote' ? 'Neues Emote für die Emote-Leiste (Taste 6–8).' : 'Rein optisch.'),
+        h('div.sowned', owned ? '✓ Im Besitz – im Spiegel ausrüsten' : ''),
+        h('button.primary', {
+          disabled: !can,
+          onclick: () => {
+            if (!can) return;
+            s.dildos -= u.shop;
+            s.stats.dildosSpent += u.shop;
+            s.cosmetics = [...(s.cosmetics || []), key];
+            Save.save();
+            sfx.shop();
+            ui.popup('item', 'NEUES ITEM', `${name} freigeschaltet`);
+            ui.refreshHud();
+            ui.renderEmotes?.();
+            render();
+          },
+        }, owned ? 'Besitzt du' : `${u.shop} 🍆`)));
+    }
+    wrap.append(cg);
+  };
+  render();
+  ui.openModal(wrap, 'wide');
+}
+
+// ───────────────────────── Charaktereditor ─────────────────────────
+const CATS = [
+  ['skin', 'Hautfarbe', 'color'], ['hair', 'Haare'], ['hairColor', 'Haarfarbe', 'color'], ['eyes', 'Augen'], ['eyeColor', 'Augenfarbe', 'color'],
+  ['brows', 'Augenbrauen'], ['beard', 'Bart'], ['top', 'Oberteil'], ['topColor', 'Oberteil-Farbe', 'color'], ['jacket', 'Jacke'],
+  ['jacketColor', 'Jackenfarbe', 'color'], ['pants', 'Hose'], ['pantsColor', 'Hosenfarbe', 'color'], ['shoes', 'Schuhe'], ['shoesColor', 'Schuhfarbe', 'color'],
+  ['hat', 'Kopfbedeckung'], ['hatColor', 'Hutfarbe', 'color'], ['glasses', 'Brille'], ['mask', 'Maske'], ['jewelry', 'Schmuck'], ['accessory', 'Accessoire'],
+];
+
+// Prompt 13: zusammengehörende Optionen in EINER Kategorie (z. B. Frisur + Haarfarbe unter HAARE)
+const GROUPS = [
+  ['body', 'Körper', [['skin', 'Hauptfarbe']]],
+  ['hairg', 'Haare', [['hair', 'Frisur'], ['hairColor', 'Haarfarbe']]],
+  ['face', 'Gesicht', [['eyes', 'Augen'], ['eyeColor', 'Augenfarbe'], ['brows', 'Augenbrauen'], ['beard', 'Bart']]],
+  ['topg', 'Oberteil', [['top', 'Oberteil'], ['topColor', 'Farbe']]],
+  ['jacketg', 'Jacke', [['jacket', 'Jacke'], ['jacketColor', 'Farbe']]],
+  ['pantsg', 'Hose', [['pants', 'Hose'], ['pantsColor', 'Farbe']]],
+  ['shoesg', 'Schuhe', [['shoes', 'Schuhe'], ['shoesColor', 'Farbe']]],
+  ['hatg', 'Kopfbedeckung', [['hat', 'Kopfbedeckung'], ['hatColor', 'Hutfarbe']]],
+  ['acc', 'Accessoires', [['glasses', 'Brille'], ['mask', 'Maske'], ['jewelry', 'Schmuck'], ['accessory', 'Accessoire']]],
+];
+const isColor = key => CATS.find(c => c[0] === key)?.[2] === 'color';
+
+function isLocked(cat, val) { return cosmeticLock(`${cat}:${val}`); }
+
+// Feste Anpassungs-Kamera (unabhängig davon, wo der Spieler vorher stand): Charakter auf einem festen Punkt vor dem
+// Spiegel, Kamera in sicherem Abstand – kein Clipping in Spiegel/Wand. Nur für den eigenen Spieler.
+function customizationView(app) {
+  const w = app.world;
+  const mp = w?.mirrorPose?.();
+  if (mp) {
+    app.player.jump?.reset?.();
+    if (app.player.vel) app.player.vel.set(0, 0, 0);
+    app.player.pos.set(mp.stand.x, 0, mp.stand.z);
+    app.player.yaw = mp.stand.yaw;
+    app.player.camYaw = mp.stand.yaw + Math.PI;
+    return { pos: mp.cam.clone(), look: mp.look.clone() };
+  }
+  // Anderswo (z. B. Penthouse): fester Abstand vor dem Charakter, Charakter links im Bild
+  const p = app.player.pos, yaw = app.player.yaw;
+  const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+  const camRight = new THREE.Vector3(fwd.z, 0, -fwd.x);
+  return { pos: p.clone().addScaledVector(fwd, 2.6).add(new THREE.Vector3(0, 1.3, 0)), look: p.clone().addScaledVector(camRight, 0.55).add(new THREE.Vector3(0, 0.9, 0)) };
+}
+
+export function openEditor(ui, fromMenu) {
+  const app = ui.app, s = Save.get();
+  const a = s.appearance;
+  const char = app.selfChar;
+  if (!fromMenu && app.state) {
+    const v = customizationView(app);
+    app.cinematic = v;
+    app.player.camPos.copy(v.pos); // sofort an die feste Position (kein Durchfahren von Wänden)
+    app.player.camLook.copy(v.look);
+  }
+  const nameIn = h('input', { value: s.name, maxlength: 16, oninput: e => { s.name = e.target.value.slice(0, 16); } });
+  const body = h('div.editbody');
+  let group = 'body';
+  const tabs = h('div.edittabs.groups');
+  const renderTabs = () => {
+    clear(tabs);
+    for (const [k, label] of GROUPS) tabs.append(h('button', { class: k === group ? 'sel' : '', onclick: () => { group = k; sfx.click(); renderTabs(); renderBody(); } }, label));
+  };
+  const apply = () => { char.rebuild(a); Save.save(); };
+  const section = (cat, title) => {
+    const opts = OPTIONS[cat];
+    const wrap = h('div.esec', h('div.esect', title));
+    if (isColor(cat)) {
+      const row = h('div.swatches');
+      for (const c of opts) row.append(h('button.swatch', { style: { background: c }, class: a[cat] === c ? 'sel' : '', title: c, onclick: () => { a[cat] = c; sfx.click(); apply(); renderBody(); } }));
+      const custom = h('input', { type: 'color', value: a[cat], oninput: e => { a[cat] = e.target.value; apply(); } });
+      row.append(h('label.custom', 'Eigene: ', custom));
+      wrap.append(row);
+    } else {
+      const row = h('div.optgrid');
+      for (const [val, label] of opts) {
+        const lock = isLocked(cat, val);
+        row.append(h('button.opt', {
+          class: [a[cat] === val ? 'sel' : '', lock ? 'locked' : ''].join(' '),
+          title: lock ? `Freischalten: ${lock}` : label,
+          onclick: () => { if (lock) { ui.toast(`🔒 ${label}: ${lock}`, 'warn'); return; } a[cat] = val; sfx.click(); apply(); renderBody(); },
+        }, lock ? `🔒 ${label}` : label));
+      }
+      wrap.append(row);
+    }
+    return wrap;
+  };
+  const renderBody = () => {
+    const top = body.scrollTop;
+    clear(body);
+    const g = GROUPS.find(x => x[0] === group);
+    for (const [cat, title] of g[2]) body.append(section(cat, title));
+    body.scrollTop = top;
+  };
+  // Charakter drehen (Pfeile oder Ziehen neben dem Menü) – die Kamera bleibt stabil
+  const turn = d => { app.player.yaw += d; };
+  renderTabs();
+  renderBody();
+  ui.openModal(h('div.editor',
+    h('h2', '🎨 CHARAKTER'),
+    h('label', 'Name ', nameIn),
+    tabs, body,
+    h('div.actions',
+      h('button', { title: 'Charakter nach links drehen', onclick: () => turn(-0.6) }, '⟲'),
+      h('button', { title: 'Charakter nach rechts drehen', onclick: () => turn(0.6) }, '⟳'),
+      h('button', { onclick: () => { Object.assign(a, randomLook()); apply(); renderBody(); sfx.boing(); } }, '🎲 Zufall'),
+      h('button.primary', { onclick: () => ui.closeModal() }, 'Fertig'),
+    ),
+    h('div.subtle.small', 'Weitere Kosmetik wird durch abgeschlossene Stockwerke und Achievements freigeschaltet. Tipp: neben dem Menü ziehen = Charakter drehen.'),
+  ), 'side editorside');
+  // Ziehen auf der freien Fläche dreht den Charakter (statt den Editor zu schliessen)
+  if (!fromMenu) {
+    const m = ui.modal;
+    let drag = null;
+    m.onclick = null;
+    m.onpointerdown = e => { if (e.target === m) drag = e.clientX; };
+    m.onpointermove = e => { if (drag !== null && e.buttons) { turn((e.clientX - drag) * 0.012); drag = e.clientX; } };
+    m.onpointerup = () => { drag = null; };
+  }
+  ui.onModalClose = () => {
+    app.cinematic = null;
+    app.player.snapCamera = true; // normale Kamera sofort wieder hinter dem Charakter
+    Save.save();
+    app.refreshSelf();
+    if (fromMenu) ui.showMenu();
+  };
+}
+
+function randomLook() {
+  const out = {};
+  for (const [k, , type] of CATS) {
+    const opts = OPTIONS[k];
+    let pick;
+    let guard = 0;
+    do { pick = opts[Math.floor(Math.random() * opts.length)]; guard++; } while (type !== 'color' && isLocked(k, pick[0]) && guard < 20);
+    out[k] = type === 'color' ? pick : pick[0];
+    if (type !== 'color' && isLocked(k, out[k])) out[k] = opts[0][0];
+  }
+  return out;
+}
+
+// ───────────────────────── Statistiken ─────────────────────────
+export function openStats(ui) {
+  const s = Save.get();
+  const st = s.stats;
+  const app = ui.app;
+  const tab = h('div.statbody');
+  const tabs = h('div.edittabs');
+  let cur = 'stats';
+  const row = (k, v) => h('div.srow', h('span', k), h('b', v));
+  const renders = {
+    stats: () => {
+      const g = st.games || {};
+      const bjRounds = g.blackjack || 0;
+      const fav = favoriteGame(st);
+      const hrs = Math.floor((st.playtime || 0) / 3600), mins = Math.floor((st.playtime || 0) % 3600 / 60);
+      return [
+      h('h3', 'Überblick'),
+      h('div.sgrid',
+        row('Spielzeit', `${hrs} h ${mins} min`), row('Höchster Team-Pot', fmtMoney(st.highestPot)), row('Grösster Gewinn', fmtMoney(st.biggestWin)),
+        row('Grösster Verlust', fmtMoney(st.biggestLoss)), row('Gesamt gewonnen', fmtMoney(st.won)), row('Gesamt verloren', fmtMoney(st.lost)),
+        row('Gespielte Runden', st.rounds), row('Blackjack-Runden', bjRounds), row('Blackjack-Siege', st.blackjackWins),
+        row('Blackjack-Siegquote', bjRounds ? `${Math.round(st.blackjackWins / bjRounds * 100)}%` : '—'), row('Roulette-Runden', g.roulette || 0), row('Slot-Spins', (g.slots || 0) + (g.highslots || 0)),
+        row('Jackpots', st.slotJackpots), row('Besuchte Stockwerke', `${(st.floorsVisited || []).length}/15`), row('Abgeschlossene Challenges', `${(s.challenges || []).length}`),
+        row('Gefundene Geheimnisse', `${secretCount()}/${SECRET_TOTAL}`), row('Verdiente Dildos', `🍆 ${st.dildosEarned}`), row('Ausgegebene Dildos', `🍆 ${st.dildosSpent}`),
+        row('Lieblingsspiel', fav ? `${GAME_ICONS[fav]} ${GAME_NAMES[fav]}` : '—'), row('Längste Pechsträhne', st.bestLossStreak || 0), row('Titel', (s.titles || []).join(', ') || '—'),
+      ),
+      h('h3', 'Details'),
+      h('div.sgrid',
+        row('Gesamteinsätze', fmtMoney(st.wagered)), row('Gesamtgewinne', fmtMoney(st.won)), row('Gesamtverluste', fmtMoney(st.lost)),
+        row('Grösster Einzelgewinn', fmtMoney(st.biggestWin)), row('Grösster Einzelverlust', fmtMoney(st.biggestLoss)), row('Höchster Team-Pot', fmtMoney(st.highestPot)),
+        row('Gespielte Runden', st.rounds), row('Gewonnene Runden', st.roundsWon), row('Gespielte Spins', st.spins), row('Gespielte Hände', st.hands),
+        row('Roulette-Gewinne', st.rouletteWins), row('Blackjack-Gewinne', st.blackjackWins), row('Blackjacks', st.blackjacks), row('Slots-Jackpots', st.slotJackpots),
+        row('Baccarat-Gewinne', st.baccaratWins), row('Craps-Gewinne', st.crapsWins), row('Poker-Gewinne', st.pokerWins), row('Glücksrad-Gewinne', st.wheelWins),
+        row('Erfolgreiche Level', st.floorsCompleted), row('Fehlgeschlagene Level', st.floorsFailed), row('Mafia-Besuche', st.mafiaVisits),
+        row('Double-or-Loss-Versuche', st.doubleAttempts), row('Erfolgreiche Doubles', st.doubleWins), row('Verlorene Doubles', st.doubleLosses),
+        row('Items benutzt', st.itemsUsed),
+      ),
+    ];
+    },
+    group: () => {
+      const c = app.state?.campaign || s.campaign;
+      return [
+        h('h3', 'Gruppe & Fortschritt'),
+        h('div.sgrid',
+          row('Abgeschlossene Stockwerke (Run)', `${(app.state ? c.completed : s.run.completed || []).length}/15`), row('Freigeschaltet bis', `Stock ${app.state ? c.unlocked : s.run.unlocked || 1}`),
+          row('Bestes Stockwerk (alle Runs)', (s.campaign.everCompleted || []).length ? `Stock ${Math.max(...s.campaign.everCompleted)}` : '—'), row('Runs gespielt', String((c.runs || 0) + 1)),
+          row('Höchster Team-Pot', fmtMoney(c.highestPot || 0)), row('Höchster erfolgreicher Gewinn', fmtMoney(c.bestWinnings || 0)),
+          row('Höchste Double-or-Loss-Summe', fmtMoney(c.bestDouble || 0)), row('Spiel durchgespielt', c.gameComplete ? `Ja (${new Date(c.finishedAt).toLocaleDateString('de-CH')})` : 'Noch nicht'),
+          row('Aktueller Team-Pot', fmtMoney(app.state?.pot ?? s.run.pot)),
+        ),
+        h('h3', 'Abgeschlossene Runs'),
+        s.history.length ? h('div.history', s.history.map(r => h('div.hrow', { class: r.type },
+          h('span', new Date(r.date).toLocaleString('de-CH')),
+          h('b', r.type === 'take' ? `TAKE ${fmtMoney(r.amount)}` : r.type === 'double-win' ? `DOUBLE ✓ ${fmtMoney(r.amount)}` : `DOUBLE ✗ (${fmtMoney(r.amount)} verloren)`)))) : h('div.subtle', 'Noch kein Finale gespielt.'),
+        app.state?.scene === 'lobby' ? h('div.actions', h('button.danger', { onclick: () => { ui.closeModal(); app.send({ t: 'vote.start', type: 'newrun' }); } }, `Neuen Run starten (${fmtMoney(START_CAPITAL)})`)) : null,
+      ];
+    },
+    rec: () => [
+      h('h3', '🏆 PERSÖNLICHE REKORDE'),
+      h('div.sgrid', ...Object.entries(RECORDS).map(([k, d]) => row(d.name, fmtRecord(k, (s.records || {})[k])))),
+      h('div.subtle.small', 'Rekorde werden dauerhaft gespeichert. Wird einer gebrochen, erscheint „NEUER PERSÖNLICHER REKORD“.'),
+    ],
+    ach: () => [
+      h('h3', `Achievements (${Object.keys(s.achievements).length}/${Object.keys(ACHIEVEMENTS).length})`),
+      h('div.achs', Object.entries(ACHIEVEMENTS).map(([k, a]) => {
+        const cos = Object.entries(COSMETIC_UNLOCKS).filter(([, u]) => u.achievement === k).map(([key]) => { const [cat, val] = key.split(':'); return cat === 'emote' ? `Emote ${EXTRA_EMOTES.find(e => e[0] === val)?.[2] || val}` : OPTIONS[cat]?.find(o => o[0] === val)?.[1] || val; });
+        return h('div.ach', { class: s.achievements[k] ? 'on' : '' },
+          h('div.an', (s.achievements[k] ? '🏆 ' : '🔒 ') + a.name), h('div.ad', a.desc), h('div.ar', `+${a.reward} 🍆${cos.length ? ' · 🎁 ' + cos.join(', ') : ''}`));
+      })),
+    ],
+  };
+  const render = () => {
+    clear(tabs);
+    for (const [k, l] of [['stats', 'Statistiken'], ['rec', 'Rekorde'], ['group', 'Gruppe & Runs'], ['ach', 'Achievements']]) tabs.append(h('button', { class: k === cur ? 'sel' : '', onclick: () => { cur = k; render(); } }, l));
+    clear(tab);
+    tab.append(...renders[cur]().filter(Boolean));
+  };
+  render();
+  ui.openModal(h('div.stats', h('h2', '📊 HALL OF FAME'), tabs, tab), 'wide');
+}
+
+// ───────────────────────── Einstellungen ─────────────────────────
+export function openSettings(ui) {
+  const s = Save.get();
+  const st = s.settings;
+  const app = ui.app;
+  const slider = (key, label, min = 0, max = 1, step = 0.05) => h('label.slider', label,
+    h('input', { type: 'range', min, max, step, value: st[key], oninput: e => { st[key] = +e.target.value; app.applySettings(); } }));
+  const toggle = (key, label) => h('label.toggle', h('input', { type: 'checkbox', checked: st[key] ? true : null, onchange: e => { st[key] = e.target.checked; app.applySettings(); } }), label);
+  // Grafikstufe (setzt Bloom/Schatten passend) und FPS-Limit
+  const seg = (title, opts, key, onPick) => h('div.setrow', h('span', title), h('div.seg', ...opts.map(([v, l]) => h('button', { class: st[key] === v ? 'sel' : '', onclick: e => { onPick(v); for (const b of e.target.parentNode.children) b.classList.toggle('sel', b === e.target); sfx.click(); } }, l))));
+  const mobile = !!app.touch?.active;
+  const graphics = h('div',
+    seg('Grafik', [...(mobile ? [['auto', 'Auto']] : []), ['low', 'Niedrig'], ['medium', 'Mittel'], ['high', 'Hoch'], ...(mobile ? [['ultra', 'Ultra']] : [])], 'quality', v => {
+      st.quality = v;
+      st.bloom = v !== 'low'; st.shadows = v !== 'low';
+      app.applySettings();
+      ui.toast('Grafik geändert – Lichter und Schatten passen sich beim nächsten Raumwechsel ganz an.', 'info', 2500);
+    }),
+    seg('FPS', mobile ? [['auto', 'Auto'], [30, '30'], [60, '60']] : [[30, '30'], [60, '60'], [0, 'Max']], 'fpsLimit', v => { st.fpsLimit = v; app.applySettings(); }),
+    h('div.subtle.small', mobile ? `Aktuell: ${TIER_NAMES[app.engine.quality]} · Auflösung passt sich automatisch an die Bildrate an.` : ''),
+  );
+  ui.openModal(h('div.settings',
+    h('h2', '⚙️ EINSTELLUNGEN'),
+    slider('master', 'Gesamtlautstärke'), slider('music', 'Musik'), slider('sfx', 'Effekte'),
+    app.touch?.active ? slider('touchSensitivity', 'Kamera-Empfindlichkeit (Touch)', 0.4, 2.2, 0.1) : slider('sensitivity', 'Mausempfindlichkeit', 0.3, 2.5, 0.1),
+    graphics,
+    app.touch?.active ? h('div.actions', h('button', { onclick: async () => { sfx.click(); const ok = await enterFullscreen(); if (!ok) ui.toast('Vollbild wird von diesem Browser nicht unterstützt – über „Zum Home-Bildschirm“ startet das Spiel wie eine App.', 'info', 4000); } }, '⛶ VOLLBILD')) : null,
+    seg('Song „Alles auf Schwarz“', [['lobby', 'Shishabar'], ['all', 'Überall'], ['off', 'Aus']], 'song', v => { st.song = v; app.applySettings(); }),
+    toggle('bloom', 'Neon-Glow (Bloom)'), toggle('shadows', 'Schatten'),
+    h('label.toggle', h('input', { type: 'checkbox', checked: app.perfOn ? true : null, onchange: e => app.togglePerf(e.target.checked) }), 'Performance-Anzeige (Entwickler)'),
+    h('div.actions', h('button', { onclick: () => { sfx.click(); st.helpSeen = false; Save.save(); if (app.state) { ui.closeModal(); ui.showControlsHelp(); } else ui.toast('Die Steuerungshilfe erscheint beim nächsten Spielstart', 'info'); } }, '🎮 Steuerungshilfe erneut anzeigen')),
+    h('div.actions',
+      app.state ? h('button.danger', { onclick: () => { ui.closeModal(); app.disconnect(); ui.showMenu(); } }, app.mode === 'solo' ? 'Zum Hauptmenü' : 'Gruppe verlassen') : null,
+      h('button', { onclick: async () => { if (await ui.confirm('Wirklich ALLE Fortschritte, Dildos und Items löschen?')) { Save.resetAll(); location.reload(); } } }, 'Spielstand zurücksetzen'),
+    ),
+    app.touch?.active ? h('div.subtle.small', 'Touch: Joystick links = laufen · rechts wischen = Kamera · JUMP = springen · Buttons rechts = Aktion (SPIELEN, AUFZUG, SPIN …) · Tippen auf Tische/Automaten = setzen/drücken · lange drücken = Chip wegnehmen · 🎥 = Kugelkamera') : null,
+    h('div.subtle.small', 'Steuerung: WASD laufen · Maus schauen · Shift rennen · E interagieren · ESC/Q Tisch verlassen · 1-5 Emotes · TAB Gruppe · Mausrad Kamera-Zoom (Shishabar)'),
+  ), 'small');
+}
+
+export function renderScoreboard(ui, el) {
+  const st = ui.app.state;
+  clear(el);
+  el.append(h('h3', `Gruppe ${st.code === 'SOLO' ? '(Solo)' : st.code}`));
+  for (const p of st.players) el.append(h('div.srow', h('span', (p.id === st.hostId ? '★ ' : '') + p.name), h('b', p.seat ? `spielt ${GAME_NAMES[p.seat.split('-')[0]]}` : '—')));
+  el.append(h('div.srow', h('span', 'Team-Pot'), h('b', fmtMoney(st.pot))));
+  el.append(h('div.srow', h('span', 'Stockwerke'), h('b', `${st.campaign.completed.length}/15`)));
+}
+
+// ───────────────────────── Trophäen & Fortschritt (Hub in der Shishabar) ─────────────────────────
+export function openTrophies(ui, TROPHIES) {
+  const app = ui.app, s = Save.get();
+  const body = h('div.statbody');
+  const tabs = h('div.edittabs');
+  let cur = 'trophies';
+  const renders = {
+    trophies: () => [h('div.trophygrid', ...TROPHIES.map(t => {
+      const got = s.trophies?.[t.id];
+      return h('div.trophycard', { class: got ? 'on' : '' },
+        h('div.tci', got ? '🏆' : '❔'), h('div.tcn', got ? t.name : '???'), h('div.tcd', t.desc),
+        got ? h('div.tcm', `${new Date(got.at).toLocaleDateString('de-CH')} · Run #${got.run}${got.detail ? ' · ' + got.detail : ''}`) : h('div.tcm', 'Noch nicht freigeschaltet'));
+    }))],
+    challenges: () => {
+      const mine = new Set(s.challenges || []);
+      return [h('div.chover', ...FLOORS.map(f => h('div.chfloor', h('b', `Stock ${f.n} · ${f.name}`), ...challengesFor(f.n).map(c => h('div.ch', { class: mine.has(c.id) ? 'ok' : '' }, `${mine.has(c.id) ? '✓' : '□'} ${c.text} (+${c.reward} 🍆)`)))))];
+    },
+    prestige: () => {
+      const c = app.state?.campaign || s.campaign;
+      const lvl = c.prestige || 0;
+      return [
+        h('div.sgrid',
+          h('div.srow', h('span', 'Prestige-Stufe'), h('b', `★ ${lvl}`)),
+          h('div.srow', h('span', 'Ziele auf dieser Stufe'), h('b', `×${(1 + 0.5 * lvl).toFixed(1)}`)),
+          h('div.srow', h('span', 'Nächster Prestige-Run'), h('b', c.prestigeReady ? 'bereit (freiwillig)' : 'nach dem nächsten Finale')),
+          h('div.srow', h('span', 'Gespielte Finale'), h('b', String((s.history || []).length))),
+        ),
+        c.prestigeReady ? h('div.actions', h('button.primary.big', { onclick: () => { ui.closeModal(); app.requestPrestige(); } }, `★ PRESTIGE ${lvl + 1} STARTEN`)) : null,
+        h('div.subtle.small', 'Prestige startet einen neuen Run mit höheren Zielen. 🍆, Kosmetik, Achievements, Rekorde und Trophäen bleiben. Prestige 1/2/3 schalten besondere Kosmetik frei.'),
+      ];
+    },
+  };
+  const render = () => {
+    clear(tabs);
+    for (const [k, l] of [['trophies', '🏆 Trophäen'], ['challenges', '🏅 Challenges'], ['prestige', '★ Prestige']]) tabs.append(h('button', { class: k === cur ? 'sel' : '', onclick: () => { cur = k; render(); } }, l));
+    clear(body);
+    body.append(...renders[cur]().filter(Boolean));
+  };
+  render();
+  ui.openModal(h('div.stats', h('h2', '🏆 TROPHÄEN & FORTSCHRITT'), tabs, body), 'wide');
+}

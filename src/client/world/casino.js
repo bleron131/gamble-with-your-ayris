@@ -1,0 +1,751 @@
+// Casino-Stockwerk: Raum, Dekoration je nach Luxusstufe, Tische, Dealer, Mafia-Sequenz.
+import * as THREE from 'three';
+import { World } from './base.js';
+import { addElevatorColliders } from './lobby.js';
+import { M, mesh, neonSign, chandelier, pillar, plant, palm, velvetRope, skylineWindow, elevator, barCounter, painting, labelPlane, pendantLamp, sofa } from './props.js';
+import { carpetTexture, marbleTexture, wallpaperTexture, tileTexture, woodTexture, floorTexture, wallTexture } from '../textures.js';
+import { floorStyle, buildProps, buildSigns, buildLamps, buildPillars, buildWindows } from './styles.js';
+import { floorDef, floorTables, fmtMoney, GAME_NAMES, GAME_ICONS } from '../../shared/config.js';
+import { Character, npcAppearance } from '../character.js';
+import { freeStandSpots, standSpot } from '../npcs.js';
+import { bakeView } from '../bake.js';
+import { SlotView } from '../tables/slots.js';
+import { RouletteView } from '../tables/roulette.js';
+import { BlackjackView } from '../tables/blackjack.js';
+import { BaccaratView } from '../tables/baccarat.js';
+import { CrapsView } from '../tables/craps.js';
+import { PokerView } from '../tables/poker.js';
+import { WheelView } from '../tables/wheel.js';
+import { ARCADE_VIEWS } from '../tables/arcade.js';
+import { layoutFloor } from './layout.js';
+import { stool } from '../tables/common.js';
+import { buildStaffRoom } from './staffroom.js';
+import { canAccessStaffRooms } from '../../shared/dev.js';
+import { STOOL_Y } from '../../shared/npcs.js';
+import { ARCADE_TYPES } from '../../shared/config.js';
+
+// Arcade-Stationen (Prompt 10) stehen wie Automaten an den Wänden
+const WALL_GAMES = ['slots', 'highslots', 'wheel', ...ARCADE_TYPES];
+const VIEWS = { slots: SlotView, highslots: SlotView, roulette: RouletteView, blackjack: BlackjackView, baccarat: BaccaratView, craps: CrapsView, poker: PokerView, wheel: WheelView, ...ARCADE_VIEWS };
+
+const THEMES = [
+  { wall: '#2a1a14', accent: '#a07850', ceil: '#141010', light: '#ffe2b8', neon: '#ff3cac', lights: 0.9 },
+  { wall: '#1a1430', accent: '#c9a050', ceil: '#100c1c', light: '#ffd9a0', neon: '#2bd9fe', lights: 1.0 },
+  { wall: '#2a0f2f', accent: '#e2b65a', ceil: '#140814', light: '#ffd28a', neon: '#ff3cac', lights: 1.1 },
+  { wall: '#0f1a30', accent: '#e8c36a', ceil: '#080c18', light: '#fff0c8', neon: '#7cf9ff', lights: 1.15 },
+  { wall: '#2a0a0a', accent: '#f0cf7a', ceil: '#140505', light: '#ffe7b0', neon: '#ffd97a', lights: 1.25 },
+  { wall: '#120a1f', accent: '#ffd97a', ceil: '#07040c', light: '#fff2d0', neon: '#ffd700', lights: 1.35 },
+];
+
+export class CasinoWorld extends World {
+  constructor(app, n) {
+    super(app);
+    this.mode = 'first';
+    this.kind = 'floor';
+    this.n = n;
+    this.def = floorDef(n, app.prestige || 0);
+    this.tier = this.def.tier;
+    // Jedes Stockwerk hat einen eigenen Stil (Architektur, Licht, Deko, Musik, NPCs)
+    this.style = floorStyle(n);
+    const st = this.style;
+    this.theme = { ...THEMES[this.tier], wall: st.wall[1], accent: st.wall[3], ceil: st.ceil, light: st.light, neon: st.neon, lights: st.lights };
+    this.decoBlocks = [];
+    this.wallUsed = [];
+    const tables = floorTables(n);
+    // Prompt 12: kompakte, in Bereiche gegliederte Räume (SLOTS · TABLE GAMES · ARCADE · Eye-Catcher · BAR/LOUNGE).
+    // Die kleinste Raumgrösse, auf der alle Stationen samt Spielerplatz überschneidungsfrei Platz finden.
+    this.layout = layoutFloor(tables, { bar: !!st.bar, vip: !!st.vip, minW: 16 + Math.min(4, this.tier), minD: 15 });
+    this.W = this.layout.W;
+    this.D = this.layout.D;
+    this.rowZ = this.layout.rows;
+    this.rows = Math.max(1, this.rowZ.length);
+    this.H = st.H || 4.5 + this.tier * 0.6;
+    const s = this.scene;
+    s.background = new THREE.Color(this.theme.ceil);
+    s.fog = new THREE.Fog(this.theme.ceil, 20, 50 + this.tier * 6);
+    this.spawn = { x: 0, z: this.D / 2 - 1.1, yaw: Math.PI, inElevator: true };
+    this.lightsList = [];
+    this.buildRoom();
+    this.buildLights();
+    this.initFlash();
+    this.plan = this.planTables(tables);
+    this.buildZones();
+    this.buildDecor();
+    if (this.style.luxury || this.style.redCarpet) this.buildLuxury();
+    this.views = {};
+    this.buildTables();
+    this.buildElevator();
+    this.buildInfoBoard();
+    this.addRoomWalls(-this.W / 2, this.W / 2, -this.D / 2, this.D / 2);
+    this.buildStaffAccess();
+    this.updaters.push((dt, t) => { for (const v of Object.values(this.views)) v.tick(dt, t); });
+    this.bakeWorld();
+  }
+
+  buildRoom() {
+    const { W, D, H, tier, theme } = this;
+    const s = this.scene;
+    const st = this.style;
+    const [fk, fa, fb, fc] = st.floor;
+    const carpet = (fk === 'carpet' ? carpetTexture(fa) : floorTexture(fk, fa, fb, fc)).clone();
+    carpet.userData = {};
+    carpet.needsUpdate = true;
+    carpet.repeat.set(W / (fk === 'carpet' ? 4 : 3), D / (fk === 'carpet' ? 4 : 3));
+    const floorRough = { ice: 0.15, tiles: 0.35, checker: 0.4, wood: 0.6, deck: 0.7 }[fk] ?? 0.95;
+    const floor = mesh(new THREE.PlaneGeometry(W, D), M.std('#ffffff', floorRough, fk === 'ice' ? 0.2 : 0, { map: carpet }), 0, 0, 0, { cast: false });
+    floor.rotation.x = -Math.PI / 2;
+    s.add(floor);
+    if (tier >= 3 && fk === 'carpet') {
+      // Marmorrahmen um den Teppich
+      for (const [x, z, w, d] of [[0, D / 2 - 1, W, 2], [0, -D / 2 + 1, W, 2], [W / 2 - 1, 0, 2, D], [-W / 2 + 1, 0, 2, D]]) {
+        const m = mesh(new THREE.PlaneGeometry(w, d), M.std('#ffffff', 0.15, 0.05, { map: marbleTexture(tier >= 5 ? '#1a1a1a' : '#f1ece4', tier >= 5 ? 'rgba(255,215,120,0.4)' : undefined) }), x, 0.005, z, { cast: false });
+        m.rotation.x = -Math.PI / 2;
+        s.add(m);
+      }
+    }
+    const [wk, wa, wb, wc] = st.wall;
+    const wallMat = M.std('#ffffff', wk === 'velvet' ? 0.95 : 0.85, 0, { map: wallTexture(wk, wa, wb, wc) });
+    wallMat.map = wallMat.map.clone(); wallMat.map.userData = {}; wallMat.map.needsUpdate = true; wallMat.map.repeat.set(W / (wk === 'brick' ? 3 : 6), wk === 'brick' ? H / 2 : 1.5);
+    const trimMat = { gold: M.gold(), wood: M.std('#4a2a12', 0.5), chrome: M.std('#d0d4dc', 0.15, 0.95), dark: M.std('#1a1814', 0.8), neon: M.glow(st.neon, 2) }[st.trim] || M.std('#1a0f08', 0.5);
+    // Rückwand mit Öffnung für die STAFF-ONLY-Tür (Prompt 15: dahinter liegt ein echtes Hinterzimmer)
+    const dx = -W / 2 + 3, dw = 1.5, dh = 2.72;
+    const piece = (x0, x1, y0, y1) => {
+      const geo = new THREE.PlaneGeometry(x1 - x0, y1 - y0);
+      const uv = geo.attributes.uv, pos = geo.attributes.position;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, ((x0 + x1) / 2 + pos.getX(i) + W / 2) / W, ((y0 + y1) / 2 + pos.getY(i)) / H);
+      return mesh(geo, wallMat, (x0 + x1) / 2, (y0 + y1) / 2, -D / 2, { cast: false });
+    };
+    s.add(piece(-W / 2, dx - dw / 2, 0, H), piece(dx + dw / 2, W / 2, 0, H), piece(dx - dw / 2, dx + dw / 2, dh, H));
+    for (const [x, z, w, ry] of [[0, -D / 2, W, 0], [0, D / 2, W, Math.PI], [-W / 2, 0, D, Math.PI / 2], [W / 2, 0, D, -Math.PI / 2]]) {
+      const back = ry === 0;
+      if (!back) {
+        const m = mesh(new THREE.PlaneGeometry(w, H), wallMat, x, H / 2, z, { cast: false });
+        m.rotation.y = ry;
+        s.add(m);
+      }
+      const off = new THREE.Vector3(Math.sin(ry), 0, Math.cos(ry));
+      const baseMat = st.trim === 'neon' ? M.std('#0a0a12', 0.4) : trimMat;
+      if (back) {
+        // Sockelleiste mit Lücke für die Tür
+        for (const [a, b] of [[-W / 2, dx - dw / 2], [dx + dw / 2, W / 2]]) s.add(mesh(new THREE.BoxGeometry(b - a, 0.25, 0.08), baseMat, (a + b) / 2, 0.125, z + 0.04, { cast: false }));
+      } else {
+        const base = mesh(new THREE.BoxGeometry(w, 0.25, 0.08), baseMat, x, 0.125, z, { cast: false });
+        base.rotation.y = ry; base.position.addScaledVector(off, 0.04); s.add(base);
+      }
+      const top = mesh(new THREE.BoxGeometry(w, 0.15, 0.12), trimMat, x, H - 0.1, z, { cast: false });
+      top.rotation.y = ry; top.position.addScaledVector(off, 0.06); s.add(top);
+    }
+    const ceilMat = st.ceilStars ? new THREE.MeshBasicMaterial({ map: (() => { const t = wallTexture('stars', '#03040e', '#0a1030', '#ffffff').clone(); t.userData = {}; t.repeat.set(W / 6, D / 6); t.needsUpdate = true; return t; })() }) : M.std(theme.ceil, 0.9);
+    const ceil = mesh(new THREE.PlaneGeometry(W, D), ceilMat, 0, H, 0, { cast: false });
+    ceil.rotation.x = Math.PI / 2;
+    s.add(ceil);
+    // Deckenkassetten
+    if (st.beams) for (let z = -D / 2 + 2; z < D / 2; z += 3) s.add(mesh(new THREE.BoxGeometry(W, 0.35, 0.3), M.std('#3a2210', 0.8, 0, { map: woodTexture('#3a2210') }), 0, H - 0.2, z, { cast: false }));
+    else if (!st.ceilStars) for (let x = -W / 2 + 3; x < W / 2 - 1; x += 6) {
+      s.add(mesh(new THREE.BoxGeometry(0.25, 0.3, D), st.trim === 'gold' ? M.gold() : st.trim === 'chrome' ? M.std('#a0a4ac', 0.2, 0.9) : M.std('#2a1a10'), x, H - 0.15, 0, { cast: false }));
+    }
+    // Neonleiste
+    for (const z of [-D / 2 + 0.1, D / 2 - 0.1]) s.add(mesh(new THREE.BoxGeometry(W, 0.04, 0.04), M.glow(theme.neon, 2), 0, H - 0.35, z, { cast: false }));
+  }
+
+  buildLights() {
+    const { W, D, H, tier, theme } = this;
+    const s = this.scene;
+    this.hemi = new THREE.HemisphereLight(theme.light, '#20101a', 0.5 + tier * 0.05);
+    s.add(this.hemi);
+    s.add(new THREE.AmbientLight('#ffffff', 0.08));
+    const key = new THREE.DirectionalLight(theme.light, 0.8);
+    key.position.set(5, 16, 8);
+    key.castShadow = true;
+    const q = this.app.engine.q;
+    key.shadow.mapSize.set(q.shadowMap, q.shadowMap);
+    // Handy: Schattenbereich begrenzt und mit dem Spieler mitgeführt (schärfere Schatten, kleinere Shadow Map)
+    const follow = this.app.engine.mobile;
+    const ext = follow ? Math.min(Math.max(W, D) / 2 + 2, 12) : Math.max(W, D) / 2 + 2;
+    Object.assign(key.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 40 });
+    key.shadow.bias = -0.0005;
+    s.add(key);
+    this.keyLight = key;
+    if (follow) {
+      s.add(key.target);
+      const off = key.position.clone();
+      this.updaters.push(() => {
+        const p = this.app.player.pos;
+        const x = Math.round(p.x * 2) / 2, z = Math.round(p.z * 2) / 2; // in Rasterschritten, damit die Schatten nicht flimmern
+        key.position.set(x + off.x, off.y, z + off.z);
+        key.target.position.set(x, 0, z);
+        key.target.updateMatrixWorld();
+      });
+    }
+    // Höchstens 3×3 Punktlichter (Performance); auf niedrigeren Stufen weniger, dafür heller
+    const [nx, nz] = q.lights >= 9 ? [3, 3] : q.lights >= 6 ? [3, 2] : [2, 2];
+    const boost = 9 / (nx * nz);
+    for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+      const l = new THREE.PointLight(theme.light, 9 * theme.lights * boost, Math.max(W, D) / (nx === 3 ? 2.2 : 1.7), 1.4);
+      l.position.set(-W / 2 + (i + 0.5) * W / nx, H - 0.6, -D / 2 + (j + 0.5) * D / nz);
+      s.add(l);
+      this.lightsList.push(l);
+    }
+  }
+
+  // Bereiche durch Raumgestaltung statt Schilder (Prompt 12): eigener Bodenbelag mit Leuchtkante je Bereich,
+  // Pflanzkübel an den Inselenden, Lounge-Sofas neben der Bar.
+  buildZones() {
+    const s = this.scene, A = this.layout.areas, { W, D, tier } = this;
+    const rug = (r, color, edge, { tex, pad = 0.35, glow = 1.6 } = {}) => {
+      if (!r) return;
+      const x0 = Math.max(-W / 2 + 0.05, r.x0 - pad), x1 = Math.min(W / 2 - 0.05, r.x1 + pad), z0 = Math.max(-D / 2 + 0.05, r.z0 - pad), z1 = Math.min(D / 2 - 0.05, r.z1 + pad);
+      const w = x1 - x0, d = z1 - z0, cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      const mat = tex ? M.std('#ffffff', 0.95, 0, { map: (() => { const t = tex.clone(); t.userData = {}; t.repeat.set(w / 4, d / 4); t.needsUpdate = true; return t; })() }) : M.std(color, 0.9);
+      const m = mesh(new THREE.PlaneGeometry(w, d), mat, cx, 0.008, cz, { cast: false });
+      m.rotation.x = -Math.PI / 2; s.add(m);
+      const em = M.glow(edge, glow);
+      for (const [ex, ez, ew, ed] of [[cx, z0, w, 0.05], [cx, z1, w, 0.05], [x0, cz, 0.05, d], [x1, cz, 0.05, d]]) s.add(mesh(new THREE.BoxGeometry(ew, 0.012, ed), em, ex, 0.012, ez, { cast: false }));
+    };
+    const st = this.style;
+    rug(A.slots, '#22102e', '#ff3cac');
+    rug(A.tables, null, tier >= 2 ? '#ffd97a' : '#d9a441', { tex: carpetTexture((tier + 2) % 6), pad: 0.5, glow: 0.9 });
+    rug(A.arcade, '#0a1020', '#2bd9fe');
+    if (A.stage) rug({ ...A.stage, z0: -D / 2 + 0.3 }, '#1a0a20', st.neon || '#ffd700', { pad: 0.2 });
+    if (A.lounge && st.bar) {
+      rug({ x0: W / 2 - 4.6, x1: W / 2 - 0.3, z0: -D / 2 + 9.2, z1: -D / 2 + 11.6 }, null, '#ffb35a', { tex: woodTexture('#5a3a1e'), pad: 0, glow: 0.8 });
+      // Lounge: zwei Sofas gegenüber, Tischchen – Spieler können sich draufstellen (springen)
+      const lz = -D / 2 + 10.4;
+      for (const [x, ry] of [[W / 2 - 0.75, -Math.PI / 2], [W / 2 - 4.0, Math.PI / 2]]) {
+        const so = sofa(tier >= 3 ? '#5a0f24' : '#3a2a5a', 2.0); so.position.set(x, 0, lz); so.rotation.y = ry; s.add(so);
+        this.addBox(x, lz, 0.9, 2.1, 0.9, 0.5);
+      }
+      const tbl = new THREE.Group();
+      tbl.add(mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.05, 24), M.std('#1a1008', 0.3, 0.2), 0, 0.45, 0));
+      tbl.add(mesh(new THREE.CylinderGeometry(0.06, 0.1, 0.43, 10), M.gold(), 0, 0.215, 0));
+      tbl.position.set(W / 2 - 2.38, 0, lz); s.add(tbl);
+      this.addCircle(W / 2 - 2.38, lz, 0.45, 0.48);
+      this.lounge = { x: W / 2 - 2.38, z: lz };
+      this.decoBlocks.push({ x: W / 2 - 2.4, z: lz, r: 2.4 });
+    }
+    // Pflanzkübel an den Enden der freistehenden Inseln
+    for (const lines of [['slotA', 'slotB'], ['arcA', 'arcB']]) {
+      const items = this.plan.filter(p => lines.includes(p.line));
+      if (!items.length) continue;
+      const xs = items.map(p => [p.rect.x0, p.rect.x1]).flat(), zs = items.map(p => [p.rect.z0, p.rect.z1]).flat();
+      const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
+      for (const z of [Math.min(...zs) - 0.75, Math.max(...zs) + 0.75]) {
+        if (!this.isFree(cx, z, 0.35)) continue;
+        const pl = plant(1.2); pl.position.set(cx, 0, z); s.add(pl);
+        this.addCircle(cx, z, 0.35);
+        this.decoBlocks.push({ x: cx, z, r: 0.5 });
+      }
+    }
+  }
+
+  buildDecor() {
+    const { W, D, H, tier, theme } = this;
+    const s = this.scene;
+    // Etagenschild
+    const title = neonSign(`STOCK ${this.n}`, theme.neon, 3, 0.75);
+    title.position.set(0, H - 0.9, D / 2 - 0.06);
+    title.rotation.y = Math.PI;
+    s.add(title);
+    const name = neonSign(this.def.name.toUpperCase(), '#ffd97a', Math.min(W - 4, 8), 1, { size: this.def.name.length > 16 ? 80 : 110 });
+    name.position.set(0, H - 1.0, -D / 2 + 0.06);
+    s.add(name);
+    // Pflanzen in den Ecken, Säulen, Deckenlampen und Fenster – je nach Stil
+    const corners = [[-W / 2 + 1, -D / 2 + 1], [W / 2 - 1, -D / 2 + 1], [-W / 2 + 1, D / 2 - 1.2], [W / 2 - 1, D / 2 - 1.2]];
+    const st = this.style;
+    if (st.plant !== 'none') for (const [x, z] of corners) { const p = st.plant === 'palm' ? palm(2.8) : plant(1.5); p.position.set(x, 0, z); s.add(p); this.addCircle(x, z, 0.4); }
+    this.reserveWalls();
+    buildPillars(this, st.pillars);
+    buildLamps(this, st.lamps, theme.light);
+    buildWindows(this, st.windows);
+    if (!st.windows && tier < 3) for (let i = 0; i < 2; i++) { const p = painting(1.8, 1.2, 30 + i * 140 + this.n * 20); p.position.set(-W / 2 + 0.06, 2.6, (i ? 1 : -1) * D / 3); p.rotation.y = Math.PI / 2; s.add(p); }
+    // Bar
+    if (st.bar) {
+      const bar = barCounter(tier >= 3 ? 6 : 4.5, tier >= 4 ? '#140808' : '#3a1f10');
+      bar.position.set(W / 2 - 2.2, 0, -D / 2 + 5);
+      bar.rotation.y = -Math.PI / 2;
+      s.add(bar);
+      this.addBox(W / 2 - 2.2, -D / 2 + 5, 0.9, tier >= 3 ? 6.3 : 4.8);
+      this.addBox(W / 2 - 0.9, -D / 2 + 5, 0.6, tier >= 3 ? 6.3 : 4.8);
+      const bt = new Character(npcAppearance('bartender', this.n));
+      bt.root.position.set(W / 2 - 1.5, 0, -D / 2 + 5);
+      bt.root.rotation.y = -Math.PI / 2;
+      s.add(bt.root);
+      this.updaters.push(dt => bt.update(dt));
+      this.barPos = new THREE.Vector3(W / 2 - 3.1, 0, -D / 2 + 5);
+      // Barhocker (NPCs sitzen darauf, Spieler können draufspringen) und „[E] MAKKA HOLEN“ (Prompt 12)
+      this.barStools = [-1.6, -0.55, 0.55, 1.6].map(dz => {
+        const x = W / 2 - 3.05, z = -D / 2 + 5 + dz;
+        const st = stool(tier); st.position.set(x, 0, z); st.scale.set(1, 0.9, 1); s.add(st);
+        this.addCircle(x, z, 0.22, 0.68);
+        return { x, z };
+      });
+      this.addInteract({ pos: new THREE.Vector3(W / 2 - 3.0, 0, -D / 2 + 5), radius: 2.0, verb: 'MAKKA', label: () => (this.app.barCooldown() > 0 ? `MAKKA HOLEN (in ${this.app.barCooldown()}s wieder)` : 'MAKKA HOLEN – gratis, nur zum Spass'), action: () => this.app.barMakka() });
+    }
+    // VIP-Lounge mit Absperrung
+    if (st.vip) {
+      const vx = W / 2 - 3, vz = D / 2 - 4.5;
+      const so = sofa('#7a1230', 2.4); so.position.set(vx + 0.6, 0, vz); so.rotation.y = -Math.PI / 2; s.add(so);
+      this.addBox(vx + 0.6, vz, 0.9, 2.4, 0.9, 0.5);
+      const rope = velvetRope(2.4); rope.position.set(vx - 1.2, 0, vz); rope.rotation.y = Math.PI / 2; s.add(rope);
+      this.addBox(vx - 1.2, vz, 0.2, 2.4);
+      const vip = neonSign('VIP', '#ffd97a', 1.2, 0.5); vip.position.set(W / 2 - 0.06, 2.6, vz); vip.rotation.y = -Math.PI / 2; s.add(vip);
+      this.decoBlocks.push({ x: vx, z: vz, r: 2 });
+    }
+    // Set-Pieces und Schilder dieses Stockwerks
+    buildProps(this, st.props);
+    buildSigns(this, st.signs, st.neon);
+    // Personaltür für die Mafia
+    const door = new THREE.Group();
+    door.position.set(-W / 2 + 3, 0, -D / 2 + 0.05);
+    const leaf = mesh(new THREE.BoxGeometry(1.4, 2.6, 0.08), M.std('#2a1a10', 0.5), 0.7, 1.3, 0);
+    const pivot = new THREE.Group();
+    pivot.position.set(-0.7, 0, 0);
+    pivot.add(leaf);
+    door.add(pivot);
+    door.add(mesh(new THREE.BoxGeometry(1.6, 0.1, 0.12), M.gold(), 0, 2.65, 0));
+    const staff = labelPlane(['STAFF ONLY'], 0.9, 0.22, { size: 70, bg: '#3a0a0a', fg: '#fff', border: null });
+    staff.position.set(0, 2.25, 0.06);
+    door.add(staff);
+    s.add(door);
+    this.staffDoorGroup = door;
+    this.mafiaDoor = pivot;
+    this.mafiaDoorPos = new THREE.Vector3(door.position.x, 0, door.position.z + 1);
+  }
+
+  // STAFF ROOM (Prompt 15): Rückwand bekommt eine Türöffnung, dahinter das Hinterzimmer. Zutritt pro Spieler:
+  // berechtigt (Ayri000) → Tür öffnen/schliessen, Sperre im Türrahmen fällt weg, solange die Tür offen ist.
+  // Alle anderen: Tür bleibt für sie eine Wand – auch wenn sie sichtbar offen steht.
+  buildStaffAccess() {
+    const { W, D } = this;
+    const dx = -W / 2 + 3;
+    // Rückwand-Collider durch zwei Teile mit Lücke ersetzen
+    const i = this.colliders.findIndex(c => c.type === 'box' && c.maxZ <= -D / 2 + 1e-6 && c.maxX - c.minX >= W);
+    if (i >= 0) {
+      const wall = this.colliders.splice(i, 1)[0];
+      this.addBox((wall.minX + dx - 0.7) / 2, (wall.minZ + wall.maxZ) / 2, dx - 0.7 - wall.minX, wall.maxZ - wall.minZ);
+      this.addBox((dx + 0.7 + wall.maxX) / 2, (wall.minZ + wall.maxZ) / 2, wall.maxX - dx - 0.7, wall.maxZ - wall.minZ);
+    }
+    this.staffBarrier = this.addBox(dx, -D / 2, 1.4, 0.36);
+    this.staffRoom = buildStaffRoom(this, dx);
+    this.staffOpen = false;
+    this.staffDoorK = 0;
+    const allowed = () => canAccessStaffRooms({ name: this.app.save?.name });
+    const label = () => (allowed() ? (this.staffOpen ? 'STAFF ROOM – Tür schliessen' : 'STAFF ROOM – Tür öffnen') : '🔒 STAFF ONLY');
+    const action = () => {
+      if (!allowed()) { this.app.sfx.denied?.(); this.app.ui.toast('🔒 ZUTRITT VERWEIGERT', 'warn', 1400); return; }
+      this.app.send({ t: 'staffdoor', open: !this.staffOpen });
+    };
+    this.addInteract({ pos: new THREE.Vector3(dx, 0, -D / 2 + 1.0), radius: 1.6, verb: 'STAFF', label, action });
+    this.addInteract({ pos: new THREE.Vector3(dx, 0, -D / 2 - 1.0), radius: 1.6, verb: 'STAFF', label, action });
+    this.updaters.push(dt => {
+      const target = this.staffOpen ? 1 : 0;
+      if (this.staffDoorK !== target) {
+        this.staffDoorK += Math.sign(target - this.staffDoorK) * Math.min(Math.abs(target - this.staffDoorK), dt * 1.6);
+        this.mafiaDoor.rotation.y = 1.45 * (this.staffDoorK * this.staffDoorK * (3 - 2 * this.staffDoorK));
+      }
+      // Sperre im Türrahmen: nur wer berechtigt ist UND die Tür offen ist, kommt durch
+      this.staffBarrier.off = allowed() && this.staffOpen && this.staffDoorK > 0.6;
+    });
+  }
+
+  // Server-Zustand der Tür übernehmen (für alle synchron sichtbar)
+  setStaffDoor(open) {
+    if (!!open === this.staffOpen) return;
+    this.staffOpen = !!open;
+    this.app.sfx.doors?.();
+  }
+
+  // High-Roller-Etagen: roter Teppich, Geldbrunnen, Riesen-Chips, goldene Statuen
+  buildLuxury() {
+    const { W, D, tier } = this;
+    const s = this.scene;
+    const carpet = mesh(new THREE.PlaneGeometry(2.4, D / 2 - 2), M.std('#8a0f24', 0.9), 0, 0.01, D / 4, { cast: false });
+    carpet.rotation.x = -Math.PI / 2;
+    s.add(carpet);
+    for (const sx of [-1.25, 1.25]) { const e = mesh(new THREE.BoxGeometry(0.06, 0.02, D / 2 - 2), M.gold(), sx, 0.012, D / 4, { cast: false }); s.add(e); }
+    if (!this.style.luxury) return;
+    // Geldbrunnen: an einer freien Stelle zwischen den Tischreihen (nie in Tische oder Laufwege)
+    const fz = [-D / 16, ...this.rowGaps(), 0].find(z => this.isFree(0, z, 3.4));
+    if (fz !== undefined) this.buildFountain(fz);
+    // Riesige Millionen-Chips
+    const chipCols = ['#d8262f', '#151515', '#7b3fc4', '#f2a516'];
+    for (let i = 0; i < 4; i++) {
+      const x = (i < 2 ? -1 : 1) * (W / 2 - 4.6), z = (i % 2 ? 1 : -1) * (D / 2 - 9);
+      if (!this.isFree(x, z, 1.6)) continue;
+      this.buildChipStack(x, z, chipCols, i);
+    }
+  }
+
+  buildFountain(fz) {
+    const s = this.scene;
+    const f = new THREE.Group();
+    f.position.set(0, 0, fz);
+    f.add(mesh(new THREE.CylinderGeometry(1.6, 1.7, 0.5, 40), M.std('#f1ece4', 0.2, 0, { map: marbleTexture() }), 0, 0.25, 0));
+    f.add(mesh(new THREE.CylinderGeometry(1.45, 1.45, 0.05, 40), new THREE.MeshStandardMaterial({ color: '#2bd9fe', emissive: '#0a6a8a', emissiveIntensity: 0.6, roughness: 0.05, metalness: 0.3 }), 0, 0.46, 0));
+    f.add(mesh(new THREE.CylinderGeometry(0.25, 0.4, 1.4, 20), M.gold(), 0, 1.1, 0));
+    f.add(mesh(new THREE.CylinderGeometry(0.9, 0.7, 0.15, 30), M.gold(), 0, 1.85, 0));
+    // Goldene Krone oben
+    const crown = new THREE.Group();
+    crown.position.y = 2.1;
+    crown.add(mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.3, 24), M.gold()));
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; crown.add(mesh(new THREE.ConeGeometry(0.1, 0.35, 8), M.gold(), Math.cos(a) * 0.42, 0.3, Math.sin(a) * 0.42)); }
+    crown.add(mesh(new THREE.SphereGeometry(0.12, 16, 12), M.glow('#ff2b5a', 1.5), 0, 0.05, 0.45));
+    f.add(crown);
+    s.add(f);
+    this.addCircle(0, fz, 1.8);
+    this.updaters.push((dt, t) => { crown.rotation.y += dt * 0.4; });
+    let coinT = 0;
+    this.updaters.push(dt => {
+      coinT -= dt;
+      if (coinT < 0) {
+        coinT = 0.12;
+        const a = Math.random() * Math.PI * 2;
+        this.particles.emit({ pos: new THREE.Vector3(Math.cos(a) * 0.8, 1.9, fz + Math.sin(a) * 0.8), vel: [Math.cos(a) * 0.6, 1.2, Math.sin(a) * 0.6], life: 1.4, size: 0.12, grow: 0, opacity: 0.9, color: '#ffd23c', gravity: 3, additive: true });
+      }
+    });
+  }
+
+  buildChipStack(x, z, chipCols, i) {
+    const s = this.scene;
+    const stack = new THREE.Group();
+    stack.position.set(x, 0, z);
+    for (let k = 0; k < 6; k++) {
+      const c = mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.16, 32), M.std(chipCols[(i + k) % 4], 0.35), 0, 0.08 + k * 0.17, 0);
+      c.rotation.y = k * 0.4;
+      stack.add(c);
+      stack.add(mesh(new THREE.TorusGeometry(0.5, 0.02, 6, 32), M.std('#ffffff', 0.4), 0, 0.08 + k * 0.17, 0).rotateX(Math.PI / 2));
+    }
+    const lbl = neonSign('$1M', '#ffd97a', 1.2, 0.4);
+    lbl.position.set(0, 1.4, 0);
+    stack.add(lbl);
+    stack.userData.static = true;
+    s.add(stack);
+    this.addCircle(x, z, 0.6);
+  }
+
+  // Tischplan aus der Raumplanung (layout.js): Slot-Insel links, Tischinseln in der Mitte, Arcade rechts,
+  // Eye-Catcher an der Rückwand. Jeder Eintrag kennt sein Rechteck (Körper + Spielerplatz).
+  planTables() { return this.layout.plan; }
+
+  // Mitte zwischen zwei Tischreihen (für Deko wie den Geldbrunnen)
+  rowGaps() { return (this.rowZ || []).slice(1).map((z, i) => (z + this.rowZ[i]) / 2); }
+
+  // Ist an dieser Stelle Platz (Abstand zu allen Tischen/Automaten, Aufzug und Mafia-Bühne)?
+  isFree(x, z, r) {
+    const { W, D } = this;
+    if (Math.abs(x) > W / 2 - r * 0.6 || Math.abs(z) > D / 2 - r * 0.6) return false;
+    if (Math.abs(x) < 3.5 + r && z > D / 2 - 10 - r) return false;
+    for (const p of this.plan || []) {
+      for (const q of [p.rect, p.standRect]) if (q && x + r > q.x0 && x - r < q.x1 && z + r > q.z0 && z - r < q.z1) return false;
+    }
+    for (const zn of this.layout?.zones || []) if (zn.name === 'lounge' && x + r > zn.x0 && x - r < zn.x1 && z + r > zn.z0 && z - r < zn.z1) return false;
+    for (const b of this.decoBlocks || []) if (Math.hypot(x - b.x, z - b.z) < b.r + r) return false;
+    // Bar, Personaltür und Glücksrad an den Wänden freihalten
+    if (this.style?.bar && x > W / 2 - 4.5 && Math.abs(z - (-D / 2 + 5)) < 4) return false;
+    if (Math.abs(x - (-W / 2 + 3)) < 1.6 + r && z < -D / 2 + 2.2) return false;
+    return true;
+  }
+
+  // Wandabschnitte, an denen schon etwas steht (Automaten, Bar, Glücksrad, Tür, VIP), für Wanddeko sperren
+  reserveWalls() {
+    const { W, D } = this;
+    const u = this.wallUsed;
+    for (const p of this.plan) if (p.wall) u.push({ x: p.x, z: p.z, w: p.dims.w + 0.2 });
+    u.push({ x: -W / 2 + 3, z: -D / 2, w: 2.4 }, { x: 0, z: -D / 2, w: Math.min(W - 4, 8) });
+    if (this.style.bar) u.push({ x: W / 2, z: -D / 2 + 5, w: 7 });
+    if (this.style.vip) u.push({ x: W / 2, z: D / 2 - 4.5, w: 3 });
+  }
+
+  buildTables() {
+    const first = this.colliders.length;
+    const add = (def, x, z, rot) => {
+      const V = VIEWS[def.type];
+      const v = new V(this.app, def, this.def);
+      v.place(x, z, rot);
+      bakeView(v);
+      this.scene.add(v.group);
+      v.addColliders(this);
+      for (const npc of [v.dealer, v.stick, v.host]) {
+        if (!npc) continue;
+        const wp = npc.root.getWorldPosition(new THREE.Vector3());
+        this.addCircle(wp.x, wp.z, 0.35);
+      }
+      this.views[def.id] = v;
+      const ip = v.interactPos();
+      this.addInteract({
+        pos: ip, radius: v.radius, table: v,
+        verb: () => (v.state?.occupant && v.state.occupant !== this.app.me ? 'ZUSCHAUEN' : 'SETZEN'),
+        label: () => {
+          const ts = v.state;
+          if (v.walkUp) {
+            if (ts?.busy) return `${GAME_ICONS[def.type]} ${ts.state.spinnerName || 'Jemand'} dreht gerade…`;
+            return `${GAME_NAMES[def.type]} spielen – SPIN ${fmtMoney(ts?.state.bet || 0)} · R/F Einsatz`;
+          }
+          const occ = ts?.occupant && ts.occupant !== this.app.me ? this.app.playerName(ts.occupant) : null;
+          return occ ? `Zuschauen – ${occ} spielt ${GAME_NAMES[def.type]}` : `${GAME_NAMES[def.type]} spielen · ${fmtMoney(v.limits.min)} – ${fmtMoney(v.limits.max)}`;
+        },
+        action: () => this.app.sitAt(def.id),
+      });
+      // Lampe über dem Tisch
+      if (!WALL_GAMES.includes(def.type)) {
+        const lamp = new THREE.Group();
+        lamp.position.copy(v.group.position).setY(this.H - 1.4);
+        lamp.add(mesh(new THREE.BoxGeometry(1.6, 0.08, 0.5), this.tier >= 2 ? M.gold() : M.std('#222', 0.4, 0.5), 0, 0, 0, { cast: false }));
+        lamp.add(mesh(new THREE.BoxGeometry(1.5, 0.02, 0.42), M.glow(this.theme.light, 2.5), 0, -0.05, 0, { cast: false }));
+        lamp.add(mesh(new THREE.CylinderGeometry(0.01, 0.01, 1.4), M.std('#111'), 0, 0.7, 0, { cast: false }));
+        lamp.rotation.y = rot;
+        lamp.userData.static = true;
+        this.scene.add(lamp);
+      }
+    };
+    for (const p of this.plan) add(p.def, p.x, p.z, p.rot);
+    this.tableColliders = [first, this.colliders.length]; // für die Platz-Prüfung
+  }
+
+  buildElevator() {
+    const s = this.scene;
+    const el = elevator({ label: 'SHISHABAR', frame: this.tier >= 2 ? '#d4af37' : '#a8a8b0' });
+    el.position.set(0, 0, this.D / 2 - 2);
+    el.rotation.y = Math.PI;
+    s.add(el);
+    el.userData.setDisplay(String(this.n));
+    el.userData.snap(false);
+    this.elevator = el;
+    this.updaters.push(dt => el.userData.update(dt));
+    addElevatorColliders(this, 0, this.D / 2 - 2, -1);
+    this.addInteract({ pos: new THREE.Vector3(0, 0, this.D / 2 - 2.2), radius: 2.2, verb: 'AUFZUG', label: 'Aufzug benutzen (zurück zur Shishabar)', action: () => this.app.requestReturn() });
+  }
+
+  buildInfoBoard() {
+    const s = this.scene;
+    const c = document.createElement('canvas'); c.width = 768; c.height = 512;
+    const g = c.getContext('2d');
+    g.fillStyle = '#0d0612'; g.fillRect(0, 0, 768, 512);
+    g.strokeStyle = '#ffd97a'; g.lineWidth = 6; g.strokeRect(10, 10, 748, 492);
+    g.fillStyle = '#ffd97a'; g.font = '44px "Bungee", Impact'; g.textAlign = 'center';
+    g.fillText(`ZIEL: ${fmtMoney(this.def.target)}`, 384, 80);
+    g.font = 'bold 30px "Nunito", Arial'; g.textAlign = 'left';
+    Object.entries(this.def.limits).forEach(([k, l], i) => {
+      g.fillStyle = '#fff';
+      g.fillText(`${GAME_NAMES[k]}`, 50, 150 + i * 44);
+      g.textAlign = 'right'; g.fillStyle = '#e8d9ff';
+      g.fillText(`${fmtMoney(l.min)} – ${fmtMoney(l.max)}`, 718, 150 + i * 44);
+      g.textAlign = 'left';
+    });
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.6), new THREE.MeshBasicMaterial({ map: t, toneMapped: false }));
+    board.material.color.setScalar(0.9);
+    board.position.set(2.3, 2.2, this.D / 2 - 0.06);
+    board.rotation.y = Math.PI;
+    s.add(board);
+  }
+
+  // ───────────────────────── NPC-Plätze (Server wählt logische Plätze, hier liegen sie im Raum) ─────────────────────────
+  npcBounds() { return [-this.W / 2, this.W / 2, -this.D / 2, this.D / 2]; }
+  npcKind() { return this.style.npc?.kind || 'casual'; }
+  npcStandSpots() {
+    if (!this.standSpots) {
+      const st = this.mafiaStage(4).box;
+      const blocked = [{ x: (st.min.x + st.max.x) / 2, z: (st.min.z + st.max.z) / 2, r: 3.6 }, { x: this.mafiaDoorPos.x, z: this.mafiaDoorPos.z, r: 1.8 }];
+      for (const v of Object.values(this.views)) { const p = v.interactPos(); blocked.push({ x: p.x, z: p.z, r: 1.3 }); }
+      this.standSpots = freeStandSpots(this, this.npcBounds(), 14, this.n * 31 + 7, blocked);
+    }
+    return this.standSpots;
+  }
+  npcSpot(spot) {
+    const [kind, id] = spot.split(':');
+    const v = this.views[id];
+    if ((kind === 'slot' || kind === 'table') && v) {
+      const p = kind === 'slot' ? v.interactPos() : v.seatPose().stand;
+      return { x: p.x, z: p.z, ry: v.group.rotation.y + Math.PI, pose: 'stand' };
+    }
+    if (kind === 'watch' && v) {
+      const side = (id.charCodeAt(id.length - 1) % 2) ? 1 : -1;
+      const p = v.toWorld(new THREE.Vector3(side * 1.25, 0, v.seatLocal.z + 0.35));
+      const c = v.group.position;
+      return { x: p.x, z: p.z, ry: Math.atan2(c.x - p.x, c.z - p.z), pose: 'stand' };
+    }
+    if (kind === 'bar') {
+      // Plätze 0 und 3 sitzen auf einem Barhocker, 1 und 2 stehen an der Theke (unterhalten sich, trinken)
+      const k = +id;
+      if (this.barStools && (k === 0 || k === 3)) { const st = this.barStools[k]; return { x: st.x, z: st.z, y: STOOL_Y + 0.02, ry: Math.PI / 2, pose: 'sit', ax: st.x - 0.55, az: st.z }; }
+      if (this.barPos) return { x: this.barPos.x - 0.25, z: this.barPos.z + (k - 1.5) * 1.05, ry: Math.PI / 2 + (k === 1 ? 0.5 : -0.5), pose: 'stand' };
+      return standSpot(this, 'wander', +id + 6);
+    }
+    return standSpot(this, kind, +id);
+  }
+
+  // Kurzer farbiger Lichtblitz an einem Automaten (BIG WIN und mehr) – ein gemeinsames Licht für alle Geräte
+  flashAt(pos, level = 3) {
+    this.initFlash();
+    const f = this.flashLight;
+    f.position.copy(pos).add(new THREE.Vector3(0, 0.3, 0));
+    f.userData = { t: level >= 5 ? 6 : level >= 4 ? 4 : 2.5, max: level >= 5 ? 6 : level >= 4 ? 4 : 2.5, peak: level >= 5 ? 9 : level >= 4 ? 7 : 4.5 };
+  }
+
+  // Schon beim Aufbau anlegen, damit beim ersten Gewinn keine Shader neu kompiliert werden
+  initFlash() {
+    if (!this.flashLight) {
+      this.flashLight = new THREE.PointLight('#ffd23c', 0, 5, 2);
+      this.scene.add(this.flashLight);
+      this.updaters.push((dt, t) => {
+        const f = this.flashLight;
+        if (f.userData.t > 0) {
+          f.userData.t -= dt;
+          f.intensity = Math.max(0, f.userData.t) / f.userData.max * f.userData.peak * (0.6 + 0.4 * Math.abs(Math.sin(t * 18)));
+          f.color.setHSL((t * 0.7) % 1, 1, 0.6);
+        } else f.intensity = 0;
+      });
+    }
+  }
+
+  // ───────────────────────── Jackpot-Show (für alle Spieler auf dem Stockwerk) ─────────────────────────
+  // Lichter wechseln in den Farben des Stockwerks, Goldfontäne am Automaten, Feuerwerk unter der Decke.
+  jackpotShow(pos) {
+    if (this.jackpotT > 0) return;
+    const palettes = { lofi: ['#7cff6b', '#ffffff'], synth: ['#ff3cac', '#2bd9fe', '#b388ff'], jazz: ['#ffd97a', '#ff9f43'], tropical: ['#7cff6b', '#ffd60a', '#ff6b35'], pentatonic: ['#ff2e2e', '#ffd700'], ambient: ['#7cf9ff', '#ffffff', '#9be7ff'], royal: ['#ffd700', '#fff3b0', '#ff5cf0'] };
+    const cols = palettes[this.style.music] || palettes.jazz;
+    const saved = this.lightsList.map(l => ({ l, c: l.color.clone(), i: l.intensity }));
+    this.jackpotT = 5.5;
+    const ps = this.particles;
+    const fountain = () => { for (let i = 0; i < 14; i++) ps.emit({ pos: pos.clone().add(new THREE.Vector3(0, 1.6, 0)), vel: [(Math.random() - 0.5) * 1.6, 3 + Math.random() * 2.5, (Math.random() - 0.5) * 1.6], life: 1.8, size: 0.07, grow: 0, opacity: 1, color: i % 3 ? '#ffd23c' : cols[i % cols.length], gravity: 5, additive: true }); };
+    const firework = () => {
+      const c = new THREE.Vector3((Math.random() - 0.5) * this.W * 0.7, this.H - 1, (Math.random() - 0.5) * this.D * 0.7);
+      const col = cols[Math.floor(Math.random() * cols.length)];
+      for (let i = 0; i < 30; i++) { const a = Math.random() * Math.PI * 2, b = Math.random() * Math.PI; ps.emit({ pos: c.clone(), vel: [Math.cos(a) * Math.sin(b) * 3, Math.cos(b) * 3, Math.sin(a) * Math.sin(b) * 3], life: 1.4, size: 0.08, grow: 0, opacity: 1, color: col, gravity: 1.5, additive: true }); }
+    };
+    let acc = 0;
+    const upd = (dt, t) => {
+      this.jackpotT -= dt;
+      acc += dt;
+      saved.forEach(({ l }, i) => { l.color.set(cols[(Math.floor(t * 6) + i) % cols.length]); l.intensity = saved[i].i * (1.2 + 0.6 * Math.abs(Math.sin(t * 10 + i))); });
+      if (acc > 0.25) { acc = 0; fountain(); if (Math.random() < 0.6) firework(); }
+      if (this.jackpotT <= 0) {
+        saved.forEach(({ l, c, i }) => { l.color.copy(c); l.intensity = i; });
+        this.updaters.splice(this.updaters.indexOf(upd), 1);
+      }
+    };
+    this.updaters.push(upd);
+    this.flashAt(pos, 5);
+    ps.confetti(pos.clone().setY(2.4), 220, 4);
+  }
+
+  // ───────────────────────── Mafia ─────────────────────────
+  // Bühne für die Mafia-Szene: freier Bereich vor dem Aufzug, unabhängig davon, wo die Spieler gerade stehen
+  mafiaStage(n) {
+    const z0 = this.D / 2;
+    const players = Array.from({ length: n }, (_, i) => new THREE.Vector3((i - (n - 1) / 2) * 0.95, 0, z0 - 6.1));
+    // Halbkreis vor dem Team, damit aus der Kameraperspektive alle vier zu sehen sind
+    const mafia = [0, 1, 2, 3].map(i => new THREE.Vector3((i - 1.5) * 0.95, 0, z0 - 3.8 - (i === 0 || i === 3 ? 0.45 : 0)));
+    return {
+      players, mafia,
+      from: new THREE.Vector3(0, 0, z0 - 1.0),
+      center: new THREE.Vector3(0, 0, z0 - 5.0),
+      cam: { pos: new THREE.Vector3(-1.4, 4.2, z0 - 9.9), look: new THREE.Vector3(0, 0.85, z0 - 4.8) },
+      camEnd: new THREE.Vector3(-1.1, 3.8, z0 - 9.2),
+      box: new THREE.Box3(new THREE.Vector3(-2.8, 0, z0 - 7.0), new THREE.Vector3(2.8, 2.4, z0 - 2.6)),
+    };
+  }
+
+  // Rotes Licht: Musik ist schon aus, das Casino färbt sich bedrohlich rot
+  mafiaLights() {
+    for (const l of this.lightsList) { l.color.set('#ff2020'); l.intensity *= 0.5; }
+    this.keyLight.color.set('#ff4040');
+    this.keyLight.intensity = 0.3;
+    this.hemi.color.set('#ff3030');
+    this.hemi.groundColor.set('#300000');
+    this.hemi.intensity = 0.45;
+    this.scene.environmentIntensity = 0.08;
+    this.scene.fog.color.set('#200000');
+    this.scene.background = new THREE.Color('#120000');
+    for (const g of this.guests) g.setAnim('sad');
+    this.updaters.push((dt, t) => {
+      for (const l of this.lightsList) l.intensity = (Math.sin(t * 9 + l.position.x) > -0.3 ? 4 : 1.5);
+    });
+  }
+
+  // Alles ausblenden, was zwischen Kamera und Bühne steht oder in die Bühne hineinragt (Tische, Automaten, Deko, Gäste)
+  clearStage(stage, keep) {
+    const cam = stage.cam.pos;
+    const box = new THREE.Box3();
+    for (const o of this.scene.children) {
+      if (keep.has(o) || o.isLight || o.isCamera || o.isSprite || !o.visible) continue;
+      box.setFromObject(o);
+      if (box.isEmpty()) continue;
+      const size = box.getSize(new THREE.Vector3());
+      if (size.x > 8 || size.z > 8) continue; // Boden, Decke, Wände
+      if (box.intersectsBox(stage.box) || box.clone().expandByScalar(0.4).containsPoint(cam)) { o.visible = false; o.userData.hiddenForMafia = true; }
+    }
+  }
+
+  hideOccluders(camPos, targets, keep) {
+    const rc = new THREE.Raycaster();
+    rc.camera = this.app.engine.camera; // für Namensschilder (Sprites) in Gruppen
+    const objs = this.scene.children.filter(o => o.visible && !keep.has(o) && !o.isSprite && !o.isLight && !o.isCamera);
+    for (const t of targets) {
+      const dir = t.clone().sub(camPos);
+      const dist = dir.length();
+      rc.set(camPos, dir.normalize());
+      rc.far = dist - 0.25;
+      for (const hit of rc.intersectObjects(objs, true)) {
+        let o = hit.object;
+        if (o.isSprite) continue;
+        while (o.parent && o.parent !== this.scene) o = o.parent;
+        if (keep.has(o)) continue;
+        const size = new THREE.Box3().setFromObject(o).getSize(new THREE.Vector3());
+        if (size.x > 8 || size.z > 8) continue;
+        o.visible = false;
+      }
+    }
+  }
+
+  // Die Mafia kommt aus dem Aufzug und baut sich vor dem Team auf
+  startMafia(stage) {
+    this.elevator.userData.setOpen(true);
+    this.mafia = [];
+    const center = stage.center;
+    for (let i = 0; i < 4; i++) {
+      setTimeout(() => {
+        const m = new Character(npcAppearance('mafia', i));
+        m.setName(['Don Ayrone', 'Big Tony', 'Luigi', 'Vinnie'][i], '#ff6b6b');
+        m.root.position.copy(stage.from).add(new THREE.Vector3((i - 1.5) * 0.45, 0, 0));
+        m.root.rotation.y = Math.PI;
+        m.setAnim('walk');
+        this.scene.add(m.root);
+        this.mafia.push(m);
+        const goal = stage.mafia[i];
+        const from = m.root.position.clone();
+        // Zeitbasiert (Echtzeit), damit die Mafia auch bei niedriger Bildrate pünktlich vor der Explosion ankommt
+        const t0 = performance.now(), dur = 2300;
+        let arrived = false;
+        this.updaters.push(dt => {
+          m.update(dt);
+          if (arrived) return;
+          const k = Math.min(1, (performance.now() - t0) / dur);
+          const d = goal.clone().sub(from).setY(0);
+          m.root.position.lerpVectors(from, goal, k);
+          m.root.rotation.y = Math.atan2(d.x, d.z);
+          if (k >= 1) {
+            arrived = true;
+            m.setAnim(i === 0 ? 'point' : i === 3 ? 'facepalm' : 'idle');
+            m.root.rotation.y = Math.atan2(center.x - m.root.position.x, center.z - 0.85 - m.root.position.z);
+          }
+        });
+      }, i * 380);
+    }
+  }
+
+  explode(pos) {
+    for (let i = 0; i < 60; i++) {
+      const dir = new THREE.Vector3(Math.random() - 0.5, Math.random() * 0.8, Math.random() - 0.5).normalize();
+      this.particles.emit({ pos: pos.clone().add(new THREE.Vector3(0, 1, 0)), vel: dir.multiplyScalar(2 + Math.random() * 4).toArray(), life: 2.5 + Math.random(), size: 0.8, grow: 3, opacity: 0.85, color: i % 3 ? '#555' : '#ff8a2a' });
+    }
+    for (let i = 0; i < 20; i++) this.particles.emit({ pos: pos.clone().add(new THREE.Vector3(0, 1, 0)), vel: [(Math.random() - 0.5) * 6, Math.random() * 5, (Math.random() - 0.5) * 6], life: 0.8, size: 1.2, grow: 2, opacity: 1, color: '#ffd23c', additive: true });
+    const flash = new THREE.PointLight('#ffb347', 80, 25);
+    flash.position.copy(pos).setY(2);
+    this.scene.add(flash);
+    let t = 0;
+    this.updaters.push(dt => { t += dt; flash.intensity = Math.max(0, 80 - t * 120); });
+    for (const m of this.mafia || []) m.root.visible = false;
+  }
+}
