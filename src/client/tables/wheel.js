@@ -19,6 +19,7 @@ export class WheelView extends TableView {
     this.camLocal.set(0, 1.75, 3.3);
     this.lookLocal.set(0.7, 1.55, 0);
     this.footprint = { w: 3, d: 1.6, oz: 0.3 };
+    this.railLocal = () => new THREE.Vector3(0, 1.0, 1.05);
     this.pending = {};
     this.build();
   }

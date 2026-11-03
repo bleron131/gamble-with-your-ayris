@@ -1,4 +1,6 @@
-// Einheitliches 3D-Einsatzpult (Prompt 12) – „Das Casino selbst ist das Interface“.
+// Einheitliches 3D-Einsatzpult (Prompt 12/14) – „Das Casino selbst ist das Interface“.
+// Prompt 14: freistehendes Terminal mit Standfuss auf dem Boden neben der Station, Panel auf Augenhöhe,
+// deutlich grössere Tasten/Display; die Spielaktionen liegen als physische Knopfleiste direkt an der Station.
 // Jede Station (Tisch, Automat, Arcade-Maschine) hat rechts/unten-rechts ein physisches Pult mit:
 //  • Display:  MIN: $…  MAX: $…  und dem grossen aktuellen Einsatz
 //  • Ziffernblock 1–9, C, 0, 000 und Schnellwahl MIN, 1/4, 1/2, MAX (Anteil vom verfügbaren Team-Pot, in den Limits)
@@ -11,11 +13,14 @@ import { M, mesh } from '../world/props.js';
 import { fmtMoney } from '../../shared/config.js';
 import { sfx } from '../audio.js';
 
-const KEY_W = 0.088, KEY_H = 0.064, GAP = 0.012, MARGIN = 0.026, DISP_H = 0.13;
+// Prompt 14: freistehendes Terminal, deutlich grössere Tasten und Display (≈1.7×)
+const KEY_W = 0.15, KEY_H = 0.105, GAP = 0.02, MARGIN = 0.04, DISP_H = 0.25;
 const COLS = 4;
 const INNER_W = COLS * KEY_W + (COLS - 1) * GAP;
 const PAD_W = INNER_W + MARGIN * 2;
-const ACT_H = 0.078, BIG_H = 0.092;
+const SEG_H = 0.085;
+const RAIL_W = 0.27, RAIL_H = 0.135, RAIL_BIG = 0.36;
+export const KIOSK = { top: 1.82, half: 0.42, gap: 0.3 }; // Oberkante Panel, halbe Breite, Abstand zur Station
 const KEYS = [['7', '8', '9', 'MIN'], ['4', '5', '6', '1/4'], ['1', '2', '3', '1/2'], ['C', '0', '000', 'MAX']];
 const QUICK = new Set(['MIN', '1/4', '1/2', 'MAX']);
 
@@ -91,13 +96,17 @@ export class Pad3D {
     this.opts = opts;
     this.group = new THREE.Group();
     this.group.name = 'pad3d';
+    this.group.userData.noBake = true; // Terminal ändert Knöpfe zur Laufzeit → nie zusammenfassen
+    // Freistehendes Terminal (Standfuss auf dem Boden, Panel auf Augenhöhe) und Aktionsleiste an der Station
+    this.kiosk = new THREE.Group();
     this.face = new THREE.Group();
-    this.face.userData.noBake = true; // Pult ändert Grösse/Knöpfe zur Laufzeit → nie zusammenfassen
-    this.group.add(this.face);
+    this.kiosk.add(this.face);
+    this.rail = new THREE.Group();
+    this.group.add(this.kiosk, this.rail);
     this.raw = null;          // gewünschter Einsatz (null = Minimum)
     this.typing = '';         // laufende Eingabe über den Ziffernblock
-    this.keys = [];           // { mesh, label, action, t }
-    this.acts = [];           // gespiegelte Aktionsknöpfe
+    this.keys = [];           // Ziffern + Schnellwahl
+    this.acts = [];           // gespiegelte Knöpfe (Optionen am Terminal, Aktionen an der Leiste)
     this.sig = '';
     this.syncT = 0;
     this.hovered = null;
@@ -131,43 +140,49 @@ export class Pad3D {
 
   // ── Aufbau ──
   build() {
-    const f = this.face;
-    this.plate = mesh(new THREE.BoxGeometry(1, 1, 0.03), M.std('#15121f', 0.35, 0.5), 0, 0, -0.016, { cast: false });
-    this.rim = mesh(new THREE.BoxGeometry(1, 1, 0.012), M.glow(this.opts.color || '#2bd9fe', 1.2), 0, 0, -0.034, { cast: false });
-    f.add(this.rim, this.plate);
-    // Display
+    const f = this.face, k = this.kiosk;
+    const dark = M.std('#15121f', 0.35, 0.5), metal = M.std('#9a9aac', 0.25, 0.9);
+    // Gehäuse hinter dem Panel (Höhe passt sich an), dicke Säule, schwerer Standfuss
+    this.housing = mesh(new THREE.BoxGeometry(1, 1, 0.09), dark, 0, 0, -0.05, { cast: true });
+    this.rim = mesh(new THREE.BoxGeometry(1, 1, 0.02), M.glow(this.opts.color || '#2bd9fe', 1.2), 0, 0, -0.1, { cast: false });
+    f.add(this.housing, this.rim);
+    this.column = mesh(new THREE.BoxGeometry(0.16, 1, 0.12), metal, 0, 0.5, -0.06);
+    this.foot = mesh(new THREE.CylinderGeometry(0.3, 0.34, 0.06, 28), M.std('#22202c', 0.4, 0.6), 0, 0.03, 0);
+    this.footRing = mesh(new THREE.TorusGeometry(0.32, 0.012, 6, 32), M.glow(this.opts.color || '#2bd9fe', 1.4), 0, 0.062, 0, { cast: false });
+    this.footRing.rotation.x = Math.PI / 2;
+    k.add(this.column, this.foot, this.footRing);
+    // Display (oben, auf Augenhöhe)
     this.dcanvas = document.createElement('canvas');
-    this.dcanvas.width = 512; this.dcanvas.height = Math.round(512 * DISP_H / INNER_W);
+    this.dcanvas.width = 768; this.dcanvas.height = Math.round(768 * DISP_H / INNER_W);
     this.dtex = new THREE.CanvasTexture(this.dcanvas);
     this.dtex.colorSpace = THREE.SRGBColorSpace;
     this.display = new THREE.Mesh(new THREE.PlaneGeometry(INNER_W, DISP_H), new THREE.MeshBasicMaterial({ map: this.dtex, toneMapped: false }));
     this.display.position.set(0, -MARGIN - DISP_H / 2, 0.002);
-    this.display.userData.noBake = true;
     f.add(this.display);
     // Ziffernblock + Schnellwahl
-    const top = -MARGIN - DISP_H - GAP * 1.4;
-    KEYS.forEach((row, r) => row.forEach((k, c) => {
-      const color = QUICK.has(k) ? '#ffb703' : k === 'C' ? '#e63946' : '#3d3d5c';
-      const cap = capMaterial(k, color, KEY_W, KEY_H, true);
+    const top = -MARGIN - DISP_H - GAP * 1.5;
+    KEYS.forEach((row, r) => row.forEach((lbl, c) => {
+      const color = QUICK.has(lbl) ? '#ffb703' : lbl === 'C' ? '#e63946' : '#3d3d5c';
+      const cap = capMaterial(lbl, color, KEY_W, KEY_H, true);
       const mats = cap.mats.slice(); mats[4] = cap.face.clone(); // eigenes Material je Taste (Hover-Leuchten)
       const m = new THREE.Mesh(keyGeo, mats);
-      m.scale.set(KEY_W, KEY_H, 1);
+      m.scale.set(KEY_W, KEY_H, 1.4);
       m.position.set(-INNER_W / 2 + KEY_W / 2 + c * (KEY_W + GAP), top - KEY_H / 2 - r * (KEY_H + GAP), 0);
-      m.userData.noBake = true;
-      const key = { mesh: m, label: k, t: 0, kind: 'key' };
+      const key = { mesh: m, label: lbl, t: 0, kind: 'key' };
       m.userData.padKey = key;
-      if (this.opts.walkUp) m.userData.slotButton = { label: () => this.keyLabel(k), action: () => this.press(key), padKey: key };
+      if (this.opts.walkUp) m.userData.slotButton = { label: () => this.keyLabel(lbl), action: () => this.press(key), padKey: key };
       f.add(m);
       this.keys.push(key);
     }));
     this.keysBottom = top - 4 * KEY_H - 3 * GAP;
+    this.optGroup = new THREE.Group();
+    f.add(this.optGroup);
+    // Aktionsleiste (PLAY, HIT, CASH OUT …) – physische Knöpfe direkt an der Station
+    this.railPlate = mesh(new THREE.BoxGeometry(1, 1, 0.03), M.std('#0d0b14', 0.4, 0.4), 0, 0, -0.018, { cast: false });
+    this.railPlate.visible = false;
+    this.rail.add(this.railPlate);
     this.actGroup = new THREE.Group();
-    f.add(this.actGroup);
-    // Ständer bzw. Tischarm (wird in place() ausgerichtet)
-    this.post = mesh(new THREE.CylinderGeometry(0.018, 0.024, 1, 10), M.std('#b8b8c8', 0.25, 0.9), 0, 0, 0, { cast: false });
-    this.foot = mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.03, 20), M.std('#22202c', 0.4, 0.6), 0, 0, 0, { cast: false });
-    this.post.userData.noBake = this.foot.userData.noBake = true;
-    this.group.add(this.post, this.foot);
+    this.rail.add(this.actGroup);
     this.layout();
     this.drawDisplay();
   }
@@ -222,28 +237,28 @@ export class Pad3D {
     if (key === this.dkey) return;
     this.dkey = key;
     g.fillStyle = '#04060c'; g.fillRect(0, 0, W, H);
-    g.strokeStyle = this.flashT > 0 ? '#ffffff' : '#2bd9fe'; g.lineWidth = 5; g.strokeRect(4, 4, W - 8, H - 8);
+    g.strokeStyle = this.flashT > 0 ? '#ffffff' : '#2bd9fe'; g.lineWidth = 7; g.strokeRect(5, 5, W - 10, H - 10);
     g.textBaseline = 'middle';
-    g.font = 'bold 22px "Nunito", Arial'; g.fillStyle = '#9fefff';
-    g.textAlign = 'left'; g.fillText(`MIN: ${fmtMoney(l.min)}`, 18, 24);
-    g.textAlign = 'right'; g.fillText(`MAX: ${fmtMoney(l.max)}`, W - 18, 24);
+    g.font = 'bold 34px "Nunito", Arial'; g.fillStyle = '#9fefff';
+    g.textAlign = 'left'; g.fillText(`MIN ${fmtMoney(l.min)}`, 22, 34);
+    g.textAlign = 'right'; g.fillText(`MAX ${fmtMoney(l.max)}`, W - 22, 34);
     let txt = fmtMoney(shown);
-    let size = 58;
+    let size = 104;
     g.font = `${size}px "Bungee", Impact`;
     while (g.measureText(txt).width > W - 40 && size > 24) { size -= 3; g.font = `${size}px "Bungee", Impact`; }
     g.textAlign = 'center';
     g.fillStyle = out ? '#ff6b6b' : v > this.pot ? '#ff9f1c' : '#ffe066';
-    g.fillText(txt, W / 2, H * 0.52);
-    g.font = 'bold 19px "Nunito", Arial';
+    g.fillText(txt, W / 2, H * 0.53);
+    g.font = 'bold 28px "Nunito", Arial';
     g.fillStyle = out ? '#ff9a9a' : '#c9b8e8';
     const line = out ? `wird zu ${fmtMoney(v)}` : status || (v > this.pot ? 'Nicht genug im Team-Pot' : 'EINSATZ');
-    g.fillText(line.length > 46 ? line.slice(0, 45) + '…' : line, W / 2, H - 20);
+    g.fillText(line.length > 44 ? line.slice(0, 43) + '…' : line, W / 2, H - 28);
     this.dtex.needsUpdate = true;
   }
 
-  // ── Gespiegelte Aktionsknöpfe ──
+  // ── Gespiegelte Knöpfe: Optionen ans Terminal, Aktionen an die Leiste der Station ──
   attach(panel) { this.panel = panel; this.sig = ''; this.sync(true); }
-  detach() { this.panel = null; this.sig = ''; this.setActions([]); this.status = ''; this.refresh(); }
+  detach() { this.panel = null; this.sig = ''; this.setActions([], []); this.status = ''; this.refresh(); }
 
   visibleIn(b) {
     for (let e = b; e && e !== this.panel; e = e.parentElement) {
@@ -254,10 +269,8 @@ export class Pad3D {
 
   collect() {
     const p = this.panel;
-    if (!p) return [];
-    const rows = [];
-    let pair = [];
-    const flush = () => { if (pair.length) { rows.push(pair); pair = []; } };
+    const opts = [], acts = [];
+    if (!p) return { opts, acts };
     for (const b of p.querySelectorAll('button')) {
       if (b.closest('.noMirror, .betamount, .chips, .mtile, .ktile') || b.classList.contains('mtile') || b.classList.contains('ktile')) continue;
       if (!this.visibleIn(b)) continue;
@@ -265,125 +278,109 @@ export class Pad3D {
       if (!label) continue;
       const it = { el: b, label, sub, color: colorFor(b, label), disabled: !!b.disabled, seg: b.parentElement?.classList.contains('seg') ? b.parentElement : null, big: b.classList.contains('big') && b.classList.contains('primary') };
       if (it.seg) {
-        const last = rows[rows.length - 1];
-        flush();
+        const last = opts[opts.length - 1];
         const lim = it.label.length + it.sub.length > 5 ? 3 : 5; // lange Beschriftungen: höchstens 3 pro Reihe
-        if (last && last[0]?.seg === it.seg && last.length < lim) last.push(it); else rows.push([it]);
-        continue;
-      }
-      if (it.big) { flush(); rows.push([it]); continue; }
-      pair.push(it);
-      if (pair.length === 2) flush();
+        if (last && last[0].seg === it.seg && last.length < lim) last.push(it); else opts.push([it]);
+      } else acts.push(it);
     }
-    flush();
-    return rows;
+    return { opts, acts };
   }
 
   sync(force) {
     const status = this.view.statusText?.() ?? this.panel?.querySelector('.info')?.textContent ?? '';
     if (status !== this.status) { this.status = status; this.refresh(); }
-    const rows = this.usable() ? this.collect() : [];
-    const sig = rows.map(r => r.map(i => `${i.label}~${i.sub}~${i.color}~${i.disabled}`).join(',')).join('/');
+    const { opts, acts } = this.usable() ? this.collect() : { opts: [], acts: [] };
+    const sig = [...opts.flat(), null, ...acts].map(i => (i ? `${i.label}~${i.sub}~${i.color}~${i.disabled}` : '|')).join(',');
     if (!force && sig === this.sig) return;
     this.sig = sig;
-    this.setActions(rows);
+    this.setActions(opts, acts);
   }
 
-  setActions(rows) {
-    // Bestehende Meshes wiederverwenden, nur Texte/Farben neu zeichnen
-    const flat = rows.flat();
-    while (this.acts.length > flat.length) { const a = this.acts.pop(); this.actGroup.remove(a.mesh); a.cap.tex.dispose(); a.cap.face.dispose(); }
-    let y = this.keysBottom - GAP * 1.6;
-    let i = 0;
-    for (const row of rows) {
-      const big = row.length === 1 && row[0].big;
-      const h = big ? BIG_H : row[0].seg ? ACT_H * 0.82 : ACT_H;
-      const w = (INNER_W - (row.length - 1) * GAP) / row.length;
-      row.forEach((it, c) => {
-        let a = this.acts[i];
-        const key = `${it.label}|${it.sub}|${it.color}|${it.disabled}|${(w / h).toFixed(2)}`;
-        if (!a || a.ratio !== (w / h).toFixed(2)) {
-          if (a) { this.actGroup.remove(a.mesh); a.cap.tex.dispose(); a.cap.face.dispose(); }
-          const cap = capMaterial('', it.color, w, h, false);
-          const m = new THREE.Mesh(keyGeo, cap.mats);
-          m.userData.noBake = true;
-          a = { mesh: m, cap, t: 0, kind: 'act', ratio: (w / h).toFixed(2) };
-          m.userData.padKey = a;
-          if (this.opts.walkUp) m.userData.slotButton = { label: () => a.label, action: () => this.press(a), padKey: a };
-          this.actGroup.add(m);
-          this.acts[i] = a;
-        }
-        if (a.key !== key) {
-          a.key = key;
-          drawCap(a.cap.canvas, it.label, it.disabled ? '#3a3a44' : it.color, it.sub);
-          a.cap.tex.needsUpdate = true;
-          a.cap.mats[0].color.set(new THREE.Color(it.color).multiplyScalar(0.35));
-        }
-        a.el = it.el; a.label = it.sub ? `${it.label} (${it.sub})` : it.label; a.disabled = it.disabled;
-        a.mesh.scale.set(w, h, 1);
-        a.mesh.position.set(-INNER_W / 2 + w / 2 + c * (w + GAP), y - h / 2, 0);
-        i++;
-      });
-      y -= h + GAP;
+  // Knopf-Mesh wiederverwenden (nur Text/Farbe neu zeichnen)
+  button(i, it, w, h, parent) {
+    let a = this.acts[i];
+    const ratio = (w / h).toFixed(2);
+    if (!a || a.ratio !== ratio || a.parent !== parent) {
+      if (a) { a.parent.remove(a.mesh); a.cap.tex.dispose(); a.cap.face.dispose(); }
+      const cap = capMaterial('', it.color, w, h, false);
+      const m = new THREE.Mesh(keyGeo, cap.mats);
+      a = { mesh: m, cap, t: 0, kind: 'act', ratio, parent };
+      m.userData.padKey = a;
+      if (this.opts.walkUp) m.userData.slotButton = { label: () => a.label, action: () => this.press(a), padKey: a };
+      parent.add(m);
+      this.acts[i] = a;
     }
-    this.bottom = rows.length ? y + GAP : this.keysBottom;
+    const key = `${it.label}|${it.sub}|${it.color}|${it.disabled}|${ratio}`;
+    if (a.key !== key) {
+      a.key = key;
+      drawCap(a.cap.canvas, it.label, it.disabled ? '#3a3a44' : it.color, it.sub);
+      a.cap.tex.needsUpdate = true;
+      a.cap.mats[0].color.set(new THREE.Color(it.color).multiplyScalar(0.35));
+    }
+    a.el = it.el; a.label = it.sub ? `${it.label} (${it.sub})` : it.label; a.disabled = it.disabled;
+    a.mesh.scale.set(w, h, 1.4);
+    return a;
+  }
+
+  setActions(opts, acts) {
+    let i = 0;
+    // Optionen (Minen, Schwierigkeit, Ente …) unter dem Ziffernblock
+    let y = this.keysBottom - GAP * 1.8;
+    for (const row of opts) {
+      const w = (INNER_W - (row.length - 1) * GAP) / row.length;
+      row.forEach((it, c) => { const a = this.button(i++, it, w, SEG_H, this.optGroup); a.mesh.position.set(-INNER_W / 2 + w / 2 + c * (w + GAP), y - SEG_H / 2, 0); });
+      y -= SEG_H + GAP;
+    }
+    this.bottom = opts.length ? y + GAP : this.keysBottom;
+    // Aktionen als Reihe grosser Knöpfe an der Station (höchstens 4 pro Reihe, Hauptaktion breiter)
+    const rows = [];
+    for (const it of acts) { const last = rows[rows.length - 1]; if (last && last.length < 4) last.push(it); else rows.push([it]); }
+    let ry = 0, maxW = 0;
+    rows.forEach(row => {
+      const ws = row.map(it => (it.big ? RAIL_BIG : RAIL_W));
+      const total = ws.reduce((p, q) => p + q, 0) + (row.length - 1) * GAP;
+      maxW = Math.max(maxW, total);
+      let x = -total / 2;
+      row.forEach((it, c) => { const a = this.button(i++, it, ws[c], RAIL_H, this.actGroup); a.mesh.position.set(x + ws[c] / 2, ry - RAIL_H / 2, 0); x += ws[c] + GAP; });
+      ry -= RAIL_H + GAP;
+    });
+    while (this.acts.length > i) { const a = this.acts.pop(); a.parent.remove(a.mesh); a.cap.tex.dispose(); a.cap.face.dispose(); }
+    this.railPlate.visible = rows.length > 0;
+    if (rows.length) { const hgt = -ry + GAP; this.railPlate.scale.set(maxW + 0.06, hgt + 0.04, 1); this.railPlate.position.set(0, -hgt / 2 + GAP / 2, -0.018); }
     this.layout();
   }
 
   layout() {
     const H = -(this.bottom ?? this.keysBottom) + MARGIN;
-    this.plate.scale.set(PAD_W, H, 1);
-    this.plate.position.y = -H / 2;
-    this.rim.scale.set(PAD_W + 0.02, H + 0.02, 1);
+    this.housing.scale.set(PAD_W + 0.04, H + 0.04, 1);
+    this.housing.position.y = -H / 2;
+    this.rim.scale.set(PAD_W + 0.08, H + 0.08, 1);
     this.rim.position.y = -H / 2;
     this.height = H;
-    // Zu hohe Pulte (viele Optionen) etwas verkleinern, damit alles im Blick bleibt
-    const s = (this.opts.scale || 1) * Math.min(1, (this.opts.maxH || 0.7) / H);
-    this.face.scale.setScalar(s);
-    this.placePost();
+    // Panel hängt von der festen Oberkante nach unten, leicht nach hinten geneigt; Säule bis knapp unter das Panel
+    this.face.position.set(0, KIOSK.top, 0.02);
+    this.face.rotation.x = -0.16;
+    const bottomY = KIOSK.top - H * Math.cos(0.16);
+    this.column.scale.set(1, Math.max(0.3, bottomY + 0.05), 1);
+    this.column.position.y = Math.max(0.3, bottomY + 0.05) / 2;
   }
 
-  // Pult in Tischkoordinaten platzieren: ausgerichtet auf die Sitz-Kamera (immer im Blick, rechts unten)
+  // Terminal neben der Station auf den Boden stellen, zur Spielposition gedreht; Leiste an die Station
   place() {
     const v = this.view, o = this.opts;
-    if (o.pos) {
-      this.group.position.copy(o.pos);
-      this.group.rotation.set(o.tilt ?? -0.35, o.yaw ?? -0.3, 0, 'YXZ');
-    } else {
-      const cam = v.camLocal.clone(), look = v.lookLocal.clone();
-      const fwd = look.clone().sub(cam).normalize();
-      const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
-      const up = new THREE.Vector3().crossVectors(right, fwd).normalize();
-      const d = o.dist || 0.92;
-      const p = cam.clone().addScaledVector(fwd, d).addScaledVector(right, d * (o.right ?? 0.5)).addScaledVector(up, d * (o.up ?? 0.3));
-      this.group.position.copy(p);
-      const m = new THREE.Matrix4().lookAt(cam, p, up); // +z zeigt zur Kamera
-      this.group.quaternion.setFromRotationMatrix(m);
-    }
-    this.placePost();
+    const S = v.S || 1; // skalierte Maschinen: Terminal behält seine echte Grösse
+    this.kiosk.scale.setScalar(1 / S);
+    const kp = o.kiosk || v.kioskLocal?.() || new THREE.Vector3((v.footprint?.w || 2) / 2 + (KIOSK.gap + KIOSK.half) / S, 0, v.seatLocal.z - 0.95 / S);
+    this.kiosk.position.set(kp.x, 0, kp.z);
+    const target = o.faceTo || v.camLocal;
+    this.kiosk.rotation.set(0, Math.atan2(target.x - kp.x, target.z - kp.z), 0);
+    this.kioskLocal = kp;
+    const rp = v.railLocal?.() || new THREE.Vector3(v.seatLocal.x + (v.railShift || 0), (v.tableTopY ?? 0.86) + 0.07, v.seatLocal.z - 0.38);
+    this.rail.position.copy(rp);
+    this.rail.rotation.set(v.railTilt ?? -1.0, 0, 0);
   }
-
-  placePost() {
-    if (!this.post) return;
-    this.group.updateMatrix();
-    const s = this.face.scale.x;
-    const bottomLocal = new THREE.Vector3(0, -this.height * s, -0.03);
-    const inv = new THREE.Matrix4().copy(this.group.matrix).invert();
-    const b = bottomLocal.clone().applyMatrix4(this.group.matrix); // im Tischraum
-    const fp = this.view.footprint || { w: 0, d: 0 };
-    const inside = Math.abs(b.x) < fp.w / 2 + 0.05 && Math.abs(b.z - (fp.oz || 0)) < fp.d / 2 + 0.05;
-    const floorY = inside ? (this.view.tableTopY ?? 0.84) : 0;
-    const len = Math.max(0.05, b.y - floorY);
-    // Post senkrecht im Tischraum → in Pult-Koordinaten umrechnen
-    const mid = new THREE.Vector3(b.x, floorY + len / 2, b.z).applyMatrix4(inv);
-    this.post.position.copy(mid);
-    this.post.scale.set(1, len, 1);
-    this.post.quaternion.copy(this.group.quaternion).invert();
-    this.foot.visible = !inside && !this.opts.noFoot;
-    this.foot.position.copy(new THREE.Vector3(b.x, floorY + 0.015, b.z).applyMatrix4(inv));
-    this.foot.quaternion.copy(this.post.quaternion);
-    this.post.visible = !this.opts.noPost;
-  }
+  // Welt-Position des Terminals (für den Collider)
+  kioskWorld() { return this.view.toWorld(new THREE.Vector3(this.kioskLocal.x, 0, this.kioskLocal.z)); }
 
   meshes() { return [...this.keys.map(k => k.mesh), ...this.acts.map(a => a.mesh)]; }
 
@@ -418,17 +415,18 @@ export class Pad3D {
     const app = this.view.app;
     const dist = app.distanceTo?.(this.view.group.position) ?? 0;
     const mine = app.player?.seated === this.view;
-    // Performance: weit weg unsichtbar, mittlere Distanz nur Platte + Display (wenige Draw Calls)
-    const vis = mine || dist < 14;
+    // Performance: weit weg unsichtbar, mittlere Distanz ohne Tasten (wenige Draw Calls)
+    const vis = mine || dist < 16;
     this.group.visible = vis;
     if (!vis) return;
-    const detail = mine || dist < 7;
-    if (detail !== this.detail) { this.detail = detail; for (const k of this.keys) k.mesh.visible = detail; this.actGroup.visible = detail; }
+    const detail = mine || dist < 8;
+    if (detail !== this.detail) { this.detail = detail; for (const k of this.keys) k.mesh.visible = detail; this.optGroup.visible = this.actGroup.visible = detail; }
     if (mine && this.panel) { this.syncT -= dt; if (this.syncT <= 0) { this.syncT = 0.15; this.sync(); } }
     if (this.flashT > 0) { this.flashT -= dt; if (this.flashT <= 0) { this.dkey = ''; this.drawDisplay(); } }
     else if ((this.potT = (this.potT || 0) + dt) > 0.5) { this.potT = 0; this.drawDisplay(); }
-    // Hover-Highlight + Drück-Animation
-    const hov = mine || this.opts.walkUp ? (this.hovered || (this.opts.walkUp ? app.hoverButton?.padKey : null)) : null;
+    // Hover-Highlight + Drück-Animation (nur in Reichweite: eigenes Terminal bzw. Automat direkt davor)
+    const near = mine || (this.opts.walkUp && dist < 3);
+    const hov = near ? (this.hovered || (this.opts.walkUp ? app.hoverButton?.padKey : null)) : null;
     if (hov !== this.lastHov) { this.lastHov = hov; this.settle = 0.6; }
     if (this.settle > 0) this.settle -= dt;
     if (!detail || (!mine && !(this.settle > 0) && !this.animating)) return;
@@ -436,7 +434,7 @@ export class Pad3D {
     for (const k of [...this.keys, ...this.acts]) {
       if (k.t > 0) { k.t = Math.max(0, k.t - dt); this.animating = true; }
       const press = k.t > 0 ? Math.sin((k.t / 0.22) * Math.PI) : 0;
-      k.mesh.position.z = -press * 0.014;
+      k.mesh.position.z = -press * 0.016;
       const face = k.mesh.material[4];
       const target = k === hov ? 0.75 : k.t > 0 ? 1.0 : k.disabled ? 0.08 : 0.2;
       face.emissiveIntensity += (target - face.emissiveIntensity) * Math.min(1, dt * 14);

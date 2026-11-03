@@ -520,11 +520,11 @@ export class UI {
     const title = panel?.querySelector('.ptitle')?.textContent || view.def.type.toUpperCase();
     const rule = panel?.querySelector('.phint')?.textContent || '';
     const mirror = h('div.panelmirror', panel);
+    // Kompakt, damit nichts vom Spiel verdeckt wird: Kurzregel erst beim Antippen/Überfahren von ⓘ
     const bar = h('div.tablebar',
-      h('div.tbtitle', title),
+      h('div.tbrow', h('div.tbtitle', title), rule ? h('span.tbinfo', { title: rule, tabindex: 0 }, 'ⓘ') : null, h('button.leave', { onclick: () => this.app.leaveTable() }, '✕ Aufstehen')),
       rule ? h('div.tbrule', rule) : null,
-      h('div.tbkeys', touchHint() ? 'Tippe auf das Pult und die Spielfelder' : 'Klick aufs Pult & die Spielfelder · Ziffern tippen · ESC = Aufstehen'),
-      h('button.leave', { onclick: () => this.app.leaveTable() }, '✕ Aufstehen'),
+      h('div.tbkeys', touchHint() ? 'Terminal neben der Station & Spielfelder antippen' : 'Terminal & Spielfelder anklicken · Ziffern tippen · ESC'),
     );
     this.tableWrap.append(mirror, bar);
     this.tableWrap.classList.remove('hidden');

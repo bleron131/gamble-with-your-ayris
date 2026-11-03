@@ -251,6 +251,18 @@ export class TableView {
     if (!this.pad && !this.noPad) {
       this.pad = new Pad3D(this, { color: this.padColor, ...(this.padOpts || {}) });
       this.group.add(this.pad.group);
+      // Prompt 14: Das Terminal steht rechts neben der Station → Sitzkamera etwas zurück und nach rechts,
+      // damit Spiel, Aktionsleiste und Terminal gleichzeitig im Blick sind
+      if (!this.walkUp && !this.camFramed) {
+        this.camFramed = true;
+        const S = this.S || 1;
+        const kx = (this.footprint?.w || 2) / 2 + 0.72 / S;
+        const shift = kx * 0.36;
+        this.camLocal.x += shift; this.camLocal.z += 0.85 / S; this.camLocal.y += 0.22 / S;
+        this.lookLocal.x += shift * 0.85;
+        this.lookLocal.y = Math.min(this.lookLocal.y, 1.72 / S); // grosse Maschinen: Blick etwas tiefer, Terminal ganz im Bild
+        this.railShift = shift * 0.55; // Aktionsleiste zur Bildmitte hin
+      }
     }
     this.pad?.place();
     this.group.updateMatrixWorld(true);
@@ -266,6 +278,13 @@ export class TableView {
     const w = swap ? this.footprint.d : this.footprint.w, d = swap ? this.footprint.w : this.footprint.d;
     // Tischspiele (Roulette, Blackjack …) haben eine begehbare Tischplatte – man kann draufspringen (Prompt 12)
     world.addBox(p.x, p.z, w, d, this.standTop ? 1.2 : 9, this.standTop);
+    this.addKioskCollider(world);
+  }
+  // Freistehendes Terminal: eigener Collider (niemand läuft hindurch, NPCs gehen aussen herum)
+  addKioskCollider(world) {
+    if (!this.pad) return;
+    const k = this.pad.kioskWorld();
+    world.addCircle(k.x, k.z, 0.34);
   }
   interactPos() { return this.toWorld(this.seatLocal.clone().multiplyScalar(1.05)); }
   get mine() { return this.state && this.state.occupant === this.app.me; }

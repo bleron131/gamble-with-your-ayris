@@ -13,8 +13,8 @@ for (const opts of [{ bar: false, vip: false }, { bar: true, vip: false }, { bar
       const L = layoutFloor(defs, opts);
       assert.ok(L, `Stock ${n}: kein Layout`);
       assert.equal(L.plan.length, defs.length, `Stock ${n}: alle Stationen platziert`);
-      // kompakter als früher (alte Formel: mindestens 16 × 20 m, später bis ~47 × 40 m)
-      assert.ok(L.W * L.D <= 900, `Stock ${n}: Fläche ${L.W}×${L.D}`);
+      // kompakter als früher (alte Formel bis ~47 × 40 m), auch mit Terminals neben jeder Station
+      assert.ok(L.W * L.D <= 1100, `Stock ${n}: Fläche ${L.W}×${L.D}`);
       for (const p of L.plan) {
         for (const r of [p.rect, p.standRect]) {
           assert.ok(r.x0 >= -L.W / 2 - 1e-6 && r.x1 <= L.W / 2 + 1e-6 && r.z0 >= -L.D / 2 - 1e-6 && r.z1 <= L.D / 2 + 1e-6, `Stock ${n}: ${p.def.id} ausserhalb`);
@@ -29,7 +29,7 @@ for (const opts of [{ bar: false, vip: false }, { bar: true, vip: false }, { bar
       const slot = L.plan.filter(p => p.def.type === 'slots'), center = L.plan.filter(p => p.center);
       assert.ok(slot.every(p => p.x < Math.min(...center.map(c => c.x))), `Stock ${n}: Slots links der Tische`);
       assert.ok(slot.some(p => p.line === 'slotA') && (slot.length < 2 || slot.some(p => p.line === 'slotB')), `Stock ${n}: Slot-Insel Rücken an Rücken`);
-      for (const p of L.plan.filter(q => q.def.type === 'wheel')) assert.equal(p.line, 'back');
+      for (const p of L.plan.filter(q => q.def.type === 'wheel')) assert.ok(p.wall, `Glücksrad an einer Wand (${p.line})`);
     }
   });
 }

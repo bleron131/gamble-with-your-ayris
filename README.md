@@ -320,6 +320,19 @@ unter ⚙️ oder mit `?perf=1` an der Adresse. PC- und Handy-Spieler können ge
   ist persönlich und wird erst beim Spielstart (bzw. bei Slots als Automaten-Einsatz) übertragen. Eine Station kann nur
   eine Person bedienen – andere schauen zu.
 
+## Prompt 14: freistehende Einsatz-Terminals
+
+- Jedes Einsatz-Terminal ist jetzt ein **freistehender Casino-Kiosk**: schwerer Standfuss direkt auf dem Boden (mit
+  Leuchtring), dicke Säule, Panel auf Augenhöhe (Oberkante ≈1.8 m, Display ≈1.6 m), leicht zum Spieler geneigt.
+  Es steht mit Abstand **rechts neben** der jeweiligen Station – nie auf oder an einem Tisch – und hat einen eigenen
+  Collider (niemand läuft hindurch). Die Raumplanung reserviert den Platz, damit nichts clippt oder Wege blockiert.
+- **Grösser**: Tasten ≈1.7×, Display doppelt so hoch mit grossem Einsatzbetrag, Gehäuse breiter.
+- Einstell-Optionen (Minen, Schwierigkeit, Ente, Auto-Cashout …) liegen am Terminal unter dem Ziffernblock; die
+  **Spielaktionen** (PLAY, HIT, STAND, DOUBLE, SPLIT, SPIN, STEP, CASH OUT …) sind eine physische Knopfleiste direkt an
+  der Station (Tischkante bzw. Bedienpult der Maschine).
+- Sitzkamera etwas zurück und nach rechts versetzt: Spiel, Knopfleiste und Terminal sind gleichzeitig im Blick.
+  Bedienbar ist nur das Terminal der eigenen Station bzw. ein Automat direkt davor (Reichweite ≈3 m).
+
 ## Prompt 13
 
 - **Keine Sprachansagen** mehr bei Casino-Ergebnissen (Blackjack, Roulette, Craps, Baccarat …): Text-to-Speech ist komplett

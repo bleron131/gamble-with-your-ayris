@@ -208,7 +208,7 @@ export class CasinoWorld extends World {
       if (!items.length) continue;
       const xs = items.map(p => [p.rect.x0, p.rect.x1]).flat(), zs = items.map(p => [p.rect.z0, p.rect.z1]).flat();
       const cx = (Math.min(...xs) + Math.max(...xs)) / 2;
-      for (const z of [Math.min(...zs) - 0.45, Math.max(...zs) + 0.45]) {
+      for (const z of [Math.min(...zs) - 0.75, Math.max(...zs) + 0.75]) {
         if (!this.isFree(cx, z, 0.35)) continue;
         const pl = plant(1.2); pl.position.set(cx, 0, z); s.add(pl);
         this.addCircle(cx, z, 0.35);

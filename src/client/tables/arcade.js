@@ -63,7 +63,11 @@ class ArcadeView extends TableView {
     const swap = Math.abs(Math.sin(this.group.rotation.y)) > 0.7;
     const w = this.footprint.w * this.S, d = this.footprint.d * this.S;
     world.addBox(p.x, p.z, swap ? d : w, swap ? w : d);
+    this.addKioskCollider(world);
   }
+  // Aktionsleiste auf dem Bedienpult der Maschine
+  railLocal() { return new THREE.Vector3(0, 1.21, 0.52); }
+  get railTilt() { return -0.62; }
 
   build(opts) {
     const g = this.group, w = this.cabW;
@@ -76,7 +80,6 @@ class ArcadeView extends TableView {
     const deck = mesh(new THREE.BoxGeometry(w - 0.1, 0.12, 0.45), M.std('#111', 0.4, 0.3), 0, 1.0, 0.35);
     deck.rotation.x = -0.35;
     g.add(deck);
-    for (let i = 0; i < 3; i++) g.add(mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.04, 16), M.glow(['#7cff6b', '#ffd60a', '#ff3cac'][i], 1.8), (i - 1) * 0.3, 1.08, 0.38, { cast: false }));
     // Bildschirm
     if (!opts.noScreen) {
       const sw = opts.screenW || w - 0.2, sh = opts.screenH || 0.95;

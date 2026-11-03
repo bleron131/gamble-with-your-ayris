@@ -15,25 +15,30 @@ export const ARCADE_WIDTH = Object.fromEntries(Object.entries(ARCADE_BASE_WIDTH)
 const ARCADE = Object.keys(ARCADE_BASE_WIDTH);
 const EYE = ['wheel', 'moneywheel', 'plinko', 'duck', 'penguin'];
 const PLAZA = { hw: 3.6, d: 8 };           // freier Hauptweg vom Aufzug
-const CELL = { w: 3.5, back: 1.55, front: 2.25, aisle: 1.15 }; // Tischinsel inkl. Stühle und Laufweg
+const CELL = { back: 1.55, front: 2.25, aisle: 1.15 }; // Tischinsel inkl. Stühle und Laufweg
+const KIOSK_W = 0.42 + 0.12; // halbe Terminalbreite + Luft
 
 // Abmessungen einer Station in lokalen Koordinaten (Spieler steht auf der +z-Seite)
 export function itemDims(type) {
-  if (type === 'slots' || type === 'highslots') return { w: 1.45, back: 0.95, front: 1.45, bf: 0.4 };
-  if (type === 'wheel') return { w: 3.7, back: 0.6, front: 2.6, bf: 1.15 };
-  if (ARCADE.includes(type)) { const S = ARCADE_SCALE[type] || 1; return { w: ARCADE_WIDTH[type] + 0.35, back: 0.66 * S, front: 1.85 * S, bf: 0.62 * S }; }
-  return { w: CELL.w, back: CELL.back, front: CELL.front, bf: 1.3, center: true };
+  // Prompt 14: rechts neben jeder Station steht ihr freistehendes Terminal → wr (rechts) breiter als wl (links)
+  const K = KIOSK_W;
+  const dims = d => ({ ...d, w: d.wl + d.wr });
+  if (type === 'slots' || type === 'highslots') return dims({ wl: 0.62, wr: 1.2 + K, back: 0.95, front: 1.45, bf: 0.4 });
+  if (type === 'wheel') return dims({ wl: 1.85, wr: 1.5 + 0.72 + K, back: 0.6, front: 2.6, bf: 1.15 });
+  if (ARCADE.includes(type)) {
+    const S = ARCADE_SCALE[type] || 1, cab = (ARCADE_BASE_WIDTH[type] - 0.2) / 2 + 0.05;
+    return dims({ wl: ARCADE_WIDTH[type] / 2 + 0.17, wr: cab * S + 0.72 + K, back: 0.66 * S, front: 1.85 * S, bf: 0.62 * S });
+  }
+  return dims({ wl: 1.6, wr: 1.45 + 0.72 + K, back: CELL.back, front: CELL.front, bf: 1.3, center: true });
 }
 
-// Achsparalleles Rechteck einer Station: Körper (body) und Spielerplatz davor (stand)
+// Achsparalleles Rechteck einer Station: Körper (body) und Spielerplatz davor (stand), lokal x ∈ [-wl, wr]
 function rects(x, z, rot, d) {
-  const fx = Math.round(Math.sin(rot)), fz = Math.round(Math.cos(rot)); // Blickrichtung des Spielers zur Station: -f
-  const hw = d.w / 2;
+  const c = Math.cos(rot), sn = Math.sin(rot);
   const box = (a, b) => {
-    // Bereich lokal z ∈ [a, b], x ∈ [-hw, hw] → Welt
-    const xs = fz !== 0 ? [x - hw, x + hw] : [x + fx * a, x + fx * b].sort((p, q) => p - q);
-    const zs = fz !== 0 ? [z + fz * a, z + fz * b].sort((p, q) => p - q) : [z - hw, z + hw];
-    return { x0: xs[0], x1: xs[1], z0: zs[0], z1: zs[1] };
+    const xs = [], zs = [];
+    for (const lx of [-d.wl, d.wr]) for (const lz of [a, b]) { xs.push(x + lx * c + lz * sn); zs.push(z - lx * sn + lz * c); }
+    return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
   };
   return { body: box(-d.back, d.bf), stand: box(d.bf, d.front) };
 }
@@ -102,7 +107,9 @@ function planVariant(defs, W, D, { bar = false, vip = false } = {}, variant) {
     const d = itemDims(def.type);
     for (const ln of order.map(n => lines[n]).filter(Boolean)) {
       if (ln.cur + d.w > ln.b + 1e-6) continue;
-      const c = ln.cur + d.w / 2;
+      // zeigt die rechte Seite der Station (Terminal) entlang der Linie nach vorne oder hinten?
+      const sign = ln.axis === 'z' ? -Math.round(Math.sin(ln.rot)) : Math.round(Math.cos(ln.rot));
+      const c = ln.cur + (sign > 0 ? d.wl : d.wr);
       ln.cur += d.w;
       let x, z;
       // Rückseite an der Linie: Mittelpunkt um "back" nach vorne versetzt
@@ -128,9 +135,10 @@ function planVariant(defs, W, D, { bar = false, vip = false } = {}, variant) {
   const cx1 = (islandUsed ? rSpine - aB - aF : rightUsed ? W / 2 - aB - aF : bar ? W / 2 - 5.0 : W / 2 - 1.0) - 0.5;
   const cz0 = -D / 2 + backDepth + 0.5;
   const cells = [];
+  const cd = itemDims('blackjack');
   for (let z = cz0 + CELL.back; z + CELL.front <= D / 2 - 0.8; z += CELL.back + CELL.front + CELL.aisle) {
-    const cols = Math.floor((cx1 - cx0) / CELL.w);
-    for (let c = 0; c < cols; c++) cells.push({ x: cx0 + (cx1 - cx0 - cols * CELL.w) / 2 + (c + 0.5) * CELL.w, z });
+    const cols = Math.floor((cx1 - cx0) / cd.w);
+    for (let c = 0; c < cols; c++) cells.push({ x: cx0 + (cx1 - cx0 - cols * cd.w) / 2 + cd.wl + c * cd.w, z });
   }
   const taken = [];
   for (const p of plan) { const r = rects(p.x, p.z, p.rot, p.dims); taken.push(r.body, r.stand); }

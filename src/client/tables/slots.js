@@ -28,7 +28,7 @@ export class SlotView extends TableView {
     this.radius = 1.35;
     this.buttons = [];
     // 3D-Einsatzpult rechts neben dem Automaten (Ziffernblock statt nur BET +/−)
-    this.padOpts = { walkUp: true, pos: new THREE.Vector3(0.68, 1.16, 0.34), yaw: -0.55, tilt: -0.6, scale: 0.72, maxH: 0.5, onChange: v => this.app.slotSetBet(this.def.id, v), delay: 900 };
+    this.padOpts = { walkUp: true, kiosk: new THREE.Vector3(1.2, 0, 0.5), faceTo: new THREE.Vector3(0, 0, 1.6), onChange: v => this.app.slotSetBet(this.def.id, v), delay: 900 };
     this.flash = 0;
     this.celebrate = null;
     this.build();

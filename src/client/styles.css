@@ -634,3 +634,14 @@ button.mini { font-size: 11px; padding: 2px 8px; margin-left: 8px; border-radius
 .editor .esec { margin-bottom: 10px; }
 .editor .esect { font-family: var(--title); font-size: 13px; color: var(--gold); letter-spacing: 1px; margin: 4px 0 6px; text-transform: uppercase; }
 @media (max-height: 520px) { .editor .editbody { max-height: 40vh; } .modal.editorside .mbox { width: min(330px, 46vw); } }
+
+/* ── Prompt 14: kompakte Spielleiste (verdeckt die Aktionsknöpfe am Tisch nicht) ── */
+.tablewrap { width: auto; max-width: min(360px, 40vw); }
+.tablebar { padding: 6px 10px; gap: 2px; }
+.tablebar .tbrow { display: flex; align-items: center; gap: 8px; }
+.tablebar .tbtitle { font-size: 13px; }
+.tablebar .tbinfo { cursor: help; color: var(--gold); font-weight: 900; }
+.tablebar .tbrule { display: none; font-size: 11.5px; }
+.tablebar:hover .tbrule, .tablebar:focus-within .tbrule { display: block; }
+.tablebar .tbkeys { font-size: 10.5px; }
+.tablebar .leave { margin: 0 0 0 auto; padding: 3px 9px; font-size: 12px; }
