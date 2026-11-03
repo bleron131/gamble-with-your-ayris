@@ -185,7 +185,7 @@ function dealerPlay(ctx, table) {
   if (!allBust && !onlyBJ && t < 17) {
     ctx.later(800, () => {
       // Developer-Testmodus: der Dealer überkauft sich (bis 16 ziehen, dann eine zu hohe Karte)
-      const dev = ctx.dev ? devCard(table, c => { const n = handTotal([...s.dealer, c]).total; return n > 21 || (n < 17 && t <= 11); }) : null;
+      const dev = ctx.dev ? devCard(table, c => { const n = handTotal([...s.dealer, c]).total; return n > 21 || n < 17; }) : null;
       s.dealer.push(dev || table.shoe.draw());
       ctx.changed();
       dealerPlay(ctx, table);

@@ -112,6 +112,14 @@ function showdown(ctx, table, folded) {
   const s = table.state;
   const sec = table.secret;
   s.phase = 'showdown';
+  // Developer-Testmodus: Turn/River (noch verdeckt) und Dealer-Karten gemeinsam neu ziehen, falls nötig –
+  // sonst könnte ein Board, das für beide spielt, nur einen PUSH ergeben
+  if (ctx.dev && !folded) {
+    const sc = x => compareScore(bestHand(s.player.concat(x.b)), bestHand(x.d.concat(x.b)));
+    const flop = sec.board.slice(0, 3);
+    const pick = devReroll({ b: sec.board, d: sec.dealer }, () => ({ b: flop.concat([table.shoe.draw(), table.shoe.draw()]), d: [table.shoe.draw(), table.shoe.draw()] }), sc, 0);
+    sec.board = pick.b; sec.dealer = pick.d;
+  }
   s.board = sec.board.slice();
   ctx.changed();
   ctx.later(1500, () => {

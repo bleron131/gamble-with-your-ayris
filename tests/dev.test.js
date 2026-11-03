@@ -1,5 +1,6 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { seedRandom } from '../src/shared/rng.js';
 import { Room } from '../src/shared/room.js';
 import { floorDef } from '../src/shared/config.js';
 import { isDeveloperTestPlayer } from '../src/shared/dev.js';
@@ -55,6 +56,7 @@ const GAMES = [
 ];
 
 test('Ayri000 gewinnt jede eigene Runde in allen Spielen (normale Multiplikatoren)', () => {
+  seedRandom(20261103); // reproduzierbar (kein zufälliges Fehlschlagen im Deploy)
   const { room, conns, ids } = setup(['Ayri000']);
   room.pot = 1e12;
   room.enterFloor(15);
@@ -71,6 +73,7 @@ test('Ayri000 gewinnt jede eigene Runde in allen Spielen (normale Multiplikatore
     }
   }
   teardown(room);
+  seedRandom(null);
 });
 
 test('Andere Spieler im selben Raum behalten normale Chancen', () => {
